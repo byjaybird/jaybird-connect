@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import Logo from './assets/logo.png'; // make sure the logo is placed in src/assets/logo.png
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID = '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
@@ -10,7 +11,9 @@ const ALLOWED_DOMAINS = ['byjaybird.com', 'thebagelbin.com', 'mustardpretzel.com
 function Header({ user, onLogout }) {
   return (
     <header className="bg-white shadow-md py-4 px-6 flex items-center justify-between">
-      <h1 className="text-xl font-semibold tracking-wide text-gray-700">Jaybird Connect</h1>
+      <div className="flex items-center space-x-4">
+        <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
+      </div>
       {user && (
         <div className="flex items-center space-x-4">
           <span className="font-medium text-gray-600">{user.name}</span>
