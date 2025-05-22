@@ -16,7 +16,7 @@ function ItemList() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Menu Items</h1>
+      <h1 className="text-2xl font-bold mb-4">Menu Items 🍔</h1>
       <ul className="space-y-2">
         {forSaleItems.map(item => (
           <li key={item[0]} className="border p-2 rounded hover:bg-gray-100">
