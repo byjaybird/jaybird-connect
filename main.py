@@ -1,4 +1,3 @@
-# main.py
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
@@ -13,6 +12,28 @@ DB_PATH = 'sonomas_menu.db'
 @app.route('/')
 def index():
     return "Food Cost Tracker API Running"
+
+@app.route('/api/log-login', methods=['POST'])
+def log_login():
+    data = request.get_json()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS login_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT,
+            name TEXT,
+            domain TEXT,
+            timestamp TEXT
+        )
+    ''')
+    cursor.execute('''
+        INSERT INTO login_logs (email, name, domain, timestamp)
+        VALUES (?, ?, ?, ?)
+    ''', (data.get('email'), data.get('name'), data.get('domain'), data.get('timestamp')))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'login logged'})
 
 @app.route('/api/ingredients', methods=['GET', 'POST'])
 def ingredients():
@@ -29,20 +50,6 @@ def ingredients():
         ingredients = cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = 0").fetchall()
         conn.close()
         return jsonify(ingredients)
-
-@app.route('/api/ingredients/<int:ingredient_id>', methods=['PUT'])
-def update_ingredient(ingredient_id):
-    data = request.get_json()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE ingredients
-        SET name = ?, type = ?, prep_notes = ?, default_unit = ?
-        WHERE ingredient_id = ?
-    """, (data['name'], data.get('type'), data.get('prep_notes'), data.get('default_unit'), ingredient_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'Ingredient updated'})
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
@@ -89,11 +96,8 @@ def update_item(item_id):
 def delete_item(item_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    # Archive the item instead of deleting
     cursor.execute("UPDATE items SET archived = 1 WHERE item_id = ?", (item_id,))
-    # Archive associated recipes
     cursor.execute("UPDATE recipes SET archived = 1 WHERE item_id = ?", (item_id,))
-    # Archive orphaned ingredients
     cursor.execute("""
         UPDATE ingredients
         SET archived = 1
