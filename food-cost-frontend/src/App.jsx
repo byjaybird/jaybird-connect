@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
-import Logo from './assets/logo.png'; // make sure the logo is placed in src/assets/logo.png
+import Logo from './assets/logo.png';
+import EditItem from './EditItem';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID = '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
@@ -30,27 +31,67 @@ function Header({ user, onLogout }) {
 }
 
 function ItemList() {
-  const [items, setItems] = useState([]);
+  const [itemsByCategory, setItemsByCategory] = useState({});
+  const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
-    fetch(`${API_URL}/items`)
-      .then(res => res.json())
-      .then(setItems);
+    fetch('https://jaybird-connect.ue.r.appspot.com/api/items')
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Fetched items from API:", data); // 👈 ADD THIS LINE
+
+        const visibleItems = data.filter(item => item.is_for_sale === 1); // 👈 optional filtering
+        const grouped = visibleItems.reduce((acc, item) => {
+          const category = item.category || 'Uncategorized';
+          if (!acc[category]) acc[category] = [];
+          acc[category].push(item);
+          return acc;
+        }, {});
+        console.log("Grouped items by category:", grouped); // 👈 ADD THIS TOO
+        setItemsByCategory(grouped);
+      });
   }, []);
 
-  const forSaleItems = items.filter(item => item[4] === 1);
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
   return (
     <div className="p-4">
-      <ul className="space-y-2">
-        {forSaleItems.map(item => (
-          <li key={item[0]} className="border p-2 rounded hover:bg-gray-100">
-            <Link to={`/item/${item[0]}`} className="text-blue-600 hover:underline">
-              {item[1]}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <h1 className="text-3xl font-bold mb-6">Menu Items</h1>
+      {Object.entries(itemsByCategory).map(([category, items]) => (
+        <div key={category} className="mb-4 border rounded shadow-sm">
+          <button
+            onClick={() => toggleCategory(category)}
+            className="w-full flex justify-between items-center bg-gray-100 p-4 text-left font-semibold text-lg"
+          >
+            <span>{category}</span>
+            <span>{expandedCategories[category] ? '▲' : '▼'}</span>
+          </button>
+          {expandedCategories[category] && (
+            <ul className="p-4 bg-white border-t space-y-2">
+              {items.map(item => (
+                <li key={item.item_id} className="hover:text-blue-600">
+                  <div className="flex justify-between items-center">
+                    <Link to={`/item/${item.item_id}`} className="text-blue-600 hover:underline">
+                      {item.name}
+                    </Link>
+                    <Link
+                      to={`/item/${item.item_id}/edit`}
+                      className="text-sm text-gray-500 hover:text-black ml-4"
+                    >
+                      ✏️ Edit
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -74,17 +115,17 @@ function ItemDetail() {
     <div className="p-4">
       {itemInfo && (
         <div className="mb-4">
-          <h2 className="text-2xl font-bold">{itemInfo[1]}</h2>
-          {itemInfo[5] && <p className="text-gray-700 italic mb-2">{itemInfo[5]}</p>}
-          {itemInfo[7] && <p className="text-sm text-gray-600">Notes: {itemInfo[7]}</p>}
+          <h2 className="text-2xl font-bold">{itemInfo.name}</h2>
+          {itemInfo.description && <p className="text-gray-700 italic mb-2">{itemInfo.description}</p>}
+          {itemInfo.process_notes && <p className="text-sm text-gray-600">Notes: {itemInfo.process_notes}</p>}
         </div>
       )}
       <h3 className="text-xl font-semibold mb-2">Recipe Ingredients</h3>
       <ul className="space-y-1">
         {recipe.map((r, idx) => (
           <li key={idx} className="border p-2 rounded">
-            <strong>{r[2]}</strong> – {r[3]} {r[4]}
-            {r[5] && <div className="text-sm text-gray-600">{r[5]}</div>}
+            <strong>{r.name}</strong> – {r.quantity} {r.unit}
+            {r.instructions && <div className="text-sm text-gray-600">{r.instructions}</div>}
           </li>
         ))}
       </ul>
@@ -153,6 +194,7 @@ function App() {
           <Routes>
             <Route path="/" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
+            <Route path="/item/:id/edit" element={<EditItem />} />
           </Routes>
         </Router>
       </AuthGate>
