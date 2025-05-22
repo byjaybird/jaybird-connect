@@ -7,6 +7,25 @@ const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID = '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
 const ALLOWED_DOMAINS = ['byjaybird.com', 'thebagelbin.com', 'mustardpretzel.com', 'sonomas.net'];
 
+function Header({ user, onLogout }) {
+  return (
+    <header className="bg-white shadow-md py-4 px-6 flex items-center justify-between">
+      <h1 className="text-xl font-semibold tracking-wide text-gray-700">Jaybird Connect</h1>
+      {user && (
+        <div className="flex items-center space-x-4">
+          <span className="font-medium text-gray-600">{user.name}</span>
+          <button
+            onClick={onLogout}
+            className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </header>
+  );
+}
+
 function ItemList() {
   const [items, setItems] = useState([]);
 
@@ -71,14 +90,14 @@ function ItemDetail() {
   );
 }
 
-function AuthGate({ children }) {
+function AuthGate({ children, setAppUser }) {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
 
   useEffect(() => {
-    if (user && window.displayUser) {
-      window.displayUser(user.name);
+    if (user) {
+      setAppUser(user);
     }
-  }, [user]);
+  }, [user, setAppUser]);
 
   if (!user) {
     return (
@@ -94,7 +113,6 @@ function AuthGate({ children }) {
             }
             localStorage.setItem('user', JSON.stringify(decoded));
             setUser(decoded);
-            window.displayUser(decoded.name);
 
             fetch(`${API_URL}/log-login`, {
               method: 'POST',
@@ -117,10 +135,18 @@ function AuthGate({ children }) {
 }
 
 function App() {
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+  };
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <AuthGate>
+      <AuthGate setAppUser={setUser}>
         <Router>
+          <Header user={user} onLogout={handleLogout} />
           <Routes>
             <Route path="/" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
