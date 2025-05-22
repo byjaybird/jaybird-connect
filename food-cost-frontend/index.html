@@ -1,13 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jaybird Connect</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f9fafb;
+      }
+    </style>
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="text-gray-800">
+    <div id="root">
+      <header class="bg-white shadow-md py-4 px-6 flex items-center justify-between">
+        <h1 class="text-xl font-semibold tracking-wide text-gray-700">Jaybird Connect</h1>
+        <div id="user-info" class="flex items-center space-x-4 hidden">
+          <span id="user-name" class="font-medium text-gray-600"></span>
+          <button id="logout-btn" class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition">Logout</button>
+        </div>
+      </header>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.displayUser = function(name) {
+        const userInfo = document.getElementById('user-info');
+        const userName = document.getElementById('user-name');
+        if (userInfo && userName) {
+          userName.textContent = name;
+          userInfo.classList.remove('hidden');
+        }
+        document.getElementById('logout-btn').onclick = () => {
+          localStorage.removeItem('user');
+          location.reload();
+        };
+      };
+    </script>
   </body>
 </html>

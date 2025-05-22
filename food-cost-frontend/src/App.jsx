@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, useParams, Navigate } from 'react-router-dom';
-import { GoogleOAuthProvider, GoogleLogin, useGoogleLogin } from '@react-oauth/google';
+import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
@@ -20,7 +20,6 @@ function ItemList() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Menu Items</h1>
       <ul className="space-y-2">
         {forSaleItems.map(item => (
           <li key={item[0]} className="border p-2 rounded hover:bg-gray-100">
@@ -75,6 +74,12 @@ function ItemDetail() {
 function AuthGate({ children }) {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
 
+  useEffect(() => {
+    if (user && window.displayUser) {
+      window.displayUser(user.name);
+    }
+  }, [user]);
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
@@ -89,8 +94,8 @@ function AuthGate({ children }) {
             }
             localStorage.setItem('user', JSON.stringify(decoded));
             setUser(decoded);
+            window.displayUser(decoded.name);
 
-            // Log login event to backend
             fetch(`${API_URL}/log-login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
