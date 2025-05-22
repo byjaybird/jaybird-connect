@@ -2,9 +2,7 @@ name: Deploy Frontend to Firebase Hosting
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'food-cost-frontend/**'
+    branches: [main]  # <- trigger on any push to main
 
 jobs:
   deploy:
