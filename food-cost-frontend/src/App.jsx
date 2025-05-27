@@ -40,7 +40,7 @@ function ItemList() {
       .then((data) => {
         console.log("Fetched items from API:", data); // 👈 ADD THIS LINE
 
-        const visibleItems = data.filter(item => item.is_for_sale === 1); // 👈 optional filtering
+        const visibleItems = data.filter(item => !!item.is_for_sale); // 👈 optional filtering
         const grouped = visibleItems.reduce((acc, item) => {
           const category = item.category || 'Uncategorized';
           if (!acc[category]) acc[category] = [];

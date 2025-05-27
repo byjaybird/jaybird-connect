@@ -9,3 +9,10 @@ automatic_scaling:
 
 env_variables:
   PORT: 8080
+  DB_HOST: /cloudsql/jaybird-connect:us-east1:jaybird-db
+  DB_NAME: sonomas_menu
+  DB_USER: postgres
+  DB_PASSWORD: bagels4life
+
+beta_settings:
+  cloud_sql_instances: jaybird-connect:us-east1:jaybird-db

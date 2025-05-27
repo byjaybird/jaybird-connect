@@ -24,14 +24,14 @@ function EditItem() {
       .then((data) => {
         setItem(data);
         setFormData({
-          name: data.name,
-          category: data.category,
-          is_prep: data.is_prep === 1,
-          is_for_sale: data.is_for_sale === 1,
-          price: data.price || '',
+          name: data.name || '',
+          category: data.category || '',
+          is_prep: !!data.is_prep,
+          is_for_sale: !!data.is_for_sale,
+          price: data.price ?? '',
           description: data.description || '',
           notes: data.process_notes || '',
-          is_archived: data.archived === 1
+          is_archived: !!data.archived
         });
       });
   }, [id]);
@@ -48,33 +48,33 @@ function EditItem() {
     e.preventDefault();
 
     fetch(`${API_URL}/items/${id}`, {
-  method: 'PUT',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    name: formData.name,
-    category: formData.category,
-    is_prep: formData.is_prep ? 1 : 0,
-    is_for_sale: formData.is_for_sale ? 1 : 0,
-    price: parseFloat(formData.price),
-    description: formData.description,
-    process_notes: formData.notes,
-    is_archived: formData.is_archived ? 1 : 0
-  })
-})
-  .then(async (res) => {
-    const responseBody = await res.text(); // grab error body
-    if (res.ok) {
-      alert('Item updated!');
-      navigate('/');
-    } else {
-      console.error('Update failed:', res.status, responseBody);
-      alert('Error updating item.');
-    }
-  })
-  .catch((err) => {
-    console.error('Fetch error:', err);
-    alert('Network error.');
-  });
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: formData.name,
+        category: formData.category,
+        is_prep: formData.is_prep,
+        is_for_sale: formData.is_for_sale,
+        price: formData.price === '' ? null : parseFloat(formData.price),
+        description: formData.description,
+        process_notes: formData.notes,
+        is_archived: formData.is_archived
+      })
+    })
+      .then(async (res) => {
+        const responseBody = await res.text();
+        if (res.ok) {
+          alert('Item updated!');
+          navigate('/');
+        } else {
+          console.error('Update failed:', res.status, responseBody);
+          alert('Error updating item.');
+        }
+      })
+      .catch((err) => {
+        console.error('Fetch error:', err);
+        alert('Network error.');
+      });
   };
 
   if (!item) return <div className="p-4">Loading...</div>;

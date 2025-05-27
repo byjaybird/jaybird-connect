@@ -10,6 +10,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
@@ -18,6 +19,20 @@ def get_db_connection():
         password=os.getenv("DB_PASSWORD"),
         cursor_factory=psycopg2.extras.RealDictCursor
     )
+
+@app.route('/api/test-db')
+def test_db():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+        conn.close()
+        return jsonify({'db_test': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+print("Connecting to:", os.getenv("DB_HOST"))
 
 @app.route('/')
 def index():
@@ -48,7 +63,7 @@ def ingredients():
         conn.close()
         return jsonify({'status': 'Ingredient added'})
     else:
-        cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = 0")
+        cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = FALSE")
         ingredients = cursor.fetchall()
         conn.close()
         return jsonify(ingredients)
@@ -65,8 +80,8 @@ def items():
         """, (
             data['name'],
             data.get('category'),
-            data.get('is_prep', 0),
-            data.get('is_for_sale', 1),
+            data.get('is_prep', False),
+            data.get('is_for_sale', True),
             data.get('price'),
             data.get('description'),
             data.get('process_notes')
@@ -75,7 +90,7 @@ def items():
         conn.close()
         return jsonify({'status': 'Item added'})
     else:
-        cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = 0")
+        cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = FALSE")
         items = cursor.fetchall()
         conn.close()
         return jsonify(items)
@@ -86,7 +101,7 @@ def get_item_detail(item_id):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM items
-        WHERE item_id = %s AND (archived IS NULL OR archived = 0)
+        WHERE item_id = %s AND (archived IS NULL OR archived = FALSE)
     """, (item_id,))
     item = cursor.fetchone()
     conn.close()
@@ -107,12 +122,12 @@ def update_item(item_id):
     """, (
         data['name'],
         data.get('category'),
-        data.get('is_prep', 0),
-        data.get('is_for_sale', 1),
+        data.get('is_prep', False),
+        data.get('is_for_sale', True),
         data.get('price'),
         data.get('description'),
         data.get('process_notes'),
-        data.get('is_archived', 0),
+        data.get('is_archived', False),
         item_id
     ))
     conn.commit()
@@ -123,14 +138,14 @@ def update_item(item_id):
 def delete_item(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE items SET archived = 1 WHERE item_id = %s", (item_id,))
-    cursor.execute("UPDATE recipes SET archived = 1 WHERE item_id = %s", (item_id,))
+    cursor.execute("UPDATE items SET archived = TRUE WHERE item_id = %s", (item_id,))
+    cursor.execute("UPDATE recipes SET archived = TRUE WHERE item_id = %s", (item_id,))
     cursor.execute("""
         UPDATE ingredients
-        SET archived = 1
+        SET archived = TRUE
         WHERE ingredient_id IN (
             SELECT i.ingredient_id FROM ingredients i
-            LEFT JOIN recipes r ON i.ingredient_id = r.ingredient_id AND (r.archived IS NULL OR r.archived = 0)
+            LEFT JOIN recipes r ON i.ingredient_id = r.ingredient_id AND (r.archived IS NULL OR r.archived = FALSE)
             WHERE r.ingredient_id IS NULL
         )
     """)
@@ -146,7 +161,7 @@ def get_recipe(item_id):
         SELECT r.recipe_id, r.ingredient_id, i.name, r.quantity, r.unit, r.instructions
         FROM recipes r
         JOIN ingredients i ON r.ingredient_id = i.ingredient_id
-        WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = 0)
+        WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
     ''', (item_id,))
     result = cursor.fetchall()
     conn.close()
