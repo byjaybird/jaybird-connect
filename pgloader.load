@@ -1,0 +1,6 @@
+LOAD DATABASE
+     FROM sqlite:///Users/jake/sonomas_menu.db
+     INTO postgresql://postgres:bagels4life@35.185.116.218:5432/sonomas_menu
+
+ WITH include no drop, create tables, create indexes, reset sequences
+ SET work_mem to '128MB', maintenance_work_mem to '512 MB';

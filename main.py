@@ -1,18 +1,23 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH = 'sonomas_menu.db'
-
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # 🔥 THIS makes results return dict-like rows
-    return conn
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
 
 @app.route('/')
 def index():
@@ -24,17 +29,8 @@ def log_login():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS login_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT,
-            name TEXT,
-            domain TEXT,
-            timestamp TEXT
-        )
-    ''')
-    cursor.execute('''
         INSERT INTO login_logs (email, name, domain, timestamp)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     ''', (data.get('email'), data.get('name'), data.get('domain'), data.get('timestamp')))
     conn.commit()
     conn.close()
@@ -46,26 +42,26 @@ def ingredients():
     cursor = conn.cursor()
     if request.method == 'POST':
         data = request.get_json()
-        cursor.execute("INSERT INTO ingredients (name, type, prep_notes, default_unit) VALUES (?, ?, ?, ?)",
+        cursor.execute("INSERT INTO ingredients (name, type, prep_notes, default_unit) VALUES (%s, %s, %s, %s)",
                        (data['name'], data.get('type'), data.get('prep_notes'), data.get('default_unit')))
         conn.commit()
         conn.close()
         return jsonify({'status': 'Ingredient added'})
     else:
-        ingredients = cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = 0").fetchall()
+        cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = 0")
+        ingredients = cursor.fetchall()
         conn.close()
-        return jsonify([dict(row) for row in ingredients])  # 🧠 convert to dicts
+        return jsonify(ingredients)
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
     conn = get_db_connection()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     if request.method == 'POST':
         data = request.get_json()
         cursor.execute("""
             INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             data['name'],
             data.get('category'),
@@ -79,21 +75,23 @@ def items():
         conn.close()
         return jsonify({'status': 'Item added'})
     else:
-        items = cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = 0").fetchall()
+        cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = 0")
+        items = cursor.fetchall()
         conn.close()
-        return jsonify([dict(item) for item in items])
+        return jsonify(items)
 
 @app.route('/api/items/<int:item_id>', methods=['GET'])
 def get_item_detail(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    item = cursor.execute("""
+    cursor.execute("""
         SELECT * FROM items
-        WHERE item_id = ? AND (archived IS NULL OR archived = 0)
-    """, (item_id,)).fetchone()
+        WHERE item_id = %s AND (archived IS NULL OR archived = 0)
+    """, (item_id,))
+    item = cursor.fetchone()
     conn.close()
     if item:
-        return jsonify(dict(item))  # 🔄 dict output
+        return jsonify(item)
     else:
         return jsonify({'error': 'Item not found'}), 404
 
@@ -104,8 +102,8 @@ def update_item(item_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE items
-        SET name = ?, category = ?, is_prep = ?, is_for_sale = ?, price = ?, description = ?, process_notes = ?, archived = ?
-        WHERE item_id = ?
+        SET name = %s, category = %s, is_prep = %s, is_for_sale = %s, price = %s, description = %s, process_notes = %s, archived = %s
+        WHERE item_id = %s
     """, (
         data['name'],
         data.get('category'),
@@ -113,7 +111,7 @@ def update_item(item_id):
         data.get('is_for_sale', 1),
         data.get('price'),
         data.get('description'),
-        data.get('notes'),  # assuming 'notes' in frontend matches 'process_notes'
+        data.get('notes'),
         data.get('is_archived', 0),
         item_id
     ))
@@ -125,8 +123,8 @@ def update_item(item_id):
 def delete_item(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE items SET archived = 1 WHERE item_id = ?", (item_id,))
-    cursor.execute("UPDATE recipes SET archived = 1 WHERE item_id = ?", (item_id,))
+    cursor.execute("UPDATE items SET archived = 1 WHERE item_id = %s", (item_id,))
+    cursor.execute("UPDATE recipes SET archived = 1 WHERE item_id = %s", (item_id,))
     cursor.execute("""
         UPDATE ingredients
         SET archived = 1
@@ -144,14 +142,15 @@ def delete_item(item_id):
 def get_recipe(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    result = cursor.execute('''
+    cursor.execute('''
         SELECT r.recipe_id, r.ingredient_id, i.name, r.quantity, r.unit, r.instructions
         FROM recipes r
         JOIN ingredients i ON r.ingredient_id = i.ingredient_id
-        WHERE r.item_id = ? AND (r.archived IS NULL OR r.archived = 0)
-    ''', (item_id,)).fetchall()
+        WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = 0)
+    ''', (item_id,))
+    result = cursor.fetchall()
     conn.close()
-    return jsonify([dict(row) for row in result])  # 🔄 convert to JSON-ready dicts
+    return jsonify(result)
 
 @app.route('/api/recipes/<int:recipe_id>', methods=['PUT'])
 def update_recipe(recipe_id):
@@ -160,8 +159,8 @@ def update_recipe(recipe_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE recipes
-        SET ingredient_id = ?, quantity = ?, unit = ?, instructions = ?
-        WHERE recipe_id = ?
+        SET ingredient_id = %s, quantity = %s, unit = %s, instructions = %s
+        WHERE recipe_id = %s
     """, (data['ingredient_id'], data['quantity'], data['unit'], data.get('instructions'), recipe_id))
     conn.commit()
     conn.close()
@@ -174,7 +173,7 @@ def add_recipe():
     data = request.get_json()
     cursor.execute("""
         INSERT INTO recipes (item_id, ingredient_id, quantity, unit, instructions)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (data['item_id'], data['ingredient_id'], data['quantity'], data['unit'], data.get('instructions')))
     conn.commit()
     conn.close()
