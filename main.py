@@ -111,7 +111,7 @@ def update_item(item_id):
         data.get('is_for_sale', 1),
         data.get('price'),
         data.get('description'),
-        data.get('notes'),
+        data.get('process_notes'),
         data.get('is_archived', 0),
         item_id
     ))
