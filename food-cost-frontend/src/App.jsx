@@ -13,7 +13,9 @@ function Header({ user, onLogout }) {
   return (
     <header className="bg-white shadow-md py-4 px-6 flex items-center justify-between">
       <div className="flex items-center space-x-4">
-        <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
+        <Link to="/">
+          <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
+        </Link>
       </div>
       {user && (
         <div className="flex items-center space-x-4">
@@ -184,6 +186,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('user');
     setUser(null);
+    window.location.href = '/'; // Forces reload to login screen
   };
 
   return (
