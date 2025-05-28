@@ -44,24 +44,19 @@ function IngredientsPage() {
       <ul className="space-y-2">
         {ingredients.map((ingredient) => (
             <li
-            key={ingredient.ingredient_id}
-            className={`border p-2 rounded cursor-pointer hover:bg-gray-100 ${
-                selected.includes(ingredient.ingredient_id) ? 'bg-blue-100' : ''
-            }`}
-            >
-            <Link
-                to={`/ingredient/${ingredient.ingredient_id}`}
-                onClick={(e) => {
-                // Let CMD+Click or right click work as expected
-                if (!e.metaKey && !e.ctrlKey && e.button === 0) {
-                    e.preventDefault();
-                    toggleSelect(ingredient.ingredient_id);
-                }
-                }}
-                className="text-blue-600 hover:underline block"
-            >
-                {ingredient.name}
-            </Link>
+                key={ingredient.ingredient_id}
+                className={`border p-2 rounded cursor-pointer hover:bg-gray-100 ${
+                    selected.includes(ingredient.ingredient_id) ? 'bg-blue-100' : ''
+                }`}
+                onClick={() => toggleSelect(ingredient.ingredient_id)} // Selects on li click
+                >
+                <Link
+                    to={`/ingredient/${ingredient.ingredient_id}`}
+                    onClick={(e) => e.stopPropagation()} // Prevents li's onClick from firing when link is clicked
+                    className="text-blue-600 hover:underline"
+                >
+                    {ingredient.name}
+                </Link>
             </li>
         ))}
         </ul>
