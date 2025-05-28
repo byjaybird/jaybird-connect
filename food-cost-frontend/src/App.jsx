@@ -150,7 +150,13 @@ function ItemDetail() {
       <ul className="space-y-1">
         {recipe.map((r, idx) => (
           <li key={idx} className="border p-2 rounded">
-            <strong>{r.name}</strong> – {r.quantity} {r.unit}
+            <Link
+              to={`/ingredient/${r.ingredient_id}`}
+              className="text-blue-600 hover:underline font-semibold"
+            >
+              {r.name}
+            </Link>{" "}
+            – {r.quantity} {r.unit}
             {r.instructions && (
               <div className="text-sm text-gray-600">{r.instructions}</div>
             )}

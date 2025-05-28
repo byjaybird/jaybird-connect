@@ -43,17 +43,28 @@ function IngredientsPage() {
       <h2 className="text-2xl font-bold mb-4">Ingredients</h2>
       <ul className="space-y-2">
         {ingredients.map((ingredient) => (
-          <li
-            key={ingredient.id}
-            className={`border p-2 rounded cursor-pointer hover:bg-gray-100 ${selected.includes(ingredient.id) ? 'bg-blue-100' : ''}`}
-            onClick={() => toggleSelect(ingredient.id)}
-          >
-            <Link to={`/ingredient/${ingredient.id}`} className="text-blue-600 hover:underline">
-              {ingredient.name}
+            <li
+            key={ingredient.ingredient_id}
+            className={`border p-2 rounded cursor-pointer hover:bg-gray-100 ${
+                selected.includes(ingredient.ingredient_id) ? 'bg-blue-100' : ''
+            }`}
+            >
+            <Link
+                to={`/ingredient/${ingredient.ingredient_id}`}
+                onClick={(e) => {
+                // Let CMD+Click or right click work as expected
+                if (!e.metaKey && !e.ctrlKey && e.button === 0) {
+                    e.preventDefault();
+                    toggleSelect(ingredient.ingredient_id);
+                }
+                }}
+                className="text-blue-600 hover:underline block"
+            >
+                {ingredient.name}
             </Link>
-          </li>
+            </li>
         ))}
-      </ul>
+        </ul>
       <button
         onClick={mergeIngredients}
         disabled={selected.length !== 2}
