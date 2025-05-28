@@ -118,31 +118,35 @@ def merge_ingredients():
     data = request.get_json()
     ids = data.get('ids')
 
-    if not ids or len(ids) != 2:
-        return jsonify({'error': 'Must supply exactly two ingredient IDs'}), 400
+    if not ids or len(ids) < 2:
+        return jsonify({'error': 'Must supply at least two ingredient IDs'}), 400
 
-    keep_id, drop_id = ids
+    ids = sorted(ids)
+    keep_id = ids[0]
+    drop_ids = ids[1:]
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Re-assign all recipe references
+    # Reassign all recipes from dropped IDs to the one we're keeping
     cursor.execute("""
         UPDATE recipes
         SET ingredient_id = %s
-        WHERE ingredient_id = %s
-    """, (keep_id, drop_id))
+        WHERE ingredient_id = ANY(%s)
+    """, (keep_id, drop_ids))
 
-    # Mark the dropped ingredient as archived
+    # Archive all dropped ingredients
     cursor.execute("""
         UPDATE ingredients
         SET archived = TRUE
-        WHERE ingredient_id = %s
-    """, (drop_id,))
+        WHERE ingredient_id = ANY(%s)
+    """, (drop_ids,))
 
     conn.commit()
     conn.close()
-    return jsonify({'status': 'Ingredients merged'})
+
+    return jsonify({'status': f'Merged {len(ids)} ingredients into ID {keep_id}'})
+
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
