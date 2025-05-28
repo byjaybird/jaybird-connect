@@ -49,8 +49,14 @@ function ItemDetail() {
           <ul className="list-disc list-inside">
             {recipe.map((r, i) => (
               <li key={i}>
-                {r.quantity} {r.unit} of {r.ingredient_name}
-              </li>
+                {r.quantity} {r.unit} of{' '}
+                <Link
+                    to={`/ingredients/${r.ingredient_id}`}
+                    className="text-blue-600 hover:underline"
+                >
+                    {r.name}
+                </Link>
+                </li>
             ))}
           </ul>
         ) : (
