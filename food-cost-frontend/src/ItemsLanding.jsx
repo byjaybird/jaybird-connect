@@ -32,14 +32,6 @@ function ItemsLanding() {
         <h1 className="text-3xl font-bold">Menu Items</h1>
         <Link
           to="/item/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          + New Item
-        </Link>
-      </div>
-      <div className="mb-4 text-right">
-        <Link
-          to="/item/new"
           className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
         >
           ➕ Add New Item

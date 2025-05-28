@@ -230,7 +230,7 @@ function App() {
         <Router>
           <Header user={user} onLogout={handleLogout} />
           <Routes>
-            <Route path="/" element={<ItemList />} />
+            <Route path="/" element={<ItemsLanding />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/item/:id/edit" element={<EditItem />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
