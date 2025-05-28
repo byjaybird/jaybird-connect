@@ -233,7 +233,7 @@ function App() {
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/item/:id/edit" element={<EditItem />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
-            <Route path="/ingredient/:id" element={<IngredientDetail />} />
+            <Route path="/ingredients/:id" element={<IngredientDetail />} />
           </Routes>
         </Router>
       </AuthGate>
