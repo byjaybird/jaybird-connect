@@ -19,6 +19,7 @@ function EditItem() {
   });
   const [ingredients, setIngredients] = useState([]);
   const [recipe, setRecipe] = useState([]);
+  const [originalRecipeIds, setOriginalRecipeIds] = useState(new Set());
   const [newIngredientName, setNewIngredientName] = useState('');
 
   useEffect(() => {
@@ -48,7 +49,10 @@ function EditItem() {
 
     fetch(`${API_URL}/recipes/${id}`)
       .then((res) => res.json())
-      .then(setRecipe);
+      .then((data) => {
+        setRecipe(data);
+        setOriginalRecipeIds(new Set(data.map(r => r.recipe_id)));
+      });
   }, [id]);
 
   const handleChange = (e) => {
@@ -85,6 +89,13 @@ function EditItem() {
     if (!res.ok) {
       alert(result.error || 'Failed to update item');
       return;
+    }
+
+    const currentRecipeIds = new Set(cleanRecipe.filter(r => r.recipe_id).map(r => r.recipe_id));
+    const deletedRecipeIds = Array.from(originalRecipeIds).filter(id => !currentRecipeIds.has(id));
+
+    for (let delId of deletedRecipeIds) {
+      await fetch(`${API_URL}/recipes/${delId}`, { method: 'DELETE' });
     }
 
     for (let r of cleanRecipe) {
