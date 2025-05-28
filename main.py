@@ -98,6 +98,19 @@ def get_ingredient_detail(ingredient_id):
         'recipes': recipes
     })
 
+@app.route('/api/ingredients/<int:ingredient_id>', methods=['PUT'])
+def update_ingredient(ingredient_id):
+    data = request.get_json()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE ingredients
+        SET archived = %s
+        WHERE ingredient_id = %s
+    """, (data.get('archived', False), ingredient_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'Ingredient updated'})
 
 
 @app.route('/api/ingredients/merge', methods=['POST'])

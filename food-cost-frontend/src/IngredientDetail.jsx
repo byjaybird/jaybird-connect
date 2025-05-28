@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
 function IngredientDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [ingredient, setIngredient] = useState(null);
   const [error, setError] = useState(null);
 
@@ -17,7 +18,6 @@ function IngredientDetail() {
       .then((data) => {
         console.log('Fetched ingredient:', data);
         if (!data || data.error) throw new Error('Invalid ingredient response');
-        // Ensure recipes is at least an empty array
         if (!Array.isArray(data.recipes)) {
           data.recipes = [];
         }
@@ -28,6 +28,27 @@ function IngredientDetail() {
         setError('Could not load ingredient data.');
       });
   }, [id]);
+
+  const handleArchive = () => {
+    fetch(`${API_URL}/ingredients/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ archived: true })
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to archive ingredient');
+        return res.json();
+      })
+      .then(() => {
+        navigate('/ingredients');
+      })
+      .catch((err) => {
+        console.error('Archive error:', err);
+        setError('Failed to archive ingredient.');
+      });
+  };
 
   if (error) {
     return <div className="p-4 text-red-600 font-semibold">{error}</div>;
@@ -44,7 +65,7 @@ function IngredientDetail() {
       ) : (
         <ul className="list-disc ml-6 space-y-1">
           {ingredient.recipes.map((r) => (
-            <li key={r.id}>
+            <li key={r.item_id}>
               <Link
                 to={`/item/${r.item_id}`}
                 className="text-blue-600 hover:underline"
@@ -55,9 +76,17 @@ function IngredientDetail() {
           ))}
         </ul>
       )}
-      <Link to="/ingredients" className="mt-4 inline-block text-blue-600 hover:underline">
-        ← Back to Ingredients
-      </Link>
+      <div className="mt-6 flex gap-4">
+        <Link to="/ingredients" className="text-blue-600 hover:underline">
+          ← Back to Ingredients
+        </Link>
+        <button
+          onClick={handleArchive}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+        >
+          Archive Ingredient
+        </button>
+      </div>
     </div>
   );
 }
