@@ -308,5 +308,14 @@ def add_recipe():
     conn.close()
     return jsonify({'status': 'Recipe added'})
 
+@app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
+def delete_recipes_for_item(item_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'deleted'})
+
 if __name__ == '__main__':
     app.run(debug=True)

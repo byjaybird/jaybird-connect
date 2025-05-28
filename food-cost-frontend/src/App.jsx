@@ -14,6 +14,7 @@ import IngredientsPage from './IngredientsPage';
 import IngredientDetail from './IngredientDetail';
 import NewItemPage from './NewItemPage';
 import ItemsLanding from './ItemsLanding'; // or correct relative path
+import ItemDetail from './ItemDetail';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
@@ -116,58 +117,6 @@ function ItemList() {
           )}
         </div>
       ))}
-    </div>
-  );
-}
-
-function ItemDetail() {
-  const { id } = useParams();
-  const [recipe, setRecipe] = useState([]);
-  const [itemInfo, setItemInfo] = useState(null);
-
-  useEffect(() => {
-    fetch(`${API_URL}/recipes/${id}`)
-      .then((res) => res.json())
-      .then(setRecipe);
-
-    fetch(`${API_URL}/items/${id}`)
-      .then((res) => res.json())
-      .then(setItemInfo);
-  }, [id]);
-
-  return (
-    <div className="p-4">
-      {itemInfo && (
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold">{itemInfo.name}</h2>
-          {itemInfo.description && (
-            <p className="text-gray-700 italic mb-2">{itemInfo.description}</p>
-          )}
-          {itemInfo.process_notes && (
-            <p className="text-sm text-gray-600">Notes: {itemInfo.process_notes}</p>
-          )}
-        </div>
-      )}
-      <h3 className="text-xl font-semibold mb-2">Recipe Ingredients</h3>
-      <ul className="space-y-1">
-        {recipe.map((r, idx) => (
-          <li key={idx} className="border p-2 rounded">
-            <Link
-              to={`/ingredients/${r.ingredient_id}`}
-              className="text-blue-600 hover:underline font-semibold"
-            >
-              {r.name}
-            </Link>{" "}
-            – {r.quantity} {r.unit}
-            {r.instructions && (
-              <div className="text-sm text-gray-600">{r.instructions}</div>
-            )}
-          </li>
-        ))}
-      </ul>
-      <Link to="/" className="mt-4 inline-block text-blue-600 hover:underline">
-        Back to Menu
-      </Link>
     </div>
   );
 }
