@@ -46,7 +46,7 @@ function IngredientDetail() {
           {ingredient.recipes.map((r) => (
             <li key={r.id}>
               <Link
-                to={`/item/${r.id}`}
+                to={`/item/${r.item_id}`}
                 className="text-blue-600 hover:underline"
               >
                 {r.name}

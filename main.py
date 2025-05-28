@@ -73,7 +73,10 @@ def get_ingredient_detail(ingredient_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+    cursor.execute("""
+        SELECT * FROM ingredients
+        WHERE ingredient_id = %s AND (archived IS NULL OR archived = FALSE)
+    """, (ingredient_id,))
     ingredient = cursor.fetchone()
 
     if not ingredient:
@@ -94,6 +97,7 @@ def get_ingredient_detail(ingredient_id):
         'name': ingredient['name'],
         'recipes': recipes
     })
+
 
 
 @app.route('/api/ingredients/merge', methods=['POST'])
