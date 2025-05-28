@@ -85,9 +85,16 @@ function EditItem() {
 
     await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
 
-    for (let r of recipe) {
-      if (!r.ingredient_id || r.quantity === '' || r.unit.trim() === '') continue;
+    const seen = new Set();
+    const cleaned = recipe.filter(r => {
+      if (!r.ingredient_id || r.quantity === '' || r.unit.trim() === '') return false;
+      const key = `${r.ingredient_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
+    for (let r of cleaned) {
       await fetch(`${API_URL}/recipes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,8 +131,6 @@ function EditItem() {
     setRecipe(prev => prev.filter((_, i) => i !== index));
   };
 
-  const usedIngredientIds = recipe.map(r => parseInt(r.ingredient_id));
-
   if (!item) return <div className="p-4">Loading...</div>;
 
   return (
@@ -154,7 +159,7 @@ function EditItem() {
                 setRecipe(updated);
               }} className="border p-1 rounded">
                 <option value="">-- Select Ingredient --</option>
-                {ingredients.filter(i => !usedIngredientIds.includes(i.ingredient_id) || i.ingredient_id === r.ingredient_id).map((i) => (
+                {ingredients.map((i) => (
                   <option key={i.ingredient_id} value={i.ingredient_id}>{i.name}</option>
                 ))}
               </select>
