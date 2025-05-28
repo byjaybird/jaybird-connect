@@ -19,7 +19,7 @@ function EditItem() {
   });
   const [ingredients, setIngredients] = useState([]);
   const [recipe, setRecipe] = useState([]);
-  const [originalRecipeIds, setOriginalRecipeIds] = useState(new Set());
+  const [originalRecipe, setOriginalRecipe] = useState([]);
   const [newIngredientName, setNewIngredientName] = useState('');
 
   useEffect(() => {
@@ -51,7 +51,7 @@ function EditItem() {
       .then((res) => res.json())
       .then((data) => {
         setRecipe(data);
-        setOriginalRecipeIds(new Set(data.map(r => r.recipe_id)));
+        setOriginalRecipe(data);
       });
   }, [id]);
 
@@ -91,11 +91,12 @@ function EditItem() {
       return;
     }
 
-    const currentRecipeIds = new Set(cleanRecipe.filter(r => r.recipe_id).map(r => r.recipe_id));
-    const deletedRecipeIds = Array.from(originalRecipeIds).filter(id => !currentRecipeIds.has(id));
+    const originalIds = new Set(originalRecipe.map(r => r.recipe_id));
+    const currentIds = new Set(cleanRecipe.map(r => r.recipe_id).filter(Boolean));
+    const deletedIds = [...originalIds].filter(id => !currentIds.has(id));
 
-    for (let delId of deletedRecipeIds) {
-      await fetch(`${API_URL}/recipes/${delId}`, { method: 'DELETE' });
+    for (let id of deletedIds) {
+      await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
     }
 
     for (let r of cleanRecipe) {
@@ -188,7 +189,10 @@ function EditItem() {
               />
               <button
                 type="button"
-                onClick={() => setRecipe(recipe.filter((_, i) => i !== index))}
+                onClick={() => {
+                  const updated = recipe.filter((_, i) => i !== index);
+                  setRecipe(updated);
+                }}
                 className="text-red-600"
               >✕</button>
             </div>
