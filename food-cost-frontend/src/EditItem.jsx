@@ -19,7 +19,6 @@ function EditItem() {
   });
   const [ingredients, setIngredients] = useState([]);
   const [recipe, setRecipe] = useState([]);
-  const [originalRecipe, setOriginalRecipe] = useState([]);
   const [newIngredientName, setNewIngredientName] = useState('');
 
   useEffect(() => {
@@ -49,10 +48,7 @@ function EditItem() {
 
     fetch(`${API_URL}/recipes/${id}`)
       .then((res) => res.json())
-      .then((data) => {
-        setRecipe(data);
-        setOriginalRecipe(data);
-      });
+      .then(setRecipe);
   }, [id]);
 
   const handleChange = (e) => {
@@ -65,10 +61,6 @@ function EditItem() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const cleanRecipe = recipe.filter(r =>
-      r.ingredient_id && r.quantity !== '' && r.unit.trim() !== ''
-    );
 
     const res = await fetch(`${API_URL}/items/${id}`, {
       method: 'PUT',
@@ -85,23 +77,19 @@ function EditItem() {
       })
     });
 
-    const result = await res.json();
     if (!res.ok) {
-      alert(result.error || 'Failed to update item');
+      const error = await res.json();
+      alert(error.error || 'Failed to update item');
       return;
     }
 
-    const originalIds = new Set(originalRecipe.map(r => r.recipe_id));
-    const currentIds = new Set(cleanRecipe.map(r => r.recipe_id).filter(Boolean));
-    const deletedIds = [...originalIds].filter(id => !currentIds.has(id));
+    await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
 
-    for (let id of deletedIds) {
-      await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
-    }
+    for (let r of recipe) {
+      if (!r.ingredient_id || r.quantity === '' || r.unit.trim() === '') continue;
 
-    for (let r of cleanRecipe) {
-      await fetch(`${API_URL}/recipes/${r.recipe_id || ''}`, {
-        method: r.recipe_id ? 'PUT' : 'POST',
+      await fetch(`${API_URL}/recipes`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           item_id: parseInt(id),
@@ -127,9 +115,13 @@ function EditItem() {
     if (res.ok) {
       const newList = [...ingredients, data].sort((a, b) => a.name.localeCompare(b.name));
       setIngredients(newList);
-      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '', recipe_id: null }]);
+      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '' }]);
       setNewIngredientName('');
     }
+  };
+
+  const handleRemoveIngredient = (index) => {
+    setRecipe(prev => prev.filter((_, i) => i !== index));
   };
 
   const usedIngredientIds = recipe.map(r => parseInt(r.ingredient_id));
@@ -189,10 +181,7 @@ function EditItem() {
               />
               <button
                 type="button"
-                onClick={() => {
-                  const updated = recipe.filter((_, i) => i !== index);
-                  setRecipe(updated);
-                }}
+                onClick={() => handleRemoveIngredient(index)}
                 className="text-red-600"
               >✕</button>
             </div>
@@ -200,7 +189,7 @@ function EditItem() {
 
           <button
             type="button"
-            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '', recipe_id: null }])}
+            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '' }])}
             className="bg-blue-500 text-white px-3 py-1 rounded"
           >+ Add Ingredient</button>
 
