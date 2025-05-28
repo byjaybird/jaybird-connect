@@ -28,7 +28,23 @@ function ItemsLanding() {
 
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4">
-      <h1 className="text-3xl font-bold mb-6">Menu Items</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Menu Items</h1>
+        <Link
+          to="/item/new"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          + New Item
+        </Link>
+      </div>
+      <div className="mb-4 text-right">
+        <Link
+          to="/item/new"
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+        >
+          ➕ Add New Item
+        </Link>
+      </div>
       {Object.entries(itemsByCategory).map(([category, items]) => (
         <div key={category} className="mb-4 border rounded shadow-sm">
           <button

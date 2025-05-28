@@ -17,6 +17,9 @@ function EditItem() {
     notes: '',
     is_archived: false
   });
+  const [ingredients, setIngredients] = useState([]);
+  const [recipe, setRecipe] = useState([]);
+  const [newIngredientName, setNewIngredientName] = useState('');
 
   useEffect(() => {
     fetch(`${API_URL}/items/${id}`)
@@ -34,6 +37,18 @@ function EditItem() {
           is_archived: !!data.archived
         });
       });
+
+    fetch(`${API_URL}/ingredients`)
+      .then((res) => res.json())
+      .then((data) => {
+        const active = data.filter(i => !i.archived);
+        const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
+        setIngredients(sorted);
+      });
+
+    fetch(`${API_URL}/recipes/${id}`)
+      .then((res) => res.json())
+      .then(setRecipe);
   }, [id]);
 
   const handleChange = (e) => {
@@ -44,10 +59,10 @@ function EditItem() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    fetch(`${API_URL}/items/${id}`, {
+    const res = await fetch(`${API_URL}/items/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -60,113 +75,133 @@ function EditItem() {
         process_notes: formData.notes,
         is_archived: formData.is_archived
       })
-    })
-      .then(async (res) => {
-        const responseBody = await res.text();
-        if (res.ok) {
-          alert('Item updated!');
-          navigate('/');
-        } else {
-          console.error('Update failed:', res.status, responseBody);
-          alert('Error updating item.');
-        }
-      })
-      .catch((err) => {
-        console.error('Fetch error:', err);
-        alert('Network error.');
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      alert(result.error || 'Failed to update item');
+      return;
+    }
+
+    await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
+
+    for (let ing of recipe) {
+      await fetch(`${API_URL}/recipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_id: parseInt(id),
+          ingredient_id: ing.ingredient_id,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          instructions: ing.instructions || ''
+        })
       });
+    }
+
+    navigate(`/item/${id}`);
+  };
+
+  const handleAddNewIngredient = async () => {
+    if (!newIngredientName.trim()) return;
+    const res = await fetch(`${API_URL}/ingredients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newIngredientName, category: '', notes: '', unit: '' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const newList = [...ingredients, data].sort((a, b) => a.name.localeCompare(b.name));
+      setIngredients(newList);
+      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '' }]);
+      setNewIngredientName('');
+    }
   };
 
   if (!item) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="p-4 max-w-xl mx-auto">
+    <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Edit Item</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium">Name</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className="w-full border rounded p-2"
-          />
+        <input name="name" value={formData.name} onChange={handleChange} placeholder="Name" className="w-full border p-2 rounded" required />
+        <input name="category" value={formData.category} onChange={handleChange} placeholder="Category" className="w-full border p-2 rounded" />
+        <input name="price" value={formData.price} onChange={handleChange} placeholder="Price" type="number" step="0.01" className="w-full border p-2 rounded" />
+        <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Description" className="w-full border p-2 rounded" />
+        <textarea name="notes" value={formData.notes} onChange={handleChange} placeholder="Notes" className="w-full border p-2 rounded" />
+
+        <div className="flex gap-4">
+          <label><input type="checkbox" name="is_prep" checked={formData.is_prep} onChange={handleChange} /> Is Prep</label>
+          <label><input type="checkbox" name="is_for_sale" checked={formData.is_for_sale} onChange={handleChange} /> For Sale</label>
+          <label><input type="checkbox" name="is_archived" checked={formData.is_archived} onChange={handleChange} /> Archived</label>
         </div>
-        <div>
-          <label className="block font-medium">Category</label>
-          <input
-            type="text"
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
-            className="w-full border rounded p-2"
-          />
+
+        <div className="mt-6">
+          <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
+          {recipe.map((r, index) => (
+            <div key={index} className="mb-2 flex gap-2">
+              <select value={r.ingredient_id} onChange={(e) => {
+                const updated = [...recipe];
+                updated[index].ingredient_id = parseInt(e.target.value);
+                setRecipe(updated);
+              }} className="border p-1 rounded">
+                <option value="">-- Select Ingredient --</option>
+                {ingredients.map((i) => (
+                  <option key={i.ingredient_id} value={i.ingredient_id}>{i.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                placeholder="Qty"
+                className="w-16 border p-1 rounded"
+                value={r.quantity}
+                onChange={(e) => {
+                  const updated = [...recipe];
+                  updated[index].quantity = e.target.value;
+                  setRecipe(updated);
+                }}
+              />
+              <input
+                placeholder="Unit"
+                className="w-20 border p-1 rounded"
+                value={r.unit}
+                onChange={(e) => {
+                  const updated = [...recipe];
+                  updated[index].unit = e.target.value;
+                  setRecipe(updated);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setRecipe(recipe.filter((_, i) => i !== index))}
+                className="text-red-600"
+              >✕</button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '' }])}
+            className="bg-blue-500 text-white px-3 py-1 rounded"
+          >+ Add Ingredient</button>
+
+          <div className="mt-4 flex gap-2 items-center">
+            <input
+              type="text"
+              placeholder="New Ingredient Name"
+              className="border p-1 rounded flex-1"
+              value={newIngredientName}
+              onChange={(e) => setNewIngredientName(e.target.value)}
+            />
+            <button
+              type="button"
+              className="bg-green-600 text-white px-3 py-1 rounded"
+              onClick={handleAddNewIngredient}
+            >+ Create & Add</button>
+          </div>
         </div>
-        <div>
-          <label className="block font-medium">Description</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            className="w-full border rounded p-2"
-            rows={2}
-          />
-        </div>
-        <div>
-          <label className="block font-medium">Price</label>
-          <input
-            type="number"
-            step="0.01"
-            name="price"
-            value={formData.price}
-            onChange={handleChange}
-            className="w-full border rounded p-2"
-          />
-        </div>
-        <div>
-          <label className="block font-medium">Notes</label>
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-            className="w-full border rounded p-2"
-            rows={2}
-          />
-        </div>
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            name="is_prep"
-            checked={formData.is_prep}
-            onChange={handleChange}
-          />
-          <label className="font-medium">Is Prep Item</label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            name="is_for_sale"
-            checked={formData.is_for_sale}
-            onChange={handleChange}
-          />
-          <label className="font-medium">Is For Sale</label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            name="is_archived"
-            checked={formData.is_archived}
-            onChange={handleChange}
-          />
-          <label className="font-medium">Archived</label>
-        </div>
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
-        >
-          Save Changes
-        </button>
+
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Save Changes</button>
       </form>
     </div>
   );

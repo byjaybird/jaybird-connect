@@ -12,6 +12,7 @@ import Logo from './assets/logo.png';
 import EditItem from './EditItem';
 import IngredientsPage from './IngredientsPage';
 import IngredientDetail from './IngredientDetail';
+import NewItemPage from './NewItemPage';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
@@ -234,6 +235,7 @@ function App() {
             <Route path="/item/:id/edit" element={<EditItem />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/ingredients/:id" element={<IngredientDetail />} />
+            <Route path="/item/new" element={<NewItemPage />} />
           </Routes>
         </Router>
       </AuthGate>

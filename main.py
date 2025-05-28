@@ -233,6 +233,40 @@ def delete_item(item_id):
     conn.close()
     return jsonify({'status': 'Item archived and dependencies updated'})
 
+@app.route('/api/items/new', methods=['POST'])
+def create_item():
+    data = request.get_json()
+    required_fields = ['name']
+
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING item_id
+        """, (
+            data['name'],
+            data.get('category'),
+            data.get('is_prep', False),
+            data.get('is_for_sale', True),
+            data.get('price'),
+            data.get('description'),
+            data.get('process_notes')
+        ))
+        item_id = cursor.fetchone()['item_id']
+        conn.commit()
+        return jsonify({'status': 'Item created', 'item_id': item_id}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/api/recipes/<int:item_id>', methods=['GET'])
 def get_recipe(item_id):
     conn = get_db_connection()
