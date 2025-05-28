@@ -67,6 +67,65 @@ def ingredients():
         ingredients = cursor.fetchall()
         conn.close()
         return jsonify(ingredients)
+    
+@app.route('/api/ingredients/<int:ingredient_id>', methods=['GET'])
+def get_ingredient_detail(ingredient_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+    ingredient = cursor.fetchone()
+
+    if not ingredient:
+        conn.close()
+        return jsonify({'error': 'Ingredient not found'}), 404
+
+    cursor.execute("""
+        SELECT DISTINCT i.item_id, i.name
+        FROM recipes r
+        JOIN items i ON r.item_id = i.item_id
+        WHERE r.ingredient_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
+    """, (ingredient_id,))
+    recipes = cursor.fetchall()
+
+    conn.close()
+    return jsonify({
+        'ingredient_id': ingredient['ingredient_id'],
+        'name': ingredient['name'],
+        'recipes': recipes
+    })
+
+
+@app.route('/api/ingredients/merge', methods=['POST'])
+def merge_ingredients():
+    data = request.get_json()
+    ids = data.get('ids')
+
+    if not ids or len(ids) != 2:
+        return jsonify({'error': 'Must supply exactly two ingredient IDs'}), 400
+
+    keep_id, drop_id = ids
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Re-assign all recipe references
+    cursor.execute("""
+        UPDATE recipes
+        SET ingredient_id = %s
+        WHERE ingredient_id = %s
+    """, (keep_id, drop_id))
+
+    # Mark the dropped ingredient as archived
+    cursor.execute("""
+        UPDATE ingredients
+        SET archived = TRUE
+        WHERE ingredient_id = %s
+    """, (drop_id,))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'Ingredients merged'})
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():

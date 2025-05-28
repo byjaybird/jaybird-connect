@@ -1,13 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Link,
+  useParams
+} from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import Logo from './assets/logo.png';
 import EditItem from './EditItem';
+import IngredientsPage from './IngredientsPage';
+import IngredientDetail from './IngredientDetail';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
-const GOOGLE_CLIENT_ID = '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
-const ALLOWED_DOMAINS = ['byjaybird.com', 'thebagelbin.com', 'mustardpretzel.com', 'sonomas.net'];
+const GOOGLE_CLIENT_ID =
+  '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
+const ALLOWED_DOMAINS = [
+  'byjaybird.com',
+  'thebagelbin.com',
+  'mustardpretzel.com',
+  'sonomas.net'
+];
 
 function Header({ user, onLogout }) {
   return (
@@ -15,6 +29,12 @@ function Header({ user, onLogout }) {
       <div className="flex items-center space-x-4">
         <Link to="/">
           <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
+        </Link>
+        <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">
+          Items
+        </Link>
+        <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">
+          Ingredients
         </Link>
       </div>
       {user && (
@@ -37,25 +57,22 @@ function ItemList() {
   const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
-    fetch('https://jaybird-connect.ue.r.appspot.com/api/items')
+    fetch(`${API_URL}/items`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("Fetched items from API:", data); // 👈 ADD THIS LINE
-
-        const visibleItems = data.filter(item => !!item.is_for_sale); // 👈 optional filtering
+        const visibleItems = data.filter((item) => !!item.is_for_sale);
         const grouped = visibleItems.reduce((acc, item) => {
           const category = item.category || 'Uncategorized';
           if (!acc[category]) acc[category] = [];
           acc[category].push(item);
           return acc;
         }, {});
-        console.log("Grouped items by category:", grouped); // 👈 ADD THIS TOO
         setItemsByCategory(grouped);
       });
   }, []);
 
   const toggleCategory = (category) => {
-    setExpandedCategories(prev => ({
+    setExpandedCategories((prev) => ({
       ...prev,
       [category]: !prev[category]
     }));
@@ -75,10 +92,13 @@ function ItemList() {
           </button>
           {expandedCategories[category] && (
             <ul className="p-4 bg-white border-t space-y-2">
-              {items.map(item => (
+              {items.map((item) => (
                 <li key={item.item_id} className="hover:text-blue-600">
                   <div className="flex justify-between items-center">
-                    <Link to={`/item/${item.item_id}`} className="text-blue-600 hover:underline">
+                    <Link
+                      to={`/item/${item.item_id}`}
+                      className="text-blue-600 hover:underline"
+                    >
                       {item.name}
                     </Link>
                     <Link
@@ -105,11 +125,11 @@ function ItemDetail() {
 
   useEffect(() => {
     fetch(`${API_URL}/recipes/${id}`)
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(setRecipe);
 
     fetch(`${API_URL}/items/${id}`)
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(setItemInfo);
   }, [id]);
 
@@ -118,8 +138,12 @@ function ItemDetail() {
       {itemInfo && (
         <div className="mb-4">
           <h2 className="text-2xl font-bold">{itemInfo.name}</h2>
-          {itemInfo.description && <p className="text-gray-700 italic mb-2">{itemInfo.description}</p>}
-          {itemInfo.process_notes && <p className="text-sm text-gray-600">Notes: {itemInfo.process_notes}</p>}
+          {itemInfo.description && (
+            <p className="text-gray-700 italic mb-2">{itemInfo.description}</p>
+          )}
+          {itemInfo.process_notes && (
+            <p className="text-sm text-gray-600">Notes: {itemInfo.process_notes}</p>
+          )}
         </div>
       )}
       <h3 className="text-xl font-semibold mb-2">Recipe Ingredients</h3>
@@ -127,11 +151,15 @@ function ItemDetail() {
         {recipe.map((r, idx) => (
           <li key={idx} className="border p-2 rounded">
             <strong>{r.name}</strong> – {r.quantity} {r.unit}
-            {r.instructions && <div className="text-sm text-gray-600">{r.instructions}</div>}
+            {r.instructions && (
+              <div className="text-sm text-gray-600">{r.instructions}</div>
+            )}
           </li>
         ))}
       </ul>
-      <Link to="/" className="mt-4 inline-block text-blue-600 hover:underline">Back to Menu</Link>
+      <Link to="/" className="mt-4 inline-block text-blue-600 hover:underline">
+        Back to Menu
+      </Link>
     </div>
   );
 }
@@ -150,7 +178,7 @@ function AuthGate({ children, setAppUser }) {
       <div className="flex flex-col items-center justify-center h-screen">
         <h1 className="text-2xl mb-4">Log in to access Jaybird Connect</h1>
         <GoogleLogin
-          onSuccess={credentialResponse => {
+          onSuccess={(credentialResponse) => {
             const decoded = jwtDecode(credentialResponse.credential);
             const domain = decoded.hd || '';
             if (!ALLOWED_DOMAINS.includes(domain)) {
@@ -169,7 +197,7 @@ function AuthGate({ children, setAppUser }) {
                 domain: domain,
                 timestamp: new Date().toISOString()
               })
-            }).catch(err => console.error('Failed to log login event:', err));
+            }).catch((err) => console.error('Failed to log login event:', err));
           }}
           onError={() => console.error('Login Failed')}
         />
@@ -198,6 +226,8 @@ function App() {
             <Route path="/" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/item/:id/edit" element={<EditItem />} />
+            <Route path="/ingredients" element={<IngredientsPage />} />
+            <Route path="/ingredient/:id" element={<IngredientDetail />} />
           </Routes>
         </Router>
       </AuthGate>
