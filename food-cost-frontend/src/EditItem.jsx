@@ -62,6 +62,10 @@ function EditItem() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const cleanRecipe = recipe.filter(r =>
+      r.ingredient_id && r.quantity !== '' && r.unit.trim() !== ''
+    );
+
     const res = await fetch(`${API_URL}/items/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -83,18 +87,16 @@ function EditItem() {
       return;
     }
 
-    await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
-
-    for (let ing of recipe) {
-      await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
+    for (let r of cleanRecipe) {
+      await fetch(`${API_URL}/recipes/${r.recipe_id || ''}`, {
+        method: r.recipe_id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           item_id: parseInt(id),
-          ingredient_id: ing.ingredient_id,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          instructions: ing.instructions || ''
+          ingredient_id: parseInt(r.ingredient_id),
+          quantity: r.quantity,
+          unit: r.unit,
+          instructions: r.instructions || ''
         })
       });
     }
@@ -113,10 +115,12 @@ function EditItem() {
     if (res.ok) {
       const newList = [...ingredients, data].sort((a, b) => a.name.localeCompare(b.name));
       setIngredients(newList);
-      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '' }]);
+      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '', recipe_id: null }]);
       setNewIngredientName('');
     }
   };
+
+  const usedIngredientIds = recipe.map(r => parseInt(r.ingredient_id));
 
   if (!item) return <div className="p-4">Loading...</div>;
 
@@ -146,7 +150,7 @@ function EditItem() {
                 setRecipe(updated);
               }} className="border p-1 rounded">
                 <option value="">-- Select Ingredient --</option>
-                {ingredients.map((i) => (
+                {ingredients.filter(i => !usedIngredientIds.includes(i.ingredient_id) || i.ingredient_id === r.ingredient_id).map((i) => (
                   <option key={i.ingredient_id} value={i.ingredient_id}>{i.name}</option>
                 ))}
               </select>
@@ -181,7 +185,7 @@ function EditItem() {
 
           <button
             type="button"
-            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '' }])}
+            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '', recipe_id: null }])}
             className="bg-blue-500 text-white px-3 py-1 rounded"
           >+ Add Ingredient</button>
 
