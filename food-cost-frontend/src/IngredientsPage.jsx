@@ -47,6 +47,7 @@ function IngredientsPage() {
       .then(() => {
         setSelected([]);
         fetchIngredients();
+        navigate('/ingredients');
       })
       .catch((err) => setError('Failed to merge ingredients.'));
   };
@@ -74,7 +75,7 @@ function IngredientsPage() {
               onChange={() => toggleSelect(ingredient.ingredient_id)}
             />
             <Link
-              to={`/ingredient/${ingredient.ingredient_id}`}
+              to={`/ingredients/${ingredient.ingredient_id}`}
               className="text-blue-600 hover:underline"
             >
               {ingredient.name}
