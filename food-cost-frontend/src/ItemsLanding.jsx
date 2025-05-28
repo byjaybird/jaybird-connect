@@ -19,6 +19,8 @@ function ItemsLanding() {
       });
   }, []);
 
+  console.log("Rendering ItemsLanding");
+  
   const toggleCategory = (category) => {
     setExpandedCategories((prev) => ({
       ...prev,
