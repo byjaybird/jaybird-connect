@@ -151,7 +151,7 @@ function ItemDetail() {
         {recipe.map((r, idx) => (
           <li key={idx} className="border p-2 rounded">
             <Link
-              to={`/ingredient/${r.ingredient_id}`}
+              to={`/ingredients/${r.ingredient_id}`}
               className="text-blue-600 hover:underline font-semibold"
             >
               {r.name}

@@ -51,7 +51,7 @@ function IngredientsPage() {
                 onClick={() => toggleSelect(ingredient.ingredient_id)} // Selects on li click
                 >
                 <Link
-                    to={`/ingredient/${ingredient.ingredient_id}`}
+                    to={`/ingredients/${ingredient.ingredient_id}`}
                     onClick={(e) => e.stopPropagation()} // Prevents li's onClick from firing when link is clicked
                     className="text-blue-600 hover:underline"
                 >
