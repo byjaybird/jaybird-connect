@@ -9,7 +9,7 @@ function IngredientDetail() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients/${id}`)  // ✅ corrected path includes 'ingredients'
+    fetch(`${API_URL}/ingredients/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch ingredient');
         return res.json();
@@ -17,6 +17,10 @@ function IngredientDetail() {
       .then((data) => {
         console.log('Fetched ingredient:', data);
         if (!data || data.error) throw new Error('Invalid ingredient response');
+        // Ensure recipes is at least an empty array
+        if (!Array.isArray(data.recipes)) {
+          data.recipes = [];
+        }
         setIngredient(data);
       })
       .catch((err) => {
@@ -35,7 +39,7 @@ function IngredientDetail() {
     <div className="p-4">
       <h2 className="text-2xl font-bold mb-4">{ingredient.name}</h2>
       <h3 className="text-lg font-semibold mb-2">Used in Recipes:</h3>
-      {ingredient.recipes.length === 0 ? (
+      {!ingredient.recipes || ingredient.recipes.length === 0 ? (
         <p className="text-gray-600">No recipes use this ingredient.</p>
       ) : (
         <ul className="list-disc ml-6 space-y-1">
