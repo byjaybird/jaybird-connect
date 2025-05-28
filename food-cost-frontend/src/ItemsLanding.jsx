@@ -18,8 +18,6 @@ function ItemsLanding() {
         setItemsByCategory(grouped);
       });
   }, []);
-
-  console.log("Rendering ItemsLanding");
   
   const toggleCategory = (category) => {
     setExpandedCategories((prev) => ({
@@ -27,6 +25,8 @@ function ItemsLanding() {
       [category]: !prev[category],
     }));
   };
+
+  console.log("Rendering ItemsLanding");
 
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4">

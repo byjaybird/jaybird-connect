@@ -13,6 +13,7 @@ import EditItem from './EditItem';
 import IngredientsPage from './IngredientsPage';
 import IngredientDetail from './IngredientDetail';
 import NewItemPage from './NewItemPage';
+import ItemsLanding from './ItemsLanding'; // or correct relative path
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
