@@ -9,7 +9,7 @@ function IngredientDetail() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients/${id}`)
+    fetch(`${API_URL}/ingredients/${id}`)  // ✅ corrected path includes 'ingredients'
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch ingredient');
         return res.json();
