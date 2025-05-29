@@ -13,6 +13,7 @@ function NewItemForm() {
   const [description, setDescription] = useState('');
   const [processNotes, setProcessNotes] = useState('');
   const [ingredients, setIngredients] = useState([]);
+  const [prepItems, setPrepItems] = useState([]);
   const [recipe, setRecipe] = useState([]);
   const [newIngredientName, setNewIngredientName] = useState('');
 
@@ -23,6 +24,14 @@ function NewItemForm() {
         const active = data.filter(i => !i.archived);
         const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
         setIngredients(sorted);
+      });
+
+    fetch(`${API_URL}/items`)
+      .then(res => res.json())
+      .then(data => {
+        const preps = data.filter(i => i.is_prep && !i.is_archived);
+        const sorted = preps.sort((a, b) => a.name.localeCompare(b.name));
+        setPrepItems(sorted);
       });
   }, []);
 
@@ -55,29 +64,34 @@ function NewItemForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const res = await fetch(`${API_URL}/items/new`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, category, is_prep: isPrep, is_for_sale: isForSale, price, description, process_notes: processNotes })
     });
+
     const result = await res.json();
     if (!res.ok) {
       alert(result.error || 'Failed to create item');
       return;
     }
+
     const itemId = result.item_id;
 
-    // Post recipe entries
-    for (let ing of recipe) {
+    for (let r of recipe) {
+      if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') continue;
+
       await fetch(`${API_URL}/recipes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           item_id: itemId,
-          ingredient_id: ing.ingredient_id,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          instructions: ing.instructions || ''
+          source_type: r.source_type,
+          source_id: r.source_id,
+          quantity: r.quantity,
+          unit: r.unit,
+          instructions: r.instructions || ''
         })
       });
     }
@@ -104,15 +118,28 @@ function NewItemForm() {
           <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2">
-              <select value={r.ingredient_id} onChange={(e) => {
+              <select value={`${r.source_type}:${r.source_id}`} onChange={(e) => {
+                const [type, id] = e.target.value.split(':');
                 const updated = [...recipe];
-                updated[index].ingredient_id = parseInt(e.target.value);
+                updated[index].source_type = type;
+                updated[index].source_id = parseInt(id);
                 setRecipe(updated);
               }} className="border p-1 rounded">
-                <option value="">-- Select Ingredient --</option>
-                {ingredients.map((i) => (
-                  <option key={i.ingredient_id} value={i.ingredient_id}>{i.name}</option>
-                ))}
+                <option value="">-- Select Source --</option>
+                <optgroup label="Ingredients">
+                  {ingredients.map((i) => (
+                    <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
+                      {i.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Prep Items">
+                  {prepItems.map((i) => (
+                    <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
+                      {i.name}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <input
                 type="number"
@@ -145,7 +172,13 @@ function NewItemForm() {
 
           <button
             type="button"
-            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '' }])}
+            onClick={() => setRecipe([...recipe, {
+              source_type: '',
+              source_id: '',
+              quantity: '',
+              unit: '',
+              instructions: ''
+            }])}
             className="bg-blue-500 text-white px-3 py-1 rounded"
           >+ Add Ingredient</button>
 

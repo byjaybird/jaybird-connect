@@ -50,15 +50,19 @@ function ItemDetail() {
             {recipe.map((r, i) => (
               <li key={i}>
                 {r.quantity} {r.unit} of{' '}
-                <Link
-                    to={`/ingredients/${r.ingredient_id}`}
-                    className="text-blue-600 hover:underline"
-                >
-                    {r.name}
-                </Link>
-                </li>
+                {r.source_type === 'item' ? (
+                  <Link to={`/items/${r.source_id}`} className="text-blue-600 hover:underline">
+                    {r.source_name}
+                  </Link>
+                ) : (
+                  <Link to={`/ingredients/${r.source_id}`} className="text-blue-600 hover:underline">
+                    {r.source_name}
+                  </Link>
+                )}
+              </li>
             ))}
           </ul>
+
         ) : (
           <p>No ingredients listed.</p>
         )}

@@ -183,9 +183,10 @@ function App() {
             <Route path="/" element={<ItemsLanding />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/item/:id/edit" element={<EditItem />} />
+            <Route path="/item/new" element={<NewItemPage />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/ingredients/:id" element={<IngredientDetail />} />
-            <Route path="/item/new" element={<NewItemPage />} />
+            <Route path="/ingredients/:id/edit" element={<EditIngredient />} />
           </Routes>
         </Router>
       </AuthGate>

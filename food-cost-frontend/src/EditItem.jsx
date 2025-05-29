@@ -20,6 +20,7 @@ function EditItem() {
   const [ingredients, setIngredients] = useState([]);
   const [recipe, setRecipe] = useState([]);
   const [newIngredientName, setNewIngredientName] = useState('');
+  const [prepItems, setPrepItems] = useState([]);
 
   useEffect(() => {
     fetch(`${API_URL}/items/${id}`)
@@ -45,6 +46,14 @@ function EditItem() {
         const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
         setIngredients(sorted);
       });
+
+    fetch(`${API_URL}/items`)
+    .then(res => res.json())
+    .then((data) => {
+      const preps = data.filter(i => i.is_prep && !i.is_archived);
+      const sorted = preps.sort((a, b) => a.name.localeCompare(b.name));
+      setPrepItems(sorted);
+    });
 
     fetch(`${API_URL}/recipes/${id}`)
       .then((res) => res.json())
@@ -87,8 +96,8 @@ function EditItem() {
 
     const seen = new Set();
     const cleaned = recipe.filter(r => {
-      if (!r.ingredient_id || r.quantity === '' || r.unit.trim() === '') return false;
-      const key = `${r.ingredient_id}`;
+      if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
+      const key = `${r.source_type}:${r.source_id}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -100,7 +109,8 @@ function EditItem() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           item_id: parseInt(id),
-          ingredient_id: parseInt(r.ingredient_id),
+          source_type: r.source_type,
+          source_id: r.source_id,
           quantity: r.quantity,
           unit: r.unit,
           instructions: r.instructions || ''
@@ -153,16 +163,34 @@ function EditItem() {
           <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2">
-              <select value={r.ingredient_id} onChange={(e) => {
-                const updated = [...recipe];
-                updated[index].ingredient_id = parseInt(e.target.value);
-                setRecipe(updated);
-              }} className="border p-1 rounded">
-                <option value="">-- Select Ingredient --</option>
-                {ingredients.map((i) => (
-                  <option key={i.ingredient_id} value={i.ingredient_id}>{i.name}</option>
-                ))}
+              <select
+                value={`${r.source_type}:${r.source_id}`}
+                onChange={(e) => {
+                  const [type, id] = e.target.value.split(':');
+                  const updated = [...recipe];
+                  updated[index].source_type = type;
+                  updated[index].source_id = parseInt(id);
+                  setRecipe(updated);
+                }}
+                className="border p-1 rounded"
+              >
+                <option value="">-- Select Source --</option>
+                <optgroup label="Ingredients">
+                  {ingredients.map((i) => (
+                    <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
+                      {i.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Prep Items">
+                  {prepItems.map((i) => (
+                    <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
+                      {i.name}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
+
               <input
                 type="number"
                 placeholder="Qty"
@@ -194,7 +222,7 @@ function EditItem() {
 
           <button
             type="button"
-            onClick={() => setRecipe([...recipe, { ingredient_id: '', quantity: '', unit: '' }])}
+            onClick={() => setRecipe([...recipe, { source_type: '', source_id: '', quantity: '', unit: '', instructions: '' }])}
             className="bg-blue-500 text-white px-3 py-1 rounded"
           >+ Add Ingredient</button>
 

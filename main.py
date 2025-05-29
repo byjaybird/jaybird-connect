@@ -87,7 +87,9 @@ def get_ingredient_detail(ingredient_id):
         SELECT DISTINCT i.item_id, i.name
         FROM recipes r
         JOIN items i ON r.item_id = i.item_id
-        WHERE r.ingredient_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
+        WHERE r.source_type = 'ingredient'
+        AND r.source_id = %s
+        AND (r.archived IS NULL OR r.archived = FALSE)
     """, (ingredient_id,))
     recipes = cursor.fetchall()
 
@@ -103,15 +105,29 @@ def update_ingredient(ingredient_id):
     data = request.get_json()
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Build a flexible SQL update
     cursor.execute("""
         UPDATE ingredients
-        SET archived = %s
+        SET name = %s,
+            category = %s,
+            unit = %s,
+            notes = %s,
+            archived = %s
         WHERE ingredient_id = %s
-    """, (data.get('archived', False), ingredient_id))
+    """, (
+        data.get('name'),
+        data.get('category'),
+        data.get('unit'),
+        data.get('notes'),
+        data.get('archived', False),
+        ingredient_id
+    ))
+
     conn.commit()
     conn.close()
-    return jsonify({'status': 'Ingredient updated'})
 
+    return jsonify({'status': 'Ingredient updated'})
 
 @app.route('/api/ingredients/merge', methods=['POST'])
 def merge_ingredients():
@@ -146,7 +162,6 @@ def merge_ingredients():
     conn.close()
 
     return jsonify({'status': f'Merged {len(ids)} ingredients into ID {keep_id}'})
-
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
@@ -271,12 +286,26 @@ def create_item():
 def get_recipe(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT r.recipe_id, r.ingredient_id, i.name, r.quantity, r.unit, r.instructions
+
+    cursor.execute("""
+        SELECT 
+            r.recipe_id,
+            r.source_type,
+            r.source_id,
+            r.quantity,
+            r.unit,
+            r.instructions,
+            CASE
+                WHEN r.source_type = 'ingredient' THEN ing.name
+                WHEN r.source_type = 'item' THEN it.name
+                ELSE 'Unknown'
+            END AS source_name
         FROM recipes r
-        JOIN ingredients i ON r.ingredient_id = i.ingredient_id
+        LEFT JOIN ingredients ing ON r.source_type = 'ingredient' AND r.source_id = ing.ingredient_id
+        LEFT JOIN items it ON r.source_type = 'item' AND r.source_id = it.item_id
         WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
-    ''', (item_id,))
+    """, (item_id,))
+
     result = cursor.fetchall()
     conn.close()
     return jsonify(result)
@@ -286,11 +315,24 @@ def update_recipe(recipe_id):
     data = request.get_json()
     conn = get_db_connection()
     cursor = conn.cursor()
+
     cursor.execute("""
         UPDATE recipes
-        SET ingredient_id = %s, quantity = %s, unit = %s, instructions = %s
+        SET source_type = %s,
+            source_id = %s,
+            quantity = %s,
+            unit = %s,
+            instructions = %s
         WHERE recipe_id = %s
-    """, (data['ingredient_id'], data['quantity'], data['unit'], data.get('instructions'), recipe_id))
+    """, (
+        data['source_type'],
+        data['source_id'],
+        data['quantity'],
+        data['unit'],
+        data.get('instructions'),
+        recipe_id
+    ))
+
     conn.commit()
     conn.close()
     return jsonify({'status': 'Recipe updated'})
