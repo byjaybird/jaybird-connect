@@ -62,42 +62,68 @@ function NewItemForm() {
       });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    const res = await fetch(`${API_URL}/items/new`, {
+  // Step 1: Create the new item
+  const res = await fetch(`${API_URL}/items/new`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      category,
+      is_prep: isPrep,
+      is_for_sale: isForSale,
+      price: price === '' ? null : parseFloat(price),
+      description,
+      process_notes: processNotes
+    })
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    alert(result.error || 'Failed to create item');
+    return;
+  }
+
+  const itemId = result.item_id;
+
+  // Step 2: Validate and deduplicate recipe lines
+  const seen = new Set();
+  const cleaned = recipe.filter(r => {
+    if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
+    const key = `${r.source_type}:${r.source_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Step 3: Post the cleaned recipe lines
+  for (let r of cleaned) {
+    const response = await fetch(`${API_URL}/recipes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, category, is_prep: isPrep, is_for_sale: isForSale, price, description, process_notes: processNotes })
+      body: JSON.stringify({
+        item_id: itemId,
+        source_type: r.source_type,
+        source_id: r.source_id,
+        quantity: r.quantity,
+        unit: r.unit,
+        instructions: r.instructions || ''
+      })
     });
 
-    const result = await res.json();
-    if (!res.ok) {
-      alert(result.error || 'Failed to create item');
-      return;
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('Failed to save recipe line:', error);
+      alert(`Failed to save recipe line for ${r.source_type}:${r.source_id}`);
     }
+  }
 
-    const itemId = result.item_id;
+  // Step 4: Redirect to item detail page
+  navigate(`/item/${itemId}`);
+};
 
-    for (let r of recipe) {
-      if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') continue;
-
-      await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: itemId,
-          source_type: r.source_type,
-          source_id: r.source_id,
-          quantity: r.quantity,
-          unit: r.unit,
-          instructions: r.instructions || ''
-        })
-      });
-    }
-
-    navigate(`/item/${itemId}`);
-  };
 
   return (
     <div className="max-w-2xl mx-auto p-4">
@@ -118,29 +144,36 @@ function NewItemForm() {
           <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2">
-              <select value={`${r.source_type}:${r.source_id}`} onChange={(e) => {
-                const [type, id] = e.target.value.split(':');
-                const updated = [...recipe];
-                updated[index].source_type = type;
-                updated[index].source_id = parseInt(id);
-                setRecipe(updated);
-              }} className="border p-1 rounded">
+              <select
+                value={`${r.source_type}:${r.source_id}`}
+                onChange={(e) => {
+                  const [type, id] = e.target.value.split(':');
+                  const updated = [...recipe];
+                  updated[index].source_type = type;
+                  updated[index].source_id = parseInt(id);
+                  setRecipe(updated);
+                }}
+                className="border p-1 rounded"
+              >
                 <option value="">-- Select Source --</option>
-                <optgroup label="Ingredients">
+
+                <optgroup label="🧂 Ingredients">
                   {ingredients.map((i) => (
                     <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                      {i.name}
+                      🧂 {i.name}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Prep Items">
+
+                <optgroup label="🛠️ Prep Items">
                   {prepItems.map((i) => (
                     <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
-                      {i.name}
+                      🛠️ {i.name}
                     </option>
                   ))}
                 </optgroup>
               </select>
+
               <input
                 type="number"
                 placeholder="Qty"

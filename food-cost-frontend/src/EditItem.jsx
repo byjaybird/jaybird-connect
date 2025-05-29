@@ -69,57 +69,63 @@ function EditItem() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const res = await fetch(`${API_URL}/items/${id}`, {
-      method: 'PUT',
+  // Step 1: Update the item itself
+  const res = await fetch(`${API_URL}/items/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: formData.name,
+      category: formData.category,
+      is_prep: formData.is_prep,
+      is_for_sale: formData.is_for_sale,
+      price: formData.price === '' ? null : parseFloat(formData.price),
+      description: formData.description,
+      process_notes: formData.notes,
+      is_archived: formData.is_archived
+    })
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    alert(error.error || 'Failed to update item');
+    return;
+  }
+
+  // Step 2: Clear the old recipe (clean slate)
+  await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
+
+  // Step 3: Filter out incomplete or duplicate recipe entries
+  const seen = new Set();
+  const cleaned = recipe.filter(r => {
+    if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
+    const key = `${r.source_type}:${r.source_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Step 4: Re-create the recipe lines using new model
+  for (let r of cleaned) {
+    await fetch(`${API_URL}/recipes`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: formData.name,
-        category: formData.category,
-        is_prep: formData.is_prep,
-        is_for_sale: formData.is_for_sale,
-        price: formData.price === '' ? null : parseFloat(formData.price),
-        description: formData.description,
-        process_notes: formData.notes,
-        is_archived: formData.is_archived
+        item_id: parseInt(id),
+        source_type: r.source_type,
+        source_id: r.source_id,
+        quantity: r.quantity,
+        unit: r.unit,
+        instructions: r.instructions || ''
       })
     });
+  }
 
-    if (!res.ok) {
-      const error = await res.json();
-      alert(error.error || 'Failed to update item');
-      return;
-    }
+  // Step 5: Navigate back to item detail page
+  navigate(`/item/${id}`);
+};
 
-    await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
-
-    const seen = new Set();
-    const cleaned = recipe.filter(r => {
-      if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
-      const key = `${r.source_type}:${r.source_id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    for (let r of cleaned) {
-      await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: parseInt(id),
-          source_type: r.source_type,
-          source_id: r.source_id,
-          quantity: r.quantity,
-          unit: r.unit,
-          instructions: r.instructions || ''
-        })
-      });
-    }
-
-    navigate(`/item/${id}`);
-  };
 
   const handleAddNewIngredient = async () => {
     if (!newIngredientName.trim()) return;
@@ -175,17 +181,19 @@ function EditItem() {
                 className="border p-1 rounded"
               >
                 <option value="">-- Select Source --</option>
-                <optgroup label="Ingredients">
+
+                <optgroup label="🧂 Ingredients">
                   {ingredients.map((i) => (
                     <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                      {i.name}
+                      🧂 {i.name}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Prep Items">
+
+                <optgroup label="🛠️ Prep Items">
                   {prepItems.map((i) => (
                     <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
-                      {i.name}
+                      🛠️ {i.name}
                     </option>
                   ))}
                 </optgroup>

@@ -286,7 +286,6 @@ def create_item():
 def get_recipe(item_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
         SELECT 
             r.recipe_id,
@@ -295,7 +294,7 @@ def get_recipe(item_id):
             r.quantity,
             r.unit,
             r.instructions,
-            CASE
+            CASE 
                 WHEN r.source_type = 'ingredient' THEN ing.name
                 WHEN r.source_type = 'item' THEN it.name
                 ELSE 'Unknown'
@@ -305,10 +304,9 @@ def get_recipe(item_id):
         LEFT JOIN items it ON r.source_type = 'item' AND r.source_id = it.item_id
         WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
     """, (item_id,))
-
-    result = cursor.fetchall()
+    rows = cursor.fetchall()
     conn.close()
-    return jsonify(result)
+    return jsonify(rows)
 
 @app.route('/api/recipes/<int:recipe_id>', methods=['PUT'])
 def update_recipe(recipe_id):
