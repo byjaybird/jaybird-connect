@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import CostCell from '../components/CostCell';
+import CostCell from './components/CostCell';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
