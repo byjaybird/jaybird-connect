@@ -15,6 +15,8 @@ import IngredientDetail from './IngredientDetail';
 import NewItemPage from './NewItemPage';
 import ItemsLanding from './ItemsLanding'; // or correct relative path
 import ItemDetail from './ItemDetail';
+import EditIngredient from './EditIngredient'; // Adjust the path if it's in a subfolder
+
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
