@@ -42,7 +42,9 @@ function Prices() {
             <tr key={q.id}>
               <td className="border px-4 py-2">{q.ingredient_name}</td>
               <td className="border px-4 py-2">{q.source}</td>
-              <td className="border px-4 py-2">{q.size}</td>
+              <td className="border px-4 py-2">
+                {q.size_qty} {q.size_unit}
+              </td>
               <td className="border px-4 py-2">${q.price.toFixed(2)}</td>
               <td className="border px-4 py-2">{q.date_found}</td>
               <td className="border px-4 py-2">{q.notes}</td>

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import CostCell from '../components/CostCell'; // adjust path as needed
+
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -7,6 +9,8 @@ function ItemDetail() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
   const [recipe, setRecipe] = useState([]);
+  const [fixingIndex, setFixingIndex] = useState(null);
+  const [fixData, setFixData] = useState(null);
 
   useEffect(() => {
     fetch(`${API_URL}/items/${id}`)
@@ -48,21 +52,26 @@ function ItemDetail() {
         {recipe.length > 0 ? (
           <ul className="list-disc list-inside">
             {recipe.map((r, i) => (
-              <li key={i}>
-                {r.quantity} {r.unit} of{' '}
-                {r.source_type === 'item' ? (
-                  <Link to={`/items/${r.source_id}`} className="text-blue-600 hover:underline">
-                    {r.source_name}
-                  </Link>
-                ) : (
-                  <Link to={`/ingredients/${r.source_id}`} className="text-blue-600 hover:underline">
-                    {r.source_name}
-                  </Link>
-                )}
+              <li key={i} className="flex items-center gap-2">
+                <span>
+                  {r.quantity} {r.unit} of{' '}
+                  {r.source_type === 'item' ? (
+                    <Link to={`/items/${r.source_id}`} className="text-blue-600 hover:underline">
+                      {r.source_name}
+                    </Link>
+                  ) : (
+                    <Link to={`/ingredients/${r.source_id}`} className="text-blue-600 hover:underline">
+                      {r.source_name}
+                    </Link>
+                  )}
+                </span>
+                <CostCell ingredientId={r.source_id} unit={r.unit} qty={r.quantity} onMissing={(data) => {
+                      setFixingIndex(index);
+                      setFixData(data);
+                    }} />
               </li>
             ))}
           </ul>
-
         ) : (
           <p>No ingredients listed.</p>
         )}

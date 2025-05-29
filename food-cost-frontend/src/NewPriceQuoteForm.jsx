@@ -7,7 +7,8 @@ function NewPriceQuoteForm() {
   const [form, setForm] = useState({
     ingredient_id: '',
     source: '',
-    size: '',
+    size_qty: '',
+    size_unit: '',
     price: '',
     date_found: '',
     notes: '',
@@ -41,7 +42,8 @@ function NewPriceQuoteForm() {
       setForm({
         ingredient_id: '',
         source: '',
-        size: '',
+        size_qty: '',
+        size_unit: '',
         price: '',
         date_found: '',
         notes: '',
@@ -74,8 +76,13 @@ function NewPriceQuoteForm() {
       </label>
 
       <label className="block">
-        Size:
-        <input type="text" name="size" value={form.size} onChange={handleChange} required className="w-full border p-2" />
+        Size Quantity:
+        <input type="number" name="size_qty" value={form.size_qty} onChange={handleChange} required step="any" className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        Size Unit:
+        <input type="text" name="size_unit" value={form.size_unit} onChange={handleChange} required className="w-full border p-2" />
       </label>
 
       <label className="block">

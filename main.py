@@ -4,6 +4,7 @@ import os
 import psycopg2
 import psycopg2.extras
 from datetime import datetime
+from utils.cost_resolver import resolve_ingredient_cost
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -421,6 +422,29 @@ def get_price_quotes():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+@app.route('/api/ingredient_cost/<int:ingredient_id>', methods=['GET'])
+def get_ingredient_cost(ingredient_id):
+    unit = request.args.get('unit')
+    qty = float(request.args.get('qty', 1))
+
+    if not unit:
+        return jsonify({"error": "Missing 'unit' parameter"}), 400
+
+    result = resolve_ingredient_cost(ingredient_id, unit, qty)
+    return jsonify(result)
+
+@app.route('/api/item_cost/<int:item_id>', methods=['GET'])
+def get_item_cost(item_id):
+    unit = request.args.get('unit')
+    qty = float(request.args.get('qty', 1))
+
+    if not unit:
+        return jsonify({"error": "Missing 'unit' parameter"}), 400
+
+    from cost_resolver import resolve_item_cost
+    result = resolve_item_cost(item_id, unit, qty)
+    return jsonify(result)
 
 
 if __name__ == '__main__':
