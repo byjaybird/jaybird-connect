@@ -17,7 +17,7 @@ import ItemsLanding from './ItemsLanding';
 import ItemDetail from './ItemDetail';
 import EditIngredient from './EditIngredient'; 
 import NewPriceQuoteForm from './NewPriceQuoteForm';
-import Prices from './pages/Prices';
+import Prices from './Prices';
 
 
 
