@@ -13,9 +13,12 @@ import EditItem from './EditItem';
 import IngredientsPage from './IngredientsPage';
 import IngredientDetail from './IngredientDetail';
 import NewItemPage from './NewItemPage';
-import ItemsLanding from './ItemsLanding'; // or correct relative path
+import ItemsLanding from './ItemsLanding';
 import ItemDetail from './ItemDetail';
-import EditIngredient from './EditIngredient'; // Adjust the path if it's in a subfolder
+import EditIngredient from './EditIngredient'; 
+import NewPriceQuoteForm from './components/NewPriceQuoteForm';
+import Prices from './pages/Prices';
+
 
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
@@ -40,6 +43,9 @@ function Header({ user, onLogout }) {
         </Link>
         <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">
           Ingredients
+        </Link>
+        <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">
+          Prices
         </Link>
       </div>
       {user && (
@@ -189,6 +195,8 @@ function App() {
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/ingredients/:id" element={<IngredientDetail />} />
             <Route path="/ingredients/:id/edit" element={<EditIngredient />} />
+            <Route path="/prices" element={<Prices />} />
+            <Route path="/prices/new" element={<NewPriceQuoteForm />} />
           </Routes>
         </Router>
       </AuthGate>

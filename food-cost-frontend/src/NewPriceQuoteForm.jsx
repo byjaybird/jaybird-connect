@@ -1,0 +1,108 @@
+import React, { useState, useEffect } from 'react';
+
+const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+
+function NewPriceQuoteForm() {
+  const [ingredients, setIngredients] = useState([]);
+  const [form, setForm] = useState({
+    ingredient_id: '',
+    source: '',
+    size: '',
+    price: '',
+    date_found: '',
+    notes: '',
+    is_purchase: false
+  });
+
+  useEffect(() => {
+    fetch(`${API_URL}/ingredients`)
+      .then(res => res.json())
+      .then(setIngredients);
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const res = await fetch(`${API_URL}/price_quotes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert('Price quote added!');
+      setForm({
+        ingredient_id: '',
+        source: '',
+        size: '',
+        price: '',
+        date_found: '',
+        notes: '',
+        is_purchase: false
+      });
+    } else {
+      alert(`Error: ${data.error}`);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="p-4 space-y-4 max-w-md">
+      <h2 className="text-xl font-bold">New Price Quote</h2>
+
+      <label className="block">
+        Ingredient:
+        <select name="ingredient_id" value={form.ingredient_id} onChange={handleChange} required className="w-full border p-2">
+          <option value="">Select one</option>
+          {ingredients.map(ing => (
+            <option key={ing.ingredient_id} value={ing.ingredient_id}>
+              {ing.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block">
+        Source:
+        <input type="text" name="source" value={form.source} onChange={handleChange} required className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        Size:
+        <input type="text" name="size" value={form.size} onChange={handleChange} required className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        Price:
+        <input type="number" name="price" value={form.price} onChange={handleChange} required step="0.01" className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        Date Found:
+        <input type="date" name="date_found" value={form.date_found} onChange={handleChange} className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        Notes:
+        <textarea name="notes" value={form.notes} onChange={handleChange} className="w-full border p-2" />
+      </label>
+
+      <label className="block">
+        <input type="checkbox" name="is_purchase" checked={form.is_purchase} onChange={handleChange} />
+        {' '}Was this actually purchased?
+      </label>
+
+      <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        Add Quote
+      </button>
+    </form>
+  );
+}
+
+export default NewPriceQuoteForm;

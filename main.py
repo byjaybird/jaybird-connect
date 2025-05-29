@@ -357,5 +357,71 @@ def delete_recipes_for_item(item_id):
     conn.close()
     return jsonify({'status': 'deleted'})
 
+@app.route('/api/price_quotes', methods=['POST'])
+def create_price_quote():
+    data = request.get_json()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO price_quotes (
+                ingredient_id, source, size, price, date_found, notes, is_purchase
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            data['ingredient_id'],
+            data['source'],
+            data['size'],
+            data['price'],
+            data.get('date_found', datetime.today().date()),
+            data.get('notes', ''),
+            data.get('is_purchase', False)
+        ))
+        conn.commit()
+        return jsonify({'status': 'Price quote added'}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/price_quotes', methods=['GET'])
+def get_price_quotes():
+    ingredient_id = request.args.get('ingredient_id')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if ingredient_id:
+            cursor.execute("""
+                SELECT * FROM price_quotes WHERE ingredient_id = %s
+                ORDER BY date_found DESC
+            """, (ingredient_id,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    q.id,
+                    q.ingredient_id,
+                    i.name AS ingredient_name,
+                    q.source,
+                    q.size,
+                    q.price,
+                    q.date_found,
+                    q.notes,
+                    q.is_purchase
+                FROM price_quotes q
+                JOIN ingredients i ON q.ingredient_id = i.ingredient_id
+                ORDER BY q.date_found DESC
+            """)
+        quotes = cursor.fetchall()
+        return jsonify(quotes)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 if __name__ == '__main__':
     app.run(debug=True)
