@@ -16,7 +16,7 @@ import NewItemPage from './NewItemPage';
 import ItemsLanding from './ItemsLanding';
 import ItemDetail from './ItemDetail';
 import EditIngredient from './EditIngredient'; 
-import NewPriceQuoteForm from './components/NewPriceQuoteForm';
+import NewPriceQuoteForm from './NewPriceQuoteForm';
 import Prices from './pages/Prices';
 
 
