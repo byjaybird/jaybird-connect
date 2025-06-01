@@ -29,30 +29,39 @@ function NewPriceQuoteForm() {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`${API_URL}/price_quotes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
-    });
-    const data = await res.json();
-    if (res.ok) {
-      alert('Price quote added!');
-      setForm({
-        ingredient_id: '',
-        source: '',
-        size_qty: '',
-        size_unit: '',
-        price: '',
-        date_found: '',
-        notes: '',
-        is_purchase: false
-      });
-    } else {
-      alert(`Error: ${data.error}`);
-    }
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  const payload = {
+    ...form,
+    ingredient_id: parseInt(form.ingredient_id, 10),
+    size_qty: parseFloat(form.size_qty),
+    price: parseFloat(form.price)
   };
+
+  const res = await fetch(`${API_URL}/price_quotes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    alert('Price quote added!');
+    setForm({
+      ingredient_id: '',
+      source: '',
+      size_qty: '',
+      size_unit: '',
+      price: '',
+      date_found: '',
+      notes: '',
+      is_purchase: false
+    });
+  } else {
+    alert(`Error: ${data.error}`);
+  }
+};
 
   return (
     <form onSubmit={handleSubmit} className="p-4 space-y-4 max-w-md">
@@ -82,8 +91,22 @@ function NewPriceQuoteForm() {
 
       <label className="block">
         Size Unit:
-        <input type="text" name="size_unit" value={form.size_unit} onChange={handleChange} required className="w-full border p-2" />
+        <select name="size_unit" value={form.size_unit} onChange={handleChange} required className="w-full border p-2">
+          <option value="">Select unit</option>
+          <option value="oz">oz</option>
+          <option value="lb">lb</option>
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="l">l</option>
+          <option value="each">each</option>
+          <option value="slice">slice</option>
+          <option value="dozen">dozen</option>
+          <option value="case">case</option>
+          <option value="pack">pack</option>
+        </select>
       </label>
+
 
       <label className="block">
         Price:
