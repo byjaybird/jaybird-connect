@@ -8,6 +8,8 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  console.log('🔍 CostCell mounted', { sourceType, sourceId, unit, qty });
+
   useEffect(() => {
     if (!sourceType || !sourceId || !unit || !qty) return;
 
@@ -41,6 +43,8 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
 
   const { from_unit, to_unit } = costData?.missing || {};
   const title = costData.message || 'Missing cost data';
+  
+  console.log('CostCell:', { costData });
 
   return (
     <span

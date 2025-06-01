@@ -40,37 +40,6 @@ function NewItemForm() {
       });
   }, []);
 
-  const resolveCost = async (sourceType, sourceId, unit, quantity) => {
-    if (!sourceType || !sourceId || !unit || !quantity) return null;
-
-    let url;
-    if (sourceType === 'ingredient') {
-      url = `${API_URL}/resolve_ingredient_cost?ingredient_id=${sourceId}&unit=${unit}&qty=${quantity}`;
-    } else if (sourceType === 'item') {
-      url = `${API_URL}/resolve_item_cost?item_id=${sourceId}&unit=${unit}&qty=${quantity}`;
-    } else {
-      return null;
-    }
-
-    const res = await fetch(url);
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    return data.cost || null;
-  };
-
-  useEffect(() => {
-    async function fetchCosts() {
-      const updated = await Promise.all(recipe.map(async (r) => {
-        const cost = await resolveCost(r.source_type, r.source_id, r.unit, r.quantity);
-        return { ...r, resolved_cost: cost };
-      }));
-      setRecipe(updated);
-    }
-
-    if (recipe.length) fetchCosts();
-  }, [recipe.length]);
-
   const handleAddIngredientToRecipe = () => {
     if (!newIngredientName) return;
 
@@ -234,9 +203,16 @@ function NewItemForm() {
                   setRecipe(updated);
                 }}
               />
-              <span>
-                {r.resolved_cost != null ? `$${r.resolved_cost.toFixed(2)}` : '⚠️'}
-              </span>
+              <CostCell
+                sourceType={r.source_type}
+                sourceId={r.source_id}
+                unit={r.unit}
+                qty={r.quantity}
+                onMissing={(data) => {
+                  setFixingIndex(index);
+                  setFixData(data);
+                }}
+              />
               <button
                 type="button"
                 onClick={() => setRecipe(recipe.filter((_, i) => i !== index))}

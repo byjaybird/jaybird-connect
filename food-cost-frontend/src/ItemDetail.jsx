@@ -65,10 +65,16 @@ function ItemDetail() {
                     </Link>
                   )}
                 </span>
-                <CostCell ingredientId={r.source_id} unit={r.unit} qty={r.quantity} onMissing={(data) => {
-                      setFixingIndex(index);
-                      setFixData(data);
-                    }} />
+                <CostCell
+                  sourceType={r.source_type}
+                  sourceId={r.source_id}
+                  unit={r.unit}
+                  qty={r.quantity}
+                  onMissing={(data) => {
+                    setFixingIndex(i); // use the loop index from `.map`
+                    setFixData(data);
+                  }}
+                />
               </li>
             ))}
           </ul>
