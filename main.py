@@ -21,20 +21,6 @@ def get_db_connection():
         cursor_factory=psycopg2.extras.RealDictCursor
     )
 
-@app.route('/api/test-db')
-def test_db():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
-        conn.close()
-        return jsonify({'db_test': result})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-print("Connecting to:", os.getenv("DB_HOST"))
-
 @app.route('/')
 def index():
     return "Food Cost Tracker API Running"
@@ -459,6 +445,9 @@ def get_item_cost(item_id):
     result = resolve_item_cost(item_id, unit, qty)
     return jsonify(result)
 
+print("=== ROUTES REGISTERED ===")
+for rule in app.url_map.iter_rules():
+    print(rule)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,5 +1,5 @@
 from datetime import date
-from db import get_db_connection  # or your actual import
+from utils.db import get_db_connection
 
 def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
     conn = get_db_connection()
