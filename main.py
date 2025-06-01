@@ -429,10 +429,23 @@ def get_ingredient_cost(ingredient_id):
     qty = float(request.args.get('qty', 1))
 
     if not unit:
-        return jsonify({"error": "Missing 'unit' parameter"}), 400
+        return jsonify({
+            "status": "error",
+            "issue": "missing_unit",
+            "message": "Missing 'unit' parameter"
+        }), 200
 
-    result = resolve_ingredient_cost(ingredient_id, unit, qty)
-    return jsonify(result)
+    try:
+        result = resolve_ingredient_cost(ingredient_id, unit, qty)
+        return jsonify(result), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "issue": "internal_exception",
+            "message": str(e)
+        }), 200
 
 @app.route('/api/item_cost/<int:item_id>', methods=['GET'])
 def get_item_cost(item_id):

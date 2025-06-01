@@ -22,6 +22,21 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
             : `/item_cost/${sourceId}?unit=${unit}&qty=${qty}`;
 
         const res = await fetch(`${API_URL}${endpoint}`);
+
+        if (!res.ok) {
+          console.warn('Non-OK response:', res.status);
+          setCostData({ status: 'error', message: `HTTP ${res.status}` });
+          return;
+        }
+
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          const text = await res.text();
+          console.error("Expected JSON, got HTML:", text.slice(0, 100));
+          setCostData({ status: 'error', message: 'Invalid response format' });
+          return;
+        }
+
         const data = await res.json();
         setCostData(data);
       } catch (err) {
@@ -31,6 +46,7 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
         setLoading(false);
       }
     }
+
 
     fetchCost();
   }, [sourceType, sourceId, unit, qty]);
