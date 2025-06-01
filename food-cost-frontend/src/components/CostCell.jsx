@@ -8,8 +8,6 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  console.log('🔍 CostCell mounted', { sourceType, sourceId, unit, qty });
-
   useEffect(() => {
     if (!sourceType || !sourceId || !unit || !qty) return;
 

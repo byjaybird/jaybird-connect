@@ -354,13 +354,14 @@ def create_price_quote():
     try:
         cursor.execute("""
             INSERT INTO price_quotes (
-                ingredient_id, source, size, price, date_found, notes, is_purchase
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ingredient_id, source, size_qty, size_unit, price, date_found, notes, is_purchase
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             data['ingredient_id'],
             data['source'],
-            data['size'],
-            data['price'],
+            float(data['size_qty']),
+            data['size_unit'],
+            float(data['price']),
             data.get('date_found', datetime.today().date()),
             data.get('notes', ''),
             data.get('is_purchase', False)
@@ -393,7 +394,8 @@ def get_price_quotes():
                     q.ingredient_id,
                     i.name AS ingredient_name,
                     q.source,
-                    q.size,
+                    q.size_qty,
+                    q.size_unit,
                     q.price,
                     q.date_found,
                     q.notes,
