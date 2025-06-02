@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import psycopg2
 import psycopg2.extras
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from utils.cost_resolver import resolve_ingredient_cost
 from dotenv import load_dotenv
