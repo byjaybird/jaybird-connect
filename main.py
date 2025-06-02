@@ -447,6 +447,58 @@ def get_item_cost(item_id):
     result = resolve_item_cost(item_id, unit, qty)
     return jsonify(result)
 
+@app.route('/api/ingredient_conversions', methods=['GET'])
+def get_ingredient_conversions():
+    ingredient_id = request.args.get('ingredient_id')
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        if ingredient_id:
+            cursor.execute("""
+                SELECT * FROM ingredient_conversions
+                WHERE ingredient_id = %s OR is_global = TRUE
+                ORDER BY is_global ASC, from_unit, to_unit
+            """, (ingredient_id,))
+        else:
+            cursor.execute("""
+                SELECT * FROM ingredient_conversions
+                ORDER BY ingredient_id NULLS LAST, from_unit, to_unit
+            """)
+        rows = cursor.fetchall()
+        return jsonify(rows)
+
+    finally:
+        conn.close()
+
+@app.route('/api/ingredient_conversions', methods=['POST'])
+def add_ingredient_conversion():
+    data = request.get_json()
+    ingredient_id = data.get('ingredient_id')
+    from_unit = data.get('from_unit', '').strip().lower()
+    to_unit = data.get('to_unit', '').strip().lower()
+    factor = data.get('factor')
+
+    if not all([from_unit, to_unit, factor is not None]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        cursor.execute("""
+            INSERT INTO ingredient_conversions (ingredient_id, from_unit, to_unit, factor, is_global)
+            VALUES (%s, %s, %s, %s, FALSE)
+            RETURNING *
+        """, (ingredient_id, from_unit, to_unit, factor))
+        new_conversion = cursor.fetchone()
+        conn.commit()
+        return jsonify(new_conversion), 201
+
+    finally:
+        conn.close()
+
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():
     print(rule)

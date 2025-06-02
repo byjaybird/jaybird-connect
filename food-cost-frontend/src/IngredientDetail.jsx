@@ -4,19 +4,17 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
 function IngredientDetail() {
-  // Pull the ingredient ID from the URL route params
   const { id } = useParams();
-
-  // For redirecting after archiving
   const navigate = useNavigate();
 
-  // Store the fetched ingredient data
   const [ingredient, setIngredient] = useState(null);
-
-  // If there's an error during fetch/archive, store it here
+  const [conversions, setConversions] = useState([]);
   const [error, setError] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [fromUnit, setFromUnit] = useState('');
+  const [toUnit, setToUnit] = useState('');
+  const [factor, setFactor] = useState('');
 
-  // Load ingredient details when this component mounts or when ID changes
   useEffect(() => {
     fetch(`${API_URL}/ingredients/${id}`)
       .then((res) => {
@@ -24,20 +22,24 @@ function IngredientDetail() {
         return res.json();
       })
       .then((data) => {
-        // Basic validation for data structure
         if (!data || data.error) throw new Error('Invalid ingredient response');
-        if (!Array.isArray(data.recipes)) {
-          data.recipes = [];
-        }
-        setIngredient(data); // Set the loaded data into state
+        if (!Array.isArray(data.recipes)) data.recipes = [];
+        setIngredient(data);
       })
       .catch((err) => {
         console.error('Fetch error:', err);
         setError('Could not load ingredient data.');
       });
+
+    fetch(`${API_URL}/ingredient_conversions?ingredient_id=${id}`)
+      .then((res) => res.json())
+      .then(setConversions)
+      .catch((err) => {
+        console.error('Conversion fetch error:', err);
+        setConversions([]);
+      });
   }, [id]);
 
-  // Archive handler – sets the ingredient's `archived` flag to true
   const handleArchive = () => {
     fetch(`${API_URL}/ingredients/${id}`, {
       method: 'PUT',
@@ -51,7 +53,7 @@ function IngredientDetail() {
         return res.json();
       })
       .then(() => {
-        navigate('/ingredients'); // Navigate back to ingredient list after archiving
+        navigate('/ingredients');
       })
       .catch((err) => {
         console.error('Archive error:', err);
@@ -59,42 +61,145 @@ function IngredientDetail() {
       });
   };
 
-  // Show error message if one occurred
   if (error) {
     return <div className="p-4 text-red-600 font-semibold">{error}</div>;
   }
 
-  // Show loading state if ingredient is still null
   if (!ingredient) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      {/* Ingredient name at the top */}
-      <h2 className="text-2xl font-bold mb-4">{ingredient.name}</h2>
+    <div className="p-4 max-w-3xl mx-auto">
+      <h2 className="text-3xl font-bold mb-2">{ingredient.name}</h2>
+      <p className="text-sm text-gray-500 mb-6">Category: {ingredient.category}</p>
 
-      {/* Section to show what recipes this ingredient is used in */}
-      <h3 className="text-lg font-semibold mb-2">Used in Recipes:</h3>
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold mb-2">Used in Recipes</h3>
+        {ingredient.recipes.length === 0 ? (
+          <p className="text-gray-600">No recipes use this ingredient.</p>
+        ) : (
+          <ul className="list-disc ml-6 space-y-1">
+            {ingredient.recipes.map((r) => (
+              <li key={r.item_id}>
+                <Link
+                  to={`/item/${r.item_id}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {r.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      {/* If no items use this ingredient */}
-      {!ingredient.recipes || ingredient.recipes.length === 0 ? (
-        <p className="text-gray-600">No recipes use this ingredient.</p>
-      ) : (
-        <ul className="list-disc ml-6 space-y-1">
-          {ingredient.recipes.map((r) => (
-            <li key={r.item_id}>
-              {/* Link to each item's detail page */}
-              <Link
-                to={`/item/${r.item_id}`}
-                className="text-blue-600 hover:underline"
-              >
-                {r.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mb-10">
+        <h3 className="text-xl font-semibold mb-2">Conversions</h3>
+        {conversions.length === 0 ? (
+          <p className="text-gray-600">No ingredient-specific conversions yet.</p>
+        ) : (
+          <table className="w-full border text-sm text-left">
+            <thead className="bg-gray-100 text-xs uppercase text-gray-700">
+              <tr>
+                <th className="border px-3 py-2">From</th>
+                <th className="border px-3 py-2">To</th>
+                <th className="border px-3 py-2">Factor</th>
+                <th className="border px-3 py-2 text-center">Global</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conversions.map((conv, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border px-3 py-2">{conv.from_unit}</td>
+                  <td className="border px-3 py-2">{conv.to_unit}</td>
+                  <td className="border px-3 py-2">{conv.factor}</td>
+                  <td className="border px-3 py-2 text-center">
+                    {conv.is_global ? '✅' : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
-      {/* Navigation and archive control */}
+        {/* Add Conversion Form */}
+        <div className="mt-4 border-t pt-4">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showForm ? 'Cancel' : '➕ Add Conversion'}
+          </button>
+
+          {showForm && (
+            <form
+              className="mt-4 space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+
+                const payload = {
+                  ingredient_id: parseInt(id),
+                  from_unit: fromUnit.trim().toLowerCase(),
+                  to_unit: toUnit.trim().toLowerCase(),
+                  factor: parseFloat(factor),
+                };
+
+                fetch(`${API_URL}/ingredient_conversions`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                })
+                  .then((res) => res.json())
+                  .then((newConv) => {
+                    setConversions([...conversions, newConv]);
+                    setShowForm(false);
+                    setFromUnit('');
+                    setToUnit('');
+                    setFactor('');
+                  })
+                  .catch((err) => {
+                    console.error('Failed to save conversion:', err);
+                  });
+              }}
+            >
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={fromUnit}
+                  onChange={(e) => setFromUnit(e.target.value)}
+                  placeholder="From unit (e.g. lb)"
+                  className="border rounded px-2 py-1 text-sm w-28"
+                  required
+                />
+                <input
+                  type="text"
+                  value={toUnit}
+                  onChange={(e) => setToUnit(e.target.value)}
+                  placeholder="To unit (e.g. tbsp)"
+                  className="border rounded px-2 py-1 text-sm w-28"
+                  required
+                />
+                <input
+                  type="number"
+                  value={factor}
+                  onChange={(e) => setFactor(e.target.value)}
+                  placeholder="Factor"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  step="any"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Footer navigation buttons */}
       <div className="mt-6 flex flex-wrap gap-4 items-center">
         <Link to="/ingredients" className="text-blue-600 hover:underline">
           ← Back to Ingredients
