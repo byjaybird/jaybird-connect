@@ -32,8 +32,8 @@ jobs:
           gcloud projects describe jaybird-connect
           gcloud info
 
-      - name: Deploy to App Engine
-        run: gcloud app deploy app.yaml --verbosity=debug --quiet
+      - name: Deploy to App Engine (Standard)
+        run: gcloud app deploy app.yaml --quiet --project=jaybird-connect --no-cache
 
       - name: Show debug info on failure
         if: failure()
