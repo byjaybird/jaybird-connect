@@ -27,19 +27,13 @@ jobs:
         with:
           version: '>= 363.0.0'
 
-      - name: Verify auth works
-        run: gcloud projects describe jaybird-connect
-
-      - name: Submit build manually
+      - name: Verify auth and env
         run: |
-          gcloud builds submit --tag gcr.io/jaybird-connect/jaybird-app --verbosity=debug
+          gcloud projects describe jaybird-connect
+          gcloud info
 
-      - name: Deploy to App Engine using custom image
-        run: |
-          gcloud app deploy app.yaml \
-            --image-url=gcr.io/jaybird-connect/jaybird-app \
-            --verbosity=debug \
-            --quiet
+      - name: Deploy to App Engine
+        run: gcloud app deploy app.yaml --verbosity=debug --quiet
 
       - name: Show debug info on failure
         if: failure()
