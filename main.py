@@ -328,13 +328,45 @@ def add_recipe():
     conn = get_db_connection()
     cursor = conn.cursor()
     data = request.get_json()
-    cursor.execute("""
-        INSERT INTO recipes (item_id, ingredient_id, quantity, unit, instructions)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (data['item_id'], data['ingredient_id'], data['quantity'], data['unit'], data.get('instructions')))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'Recipe added'})
+
+    try:
+        item_id = data.get('item_id')
+        recipe_rows = data.get('recipe', [])
+
+        if not item_id or not isinstance(recipe_rows, list):
+            return jsonify({'error': 'Invalid input format'}), 400
+
+        # Remove existing recipe entries for the item
+        cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
+
+        # Insert the new recipe rows
+        for row in recipe_rows:
+            if not all(k in row for k in ['source_type', 'source_id', 'quantity', 'unit']):
+                return jsonify({'error': f'Missing required fields in recipe row: {row}'}), 400
+
+            cursor.execute("""
+                INSERT INTO recipes (item_id, source_type, source_id, quantity, unit)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                item_id,
+                row['source_type'],
+                row['source_id'],
+                row['quantity'],
+                row['unit']
+            ))
+
+        conn.commit()
+        return jsonify({'status': 'Recipe saved successfully'})
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Error in add_recipe: {e}")
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
 def delete_recipes_for_item(item_id):

@@ -131,20 +131,14 @@ function EditItem() {
       return true;
     });
 
-    for (let r of cleaned) {
-      await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: parseInt(id),
-          source_type: r.source_type,
-          source_id: r.source_id,
-          quantity: r.quantity,
-          unit: r.unit,
-          instructions: r.instructions || ''
-        })
-      });
-    }
+    await fetch(`${API_URL}/recipes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_id: parseInt(id),
+        recipe: cleaned
+      })
+    });
 
     navigate(`/item/${id}`);
   };
