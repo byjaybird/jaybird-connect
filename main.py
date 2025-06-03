@@ -24,6 +24,8 @@ try:
 except Exception as e:
     print("❌ DB connection failed on startup:", e)
     
+
+    
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
