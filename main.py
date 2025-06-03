@@ -12,7 +12,18 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-
+try:
+    test_conn = psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
+    )
+    test_conn.close()
+    print("✅ Initial DB connection successful.")
+except Exception as e:
+    print("❌ DB connection failed on startup:", e)
+    
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
