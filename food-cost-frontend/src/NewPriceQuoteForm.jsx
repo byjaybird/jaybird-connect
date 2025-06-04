@@ -95,13 +95,15 @@ function NewPriceQuoteForm() {
           <option value="">Select unit</option>
           <option value="oz">oz</option>
           <option value="lb">lb</option>
+          <option value="qt">oz</option>
+          <option value="gal">oz</option>
+          <option value="each">each</option>
+          <option value="dozen">dozen</option>
           <option value="g">g</option>
           <option value="kg">kg</option>
           <option value="ml">ml</option>
           <option value="l">l</option>
-          <option value="each">each</option>
           <option value="slice">slice</option>
-          <option value="dozen">dozen</option>
           <option value="case">case</option>
           <option value="pack">pack</option>
         </select>

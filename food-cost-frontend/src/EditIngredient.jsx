@@ -29,10 +29,18 @@ function EditIngredient() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const payload = {
+      name: ingredient.name || '',
+      category: ingredient.category || '',
+      unit: ingredient.unit || '',
+      notes: ingredient.notes || '',
+      is_archived: ingredient.is_archived || false
+    };
+
     const res = await fetch(`${API_URL}/ingredients/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ingredient)
+      body: JSON.stringify(payload)
     });
 
     if (res.ok) {
@@ -42,6 +50,7 @@ function EditIngredient() {
       alert(error.error || 'Failed to update ingredient');
     }
   };
+
 
   if (error) return <div className="p-4 text-red-600 font-semibold">{error}</div>;
   if (!ingredient) return <div className="p-4">Loading...</div>;

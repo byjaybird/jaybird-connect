@@ -115,14 +115,14 @@ def update_ingredient(ingredient_id):
             category = %s,
             unit = %s,
             notes = %s,
-            archived = %s
+            is_archived = %s
         WHERE ingredient_id = %s
     """, (
         data.get('name'),
         data.get('category'),
         data.get('unit'),
         data.get('notes'),
-        data.get('archived', False),
+        data.get('is_archived', False),
         ingredient_id
     ))
 
@@ -214,7 +214,7 @@ def update_item(item_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE items
-        SET name = %s, category = %s, is_prep = %s, is_for_sale = %s, price = %s, description = %s, process_notes = %s, archived = %s
+        SET name = %s, category = %s, is_prep = %s, is_for_sale = %s, price = %s, description = %s, process_notes = %s, is_archived = %s, yield_qty = %s, yield_unit = %s
         WHERE item_id = %s
     """, (
         data['name'],
@@ -225,6 +225,8 @@ def update_item(item_id):
         data.get('description'),
         data.get('process_notes'),
         data.get('is_archived', False),
+        data.get('yield_qty'),
+        data.get('yield_unit'),
         item_id
     ))
     conn.commit()
