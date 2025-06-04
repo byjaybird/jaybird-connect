@@ -24,9 +24,7 @@ try:
     print("✅ Initial DB connection successful.")
 except Exception as e:
     print("❌ DB connection failed on startup:", e)
-    
-
-    
+        
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
@@ -35,6 +33,12 @@ def get_db_connection():
         password=os.getenv("DB_PASSWORD"),
         cursor_factory=psycopg2.extras.RealDictCursor
     )
+
+def parse_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 @app.route('/')
 def index():
@@ -212,23 +216,45 @@ def update_item(item_id):
     data = request.get_json()
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    name = data.get('name', '')
+    category = data.get('category')
+    is_prep = data.get('is_prep', False)
+    is_for_sale = data.get('is_for_sale', True)
+    price = parse_float(data.get('price'))
+    description = data.get('description', '')
+    process_notes = data.get('process_notes', '')
+    archived = data.get('archived', data.get('is_archived', False))
+    yield_qty = parse_float(data.get('yield_qty'))
+    yield_unit = data.get('yield_unit')
+
     cursor.execute("""
         UPDATE items
-        SET name = %s, category = %s, is_prep = %s, is_for_sale = %s, price = %s, description = %s, process_notes = %s, is_archived = %s, yield_qty = %s, yield_unit = %s
+        SET name = %s,
+            category = %s,
+            is_prep = %s,
+            is_for_sale = %s,
+            price = %s,
+            description = %s,
+            process_notes = %s,
+            archived = %s,
+            yield_qty = %s,
+            yield_unit = %s
         WHERE item_id = %s
     """, (
-        data['name'],
-        data.get('category'),
-        data.get('is_prep', False),
-        data.get('is_for_sale', True),
-        data.get('price'),
-        data.get('description'),
-        data.get('process_notes'),
-        data.get('is_archived', False),
-        data.get('yield_qty'),
-        data.get('yield_unit'),
+        name,
+        category,
+        is_prep,
+        is_for_sale,
+        price,
+        description,
+        process_notes,
+        archived,
+        yield_qty,
+        yield_unit,
         item_id
     ))
+
     conn.commit()
     conn.close()
     return jsonify({'status': 'Item updated'})
@@ -255,36 +281,65 @@ def delete_item(item_id):
 @app.route('/api/items/new', methods=['POST'])
 def create_item():
     data = request.get_json()
-    required_fields = ['name']
-
-    for field in required_fields:
-        if field not in data:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
-
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    def parse_float(val):
+        try:
+            if val == '' or val is None:
+                return None
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+
+    # Safely extract fields with fallbacks
+    name = data.get('name', '').strip()
+    category = data.get('category')
+    is_prep = bool(data.get('is_prep', False))
+    is_for_sale = bool(data.get('is_for_sale', True))
+    price = parse_float(data.get('price'))
+    description = data.get('description', '').strip()
+    process_notes = data.get('process_notes', '').strip()
+    archived = bool(data.get('archived', data.get('is_archived', False)))
+    yield_qty = parse_float(data.get('yield_qty'))
+    yield_unit = data.get('yield_unit')
+
     try:
         cursor.execute("""
-            INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO items (
+                name, category, is_prep, is_for_sale, price, description,
+                process_notes, archived, yield_qty, yield_unit
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING item_id
         """, (
-            data['name'],
-            data.get('category'),
-            data.get('is_prep', False),
-            data.get('is_for_sale', True),
-            data.get('price'),
-            data.get('description'),
-            data.get('process_notes')
+            name, category, is_prep, is_for_sale, price,
+            description, process_notes, archived, yield_qty, yield_unit
         ))
-        item_id = cursor.fetchone()['item_id']
+
+        row = cursor.fetchone()
+        if not row or 'item_id' not in row:
+            conn.rollback()
+            return jsonify({'error': 'Item insert failed or item_id not returned'}), 500
+
+        new_id = row['item_id']
+
+        if not row:
+            conn.rollback()
+            return jsonify({'error': 'Item insert failed'}), 500
+
+        new_id = row[0]
         conn.commit()
-        return jsonify({'status': 'Item created', 'item_id': item_id}), 201
+        return jsonify({'status': 'Item created', 'item_id': new_id})
+
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
+
     finally:
         conn.close()
+
 
 @app.route('/api/recipes/<int:item_id>', methods=['GET'])
 def get_recipe(item_id):
