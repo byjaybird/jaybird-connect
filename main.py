@@ -6,6 +6,7 @@ import psycopg2.extras
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from utils.cost_resolver import resolve_ingredient_cost
+from utils.cost_resolver import resolve_item_cost
 from dotenv import load_dotenv
 load_dotenv()
 
