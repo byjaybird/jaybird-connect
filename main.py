@@ -490,7 +490,6 @@ def get_item_cost(item_id):
     if not unit:
         return jsonify({"error": "Missing 'unit' parameter"}), 400
 
-    from cost_resolver import resolve_item_cost
     result = resolve_item_cost(item_id, unit, qty)
     return jsonify(result)
 

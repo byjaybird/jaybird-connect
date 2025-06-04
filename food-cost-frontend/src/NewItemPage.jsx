@@ -21,6 +21,8 @@ function NewItemForm() {
   const [fixData, setFixData] = useState(null);
   const [yieldQty, setYieldQty] = useState('');
   const [yieldUnit, setYieldUnit] = useState('');
+  const [filterText, setFilterText] = useState('');
+
 
   useEffect(() => {
     fetch(`${API_URL}/ingredients`)
@@ -150,6 +152,14 @@ function NewItemForm() {
 
         <div className="mt-6">
           <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
+          <input
+            type="text"
+            placeholder="Filter ingredients/prep items..."
+            className="border p-1 mb-2 rounded w-full"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2 items-center">
               <select
@@ -166,20 +176,25 @@ function NewItemForm() {
                 <option value="">-- Select Source --</option>
 
                 <optgroup label="🧂 Ingredients">
-                  {ingredients.map((i) => (
-                    <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                      🧂 {i.name}
-                    </option>
+                  {ingredients
+                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                    .map((i) => (
+                      <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
+                        🧂 {i.name}
+                      </option>
                   ))}
                 </optgroup>
 
                 <optgroup label="🛠️ Prep Items">
-                  {prepItems.map((i) => (
-                    <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
-                      🛠️ {i.name}
-                    </option>
+                  {prepItems
+                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                    .map((i) => (
+                      <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
+                        🛠️ {i.name}
+                      </option>
                   ))}
                 </optgroup>
+
               </select>
 
               <input
