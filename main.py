@@ -7,6 +7,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from utils.cost_resolver import resolve_ingredient_cost
 from utils.cost_resolver import resolve_item_cost
+from utils.db import get_db_cursor
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -47,37 +48,34 @@ def index():
 @app.route('/api/log-login', methods=['POST'])
 def log_login():
     data = request.get_json()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     cursor.execute('''
         INSERT INTO login_logs (email, name, domain, timestamp)
         VALUES (%s, %s, %s, %s)
     ''', (data.get('email'), data.get('name'), data.get('domain'), data.get('timestamp')))
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
     return jsonify({'status': 'login logged'})
 
 @app.route('/api/ingredients', methods=['GET', 'POST'])
 def ingredients():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     if request.method == 'POST':
         data = request.get_json()
         cursor.execute("INSERT INTO ingredients (name, type, prep_notes, default_unit) VALUES (%s, %s, %s, %s)",
                        (data['name'], data.get('type'), data.get('prep_notes'), data.get('default_unit')))
-        conn.commit()
-        conn.close()
+        cursor.connection.commit()
+        cursor.connection.close()
         return jsonify({'status': 'Ingredient added'})
     else:
         cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = FALSE")
         ingredients = cursor.fetchall()
-        conn.close()
+        cursor.connection.close()
         return jsonify(ingredients)
         return jsonify(ingredients_list)
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_detail(ingredient_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     cursor.execute("""
         SELECT * FROM ingredients
@@ -86,7 +84,7 @@ def get_ingredient_detail(ingredient_id):
     ingredient = cursor.fetchone()
 
     if not ingredient:
-        conn.close()
+        cursor.connection.close()
         return jsonify({'error': 'Ingredient not found'}), 404
 
     cursor.execute("""
@@ -99,7 +97,7 @@ def get_ingredient_detail(ingredient_id):
     """, (ingredient_id,))
     recipes = cursor.fetchall()
 
-    conn.close()
+    cursor.connection.close()
     return jsonify({
         'ingredient_id': ingredient['ingredient_id'],
         'name': ingredient['name'],
@@ -109,8 +107,7 @@ def get_ingredient_detail(ingredient_id):
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['PUT'])
 def update_ingredient(ingredient_id):
     data = request.get_json()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     # Build a flexible SQL update
     cursor.execute("""
@@ -130,8 +127,8 @@ def update_ingredient(ingredient_id):
         ingredient_id
     ))
 
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
 
     return jsonify({'status': 'Ingredient updated'})
 
@@ -147,8 +144,7 @@ def merge_ingredients():
     keep_id = ids[0]
     drop_ids = ids[1:]
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     # Reassign all recipes from dropped IDs to the one we're keeping
     cursor.execute("""
@@ -164,15 +160,14 @@ def merge_ingredients():
         WHERE ingredient_id = ANY(%s)
     """, (drop_ids,))
 
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
 
     return jsonify({'status': f'Merged {len(ids)} ingredients into ID {keep_id}'})
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     if request.method == 'POST':
         data = request.get_json()
         cursor.execute("""
@@ -187,25 +182,24 @@ def items():
             data.get('description'),
             data.get('process_notes')
         ))
-        conn.commit()
-        conn.close()
+        cursor.connection.commit()
+        cursor.connection.close()
         return jsonify({'status': 'Item added'})
     else:
         cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = FALSE")
         items = cursor.fetchall()
-        conn.close()
+        cursor.connection.close()
         return jsonify(items)
 
 @app.route('/api/items/<int:item_id>', methods=['GET'])
 def get_item_detail(item_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     cursor.execute("""
         SELECT * FROM items
         WHERE item_id = %s AND (archived IS NULL OR archived = FALSE)
     """, (item_id,))
     item = cursor.fetchone()
-    conn.close()
+    cursor.connection.close()
     if item:
         return jsonify(item)
     else:
@@ -214,8 +208,7 @@ def get_item_detail(item_id):
 @app.route('/api/items/<int:item_id>', methods=['PUT'])
 def update_item(item_id):
     data = request.get_json()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     name = data.get('name', '')
     category = data.get('category')
@@ -255,14 +248,13 @@ def update_item(item_id):
         item_id
     ))
 
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
     return jsonify({'status': 'Item updated'})
 
 @app.route('/api/items/<int:item_id>', methods=['DELETE'])
 def delete_item(item_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     cursor.execute("UPDATE items SET archived = TRUE WHERE item_id = %s", (item_id,))
     cursor.execute("UPDATE recipes SET archived = TRUE WHERE item_id = %s", (item_id,))
     cursor.execute("""
@@ -274,15 +266,14 @@ def delete_item(item_id):
             WHERE r.ingredient_id IS NULL
         )
     """)
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
     return jsonify({'status': 'Item archived and dependencies updated'})
 
 @app.route('/api/items/new', methods=['POST'])
 def create_item():
     data = request.get_json()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     def parse_float(val):
         try:
@@ -330,7 +321,7 @@ def create_item():
             return jsonify({'error': 'Item insert failed'}), 500
 
         new_id = row[0]
-        conn.commit()
+        cursor.connection.commit()
         return jsonify({'status': 'Item created', 'item_id': new_id})
 
     except Exception as e:
@@ -338,13 +329,12 @@ def create_item():
         return jsonify({'error': str(e)}), 500
 
     finally:
-        conn.close()
+        cursor.connection.close()
 
 
 @app.route('/api/recipes/<int:item_id>', methods=['GET'])
 def get_recipe(item_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     cursor.execute("""
         SELECT 
             r.recipe_id,
@@ -364,14 +354,13 @@ def get_recipe(item_id):
         WHERE r.item_id = %s AND (r.archived IS NULL OR r.archived = FALSE)
     """, (item_id,))
     rows = cursor.fetchall()
-    conn.close()
+    cursor.connection.close()
     return jsonify(rows)
 
 @app.route('/api/recipes/<int:recipe_id>', methods=['PUT'])
 def update_recipe(recipe_id):
     data = request.get_json()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     cursor.execute("""
         UPDATE recipes
@@ -390,14 +379,13 @@ def update_recipe(recipe_id):
         recipe_id
     ))
 
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
     return jsonify({'status': 'Recipe updated'})
 
 @app.route('/api/recipes', methods=['POST'])
 def add_recipe():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     data = request.get_json()
 
     try:
@@ -426,7 +414,7 @@ def add_recipe():
                 row['unit']
             ))
 
-        conn.commit()
+        cursor.connection.commit()
         return jsonify({'status': 'Recipe saved successfully'})
 
     except Exception as e:
@@ -436,24 +424,22 @@ def add_recipe():
 
     finally:
         cursor.close()
-        conn.close()
+        cursor.connection.close()
 
 
 @app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
 def delete_recipes_for_item(item_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
     cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
-    conn.commit()
-    conn.close()
+    cursor.connection.commit()
+    cursor.connection.close()
     return jsonify({'status': 'deleted'})
 
 @app.route('/api/price_quotes', methods=['POST'])
 def create_price_quote():
     data = request.get_json()
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     try:
         cursor.execute("""
@@ -470,20 +456,19 @@ def create_price_quote():
             data.get('notes', ''),
             data.get('is_purchase', False)
         ))
-        conn.commit()
+        cursor.connection.commit()
         return jsonify({'status': 'Price quote added'}), 201
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        cursor.connection.close()
 
 @app.route('/api/price_quotes', methods=['GET'])
 def get_price_quotes():
     ingredient_id = request.args.get('ingredient_id')
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_db_cursor()
 
     try:
         if ingredient_id:
@@ -513,7 +498,7 @@ def get_price_quotes():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        cursor.connection.close()
 
 @app.route('/api/ingredient_cost/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_cost(ingredient_id):
@@ -554,8 +539,7 @@ def get_item_cost(item_id):
 def get_ingredient_conversions():
     ingredient_id = request.args.get('ingredient_id')
 
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_db_cursor()
 
     try:
         if ingredient_id:
@@ -573,7 +557,7 @@ def get_ingredient_conversions():
         return jsonify(rows)
 
     finally:
-        conn.close()
+        cursor.connection.close()
 
 @app.route('/api/ingredient_conversions', methods=['POST'])
 def add_ingredient_conversion():
@@ -586,8 +570,7 @@ def add_ingredient_conversion():
     if not all([from_unit, to_unit, factor is not None]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_db_cursor()
 
     try:
         cursor.execute("""
@@ -596,11 +579,11 @@ def add_ingredient_conversion():
             RETURNING *
         """, (ingredient_id, from_unit, to_unit, factor))
         new_conversion = cursor.fetchone()
-        conn.commit()
+        cursor.connection.commit()
         return jsonify(new_conversion), 201
 
     finally:
-        conn.close()
+        cursor.connection.close()
 
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():
