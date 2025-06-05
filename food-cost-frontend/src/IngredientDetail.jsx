@@ -33,7 +33,11 @@ function IngredientDetail() {
 
     fetch(`${API_URL}/ingredient_conversions?ingredient_id=${id}`)
       .then((res) => res.json())
-      .then(setConversions)
+      .then((data) => {
+        // Filter out global conversions
+        const filteredConversions = data.filter(conv => conv.ingredient_id !== null);
+        setConversions(filteredConversions);
+      })
       .catch((err) => {
         console.error('Conversion fetch error:', err);
         setConversions([]);
@@ -212,13 +216,7 @@ function IngredientDetail() {
           ✏️ Edit Ingredient
         </Link>
 
-        <button
-          onClick={handleArchive}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-        >
-          🗑️ Archive Ingredient
-        </button>
-      </div>
+    </div>
     </div>
   );
 }

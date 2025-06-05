@@ -38,7 +38,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
             SELECT factor FROM ingredient_conversions
             WHERE (ingredient_id = %s OR is_global = TRUE)
             AND from_unit = %s AND to_unit = %s
-            ORDER BY ingredient_id NULLS LAST
+            ORDER BY ingredient_id NULLS LAST, from_unit, to_unit
             LIMIT 1
         """, (ingredient_id, recipe_unit, quote_unit))
         conversion = cursor.fetchone()
@@ -161,3 +161,4 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         "cost_per_unit": round(cost_per_unit, 4),
         "total_cost": round(final_cost, 4)
     }
+

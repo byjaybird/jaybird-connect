@@ -538,12 +538,11 @@ def get_item_cost(item_id):
 @app.route('/api/ingredient_conversions', methods=['GET'])
 def get_ingredient_conversions():
     ingredient_id = request.args.get('ingredient_id')
-
     cursor = get_db_cursor()
 
     try:
         if ingredient_id:
-            cursor.execute("""
+                cursor.execute("""
                 SELECT * FROM ingredient_conversions
                 WHERE ingredient_id = %s OR is_global = TRUE
                 ORDER BY is_global ASC, from_unit, to_unit
