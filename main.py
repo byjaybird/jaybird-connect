@@ -500,6 +500,56 @@ def get_price_quotes():
     finally:
         cursor.connection.close()
 
+@app.route('/api/price_quotes/bulk_insert', methods=['POST'])
+def bulk_insert_price_quotes():
+    quotes = request.json.get('quotes', [])
+
+    errors = []
+    valid_entries = []
+
+    cursor = get_db_cursor()
+
+    # Prepare data for bulk insert
+    for quote in quotes:
+        ingredient_name = quote.get('ingredient_name')
+        cursor.execute("SELECT ingredient_id FROM ingredients WHERE name = %s", (ingredient_name,))
+        ingredient = cursor.fetchone()
+
+        if not ingredient:
+            errors.append(f"No ingredient found for name: {ingredient_name}")
+            continue
+
+        ingredient_id = ingredient['ingredient_id']
+        # Validate and prepare entries
+        try:
+            valid_entry = (
+                ingredient_id,
+                quote['source'],
+                float(quote['qty_amount']),
+                quote['qty_unit'],
+                float(quote['price']),
+                quote.get('date_found', datetime.today().date()),
+                quote.get('notes', ''),
+                bool(quote.get('is_purchase'))
+            )
+            valid_entries.append(valid_entry)
+        except ValueError as e:
+            errors.append(str(e))
+
+    if valid_entries:
+        try:
+            cursor.executemany("""
+                INSERT INTO price_quotes (ingredient_id, source, size_qty, size_unit, price, date_found, notes, is_purchase)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, valid_entries)
+            cursor.connection.commit()
+        except Exception as e:
+            cursor.connection.rollback()
+            return jsonify({'error': 'Database insertion failed', 'details': str(e)}), 500
+
+    cursor.connection.close()
+    return jsonify({'status': 'Completed with some errors', 'errors': errors}), 200
+
 @app.route('/api/ingredient_cost/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_cost(ingredient_id):
     unit = request.args.get('unit')
