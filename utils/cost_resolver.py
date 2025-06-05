@@ -21,9 +21,10 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
         }
 
     quote_unit = quote.get("size_unit", "").lower()
-    total_qty = quote.get("size_qty", None)
+    quote_qty = quote.get("size_qty", None)
+    price_per_unit = quote["price"] / quote_qty
 
-    if not quote_unit or not total_qty:
+    if not quote_unit or not quote_qty:
         return {
             "status": "error",
             "issue": "malformed_quote",
@@ -31,62 +32,37 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
             "ingredient_id": ingredient_id
         }
 
-    price = quote["price"]
-
-    # Step 2: Convert quote unit → lb
-    if quote_unit != "lb":
+    # Step 2: Handle conversions
+    if quote_unit != recipe_unit:
         cursor.execute("""
             SELECT factor FROM ingredient_conversions
             WHERE (ingredient_id = %s OR is_global = TRUE)
-            AND from_unit = %s AND to_unit = 'lb'
+            AND from_unit = %s AND to_unit = %s
             ORDER BY ingredient_id NULLS LAST
             LIMIT 1
-        """, (ingredient_id, quote_unit))
-        conv = cursor.fetchone()
-        if not conv:
+        """, (ingredient_id, quote_unit, recipe_unit))
+        conversion = cursor.fetchone()
+        if not conversion:
             return {
                 "status": "error",
                 "issue": "missing_conversion",
-                "message": f"Missing conversion from {quote_unit} to lb",
+                "message": f"Missing conversion from {quote_unit} to {recipe_unit}",
                 "missing": {
                     "ingredient_id": ingredient_id,
                     "from_unit": quote_unit,
-                    "to_unit": "lb"
+                    "to_unit": recipe_unit
                 }
             }
-        price_per_lb = (price / total_qty) / conv["factor"]
-    else:
-        price_per_lb = price / total_qty
+        conversion_factor = conversion["factor"]
+        price_per_unit *= conversion_factor
 
-    # Step 3: Convert lb → recipe_unit using yield
-    cursor.execute("""
-        SELECT yield_per_lb, waste_pct FROM ingredient_yields
-        WHERE ingredient_id = %s AND unit = %s
-        LIMIT 1
-    """, (ingredient_id, recipe_unit))
-    yield_data = cursor.fetchone()
-    if not yield_data:
-        return {
-            "status": "error",
-            "issue": "missing_yield",
-            "message": f"Missing yield data from lb to {recipe_unit}",
-            "missing": {
-                "ingredient_id": ingredient_id,
-                "unit": recipe_unit
-            }
-        }
-
-    effective_yield = yield_data["yield_per_lb"] * (1 - yield_data["waste_pct"])
-    cost_per_unit = price_per_lb / effective_yield
-    total_cost = cost_per_unit * quantity
-
+    total_cost = price_per_unit * quantity
     return {
         "status": "ok",
-        "ingredient_id": ingredient_id,
+                "ingredient_id": ingredient_id,
         "recipe_unit": recipe_unit,
         "quantity": quantity,
-        "price_per_lb": round(price_per_lb, 4),
-        "cost_per_unit": round(cost_per_unit, 4),
+        "cost_per_unit": round(price_per_unit, 4),
         "total_cost": round(total_cost, 4),
         "quote_date": quote["date_found"],
         "source": quote["source"]
@@ -161,15 +137,15 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
             AND from_unit = %s AND to_unit = %s
             LIMIT 1
         """, (yield_unit, recipe_unit))
-        row = cursor.fetchone()
-        if not row:
+        conversion = cursor.fetchone()
+        if not conversion:
             return {
                 "status": "error",
                 "issue": "missing_conversion",
                 "from": yield_unit,
                 "to": recipe_unit
             }
-        conversion_factor = row["factor"]
+        conversion_factor = conversion["factor"]
     else:
         conversion_factor = 1
 
@@ -185,3 +161,4 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         "cost_per_unit": round(cost_per_unit, 4),
         "total_cost": round(final_cost, 4)
     }
+
