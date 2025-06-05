@@ -2,7 +2,7 @@ from datetime import date
 from utils.db import get_db_cursor
 
 def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
-    cursor = get_db_cursor()  # Already a RealDictCursor
+    cursor = get_db_cursor()
 
     # Step 1: Get most recent price quote
     cursor.execute("""

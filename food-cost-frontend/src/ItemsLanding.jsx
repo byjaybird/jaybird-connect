@@ -15,6 +15,10 @@ function ItemsLanding() {
           acc[category].push(item);
           return acc;
         }, {});
+        for (const category in grouped) {
+          grouped[category].sort((a, b) => a.name.localeCompare(b.name));
+        }
+
         setItemsByCategory(grouped);
       });
   }, []);
@@ -75,3 +79,4 @@ function ItemsLanding() {
 }
 
 export default ItemsLanding;
+
