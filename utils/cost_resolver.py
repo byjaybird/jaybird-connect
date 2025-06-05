@@ -1,8 +1,8 @@
 from datetime import date
-from utils.db import get_db_connection
+from utils.db import get_db_cursor
 
 def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
-    cursor = get_db_connection()  # Already a RealDictCursor
+    cursor = get_db_cursor()  # Already a RealDictCursor
 
     # Step 1: Get most recent price quote
     cursor.execute("""
@@ -93,7 +93,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
     }
 
 def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
-    cursor = get_db_connection()  # Already a RealDictCursor
+    cursor = get_db_cursor()
 
     visited = visited or set()
     if item_id in visited:
