@@ -73,7 +73,7 @@ def ingredients():
         ingredients = cursor.fetchall()
         conn.close()
         return jsonify(ingredients)
-    
+        return jsonify(ingredients_list)
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_detail(ingredient_id):
     conn = get_db_connection()
