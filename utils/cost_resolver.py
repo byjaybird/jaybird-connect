@@ -27,7 +27,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
     if not quote_unit or not quote_qty:
         return {
             "status": "error",
-            "issue": "malformed_quote",
+                    "issue": "invalid_quote_format",
             "message": "Missing or invalid size_qty or size_unit fields",
             "ingredient_id": ingredient_id
         }
@@ -40,7 +40,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
             AND from_unit = %s AND to_unit = %s
             ORDER BY ingredient_id NULLS LAST
             LIMIT 1
-        """, (ingredient_id, quote_unit, recipe_unit))
+        """, (ingredient_id, recipe_unit, quote_unit))
         conversion = cursor.fetchone()
         if not conversion:
             return {
@@ -54,7 +54,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
                 }
             }
         conversion_factor = conversion["factor"]
-        price_per_unit *= conversion_factor
+        price_per_unit /= conversion_factor
 
     total_cost = price_per_unit * quantity
     return {
@@ -136,7 +136,7 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
             WHERE (ingredient_id IS NULL AND is_global = TRUE)
             AND from_unit = %s AND to_unit = %s
             LIMIT 1
-        """, (yield_unit, recipe_unit))
+        """, (recipe_unit, yield_unit))
         conversion = cursor.fetchone()
         if not conversion:
             return {
@@ -149,7 +149,7 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
     else:
         conversion_factor = 1
 
-    effective_yield = yield_qty * conversion_factor
+    effective_yield = yield_qty / conversion_factor
     cost_per_unit = total_cost / effective_yield
     final_cost = cost_per_unit * quantity
 
@@ -161,4 +161,3 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         "cost_per_unit": round(cost_per_unit, 4),
         "total_cost": round(final_cost, 4)
     }
-
