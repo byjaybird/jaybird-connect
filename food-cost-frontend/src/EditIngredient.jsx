@@ -51,6 +51,19 @@ function EditIngredient() {
     }
   };
 
+  const handleArchive = async () => {
+    const res = await fetch(`${API_URL}/ingredients/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_archived: true })
+    });
+
+    if (res.ok) {
+      navigate(`/ingredients`);
+    } else {
+      alert('Failed to archive ingredient');
+    }
+  };
 
   if (error) return <div className="p-4 text-red-600 font-semibold">{error}</div>;
   if (!ingredient) return <div className="p-4">Loading...</div>;
@@ -88,21 +101,31 @@ function EditIngredient() {
           className="w-full border p-2 rounded"
           placeholder="Notes"
         />
-        <button
+        <div className="flex space-x-4">
+          <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded"
         >
           Save Changes
         </button>
-        <Link
-          to={`/ingredients/${id}`}
-          className="text-blue-600 hover:underline ml-4"
+          <button
+            type="button"
+            onClick={handleArchive}
+            className="bg-red-600 text-white px-4 py-2 rounded"
         >
-          Cancel
-        </Link>
+            Archive
+          </button>
+          <Link
+            to={`/ingredients/${id}`}
+            className="text-blue-600 hover:underline ml-4"
+          >
+            Cancel
+          </Link>
+    </div>
       </form>
     </div>
   );
 }
 
 export default EditIngredient;
+

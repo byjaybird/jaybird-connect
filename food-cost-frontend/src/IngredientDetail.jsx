@@ -44,6 +44,20 @@ function IngredientDetail() {
       });
   }, [id]);
 
+  const handleDeleteConversion = (convId) => {
+    fetch(`${API_URL}/ingredient_conversions/${convId}`, {
+      method: 'DELETE'
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to delete conversion');
+        setConversions(conversions.filter(conv => conv.id !== convId));
+      })
+      .catch((err) => {
+        console.error('Delete conversion error:', err);
+        setError('Failed to delete conversion.');
+      });
+  };
+
   const handleArchive = () => {
     fetch(`${API_URL}/ingredients/${id}`, {
       method: 'PUT',
@@ -110,18 +124,26 @@ function IngredientDetail() {
                 <th className="border px-3 py-2 text-center">Global</th>
               </tr>
             </thead>
-            <tbody>
-              {conversions.map((conv, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="border px-3 py-2">{conv.from_unit}</td>
-                  <td className="border px-3 py-2">{conv.to_unit}</td>
-                  <td className="border px-3 py-2">{conv.factor}</td>
-                  <td className="border px-3 py-2 text-center">
-                    {conv.is_global ? '✅' : ''}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+              <tbody>
+                {conversions.map((conv, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="border px-3 py-2">{conv.from_unit}</td>
+                    <td className="border px-3 py-2">{conv.to_unit}</td>
+                    <td className="border px-3 py-2">{conv.factor}</td>
+                    <td className="border px-3 py-2 text-center">
+                      {conv.is_global ? '✅' : ''}
+                    </td>
+                    <td className="border px-3 py-2 text-center">
+                      <button
+                        onClick={() => handleDeleteConversion(conv.id)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
           </table>
         )}
 

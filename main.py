@@ -331,7 +331,6 @@ def create_item():
     finally:
         cursor.connection.close()
 
-
 @app.route('/api/recipes/<int:item_id>', methods=['GET'])
 def get_recipe(item_id):
     cursor = get_db_cursor()
@@ -425,7 +424,6 @@ def add_recipe():
     finally:
         cursor.close()
         cursor.connection.close()
-
 
 @app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
 def delete_recipes_for_item(item_id):
@@ -630,6 +628,29 @@ def add_ingredient_conversion():
         new_conversion = cursor.fetchone()
         cursor.connection.commit()
         return jsonify(new_conversion), 201
+
+    finally:
+        cursor.connection.close()
+
+@app.route('/api/ingredient_conversions/<int:conversion_id>', methods=['DELETE'])
+def delete_ingredient_conversion(conversion_id):
+    cursor = get_db_cursor()
+    
+    try:
+        cursor.execute("""
+            DELETE FROM ingredient_conversions
+            WHERE id = %s
+        """, (conversion_id,))
+        
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Conversion not found'}), 404
+        
+        cursor.connection.commit()
+        return jsonify({'status': 'Conversion deleted successfully'}), 200
+
+    except Exception as e:
+        cursor.connection.rollback()
+        return jsonify({'error': str(e)}), 500
 
     finally:
         cursor.connection.close()

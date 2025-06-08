@@ -40,7 +40,7 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
             AND from_unit = %s AND to_unit = %s
             ORDER BY ingredient_id NULLS LAST, from_unit, to_unit
             LIMIT 1
-        """, (ingredient_id, recipe_unit, quote_unit))
+        """, (ingredient_id, quote_unit, recipe_unit))  # Correct order of 'from' and 'to' in the parameters
         conversion = cursor.fetchone()
         if not conversion:
             return {
@@ -54,7 +54,8 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
                 }
             }
         conversion_factor = conversion["factor"]
-        price_per_unit /= conversion_factor
+        # Correct the direction of the conversion
+        price_per_unit *= conversion_factor
 
     total_cost = price_per_unit * quantity
     return {
@@ -161,4 +162,5 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         "cost_per_unit": round(cost_per_unit, 4),
         "total_cost": round(final_cost, 4)
     }
+
 
