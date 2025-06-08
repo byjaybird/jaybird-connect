@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CostCell from './components/CostCell';
+import Select from 'react-select';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -162,41 +163,29 @@ function NewItemForm() {
 
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2 items-center">
-              <select
-                value={`${r.source_type}:${r.source_id}`}
-                onChange={(e) => {
-                  const [type, id] = e.target.value.split(':');
-                  const updated = [...recipe];
-                  updated[index].source_type = type;
-                  updated[index].source_id = parseInt(id);
-                  setRecipe(updated);
+              <Select
+                value={ingredients.concat(prepItems).find(i => `${r.source_type}:${r.source_id}` === `${i.source_type}:${i.source_id}`) || ''}
+                onChange={(selectedOption) => {
+                  if (selectedOption) {
+                    const [type, id] = selectedOption.value.split(':');
+                    const updated = [...recipe];
+                    updated[index].source_type = type;
+                    updated[index].source_id = parseInt(id);
+                    setRecipe(updated);
+                  }
                 }}
-                className="border p-1 rounded"
-              >
-                <option value="">-- Select Source --</option>
-
-                <optgroup label="🧂 Ingredients">
-                  {ingredients
-                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                    .map((i) => (
-                      <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                        🧂 {i.name}
-                      </option>
-                  ))}
-                </optgroup>
-
-                <optgroup label="🛠️ Prep Items">
-                  {prepItems
-                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                    .map((i) => (
-                      <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
-                        🛠️ {i.name}
-                      </option>
-                  ))}
-                </optgroup>
-
-              </select>
-
+                options={[
+                  {
+                    label: "🧂 Ingredients",
+                    options: ingredients.map(i => ({ value: `ingredient:${i.ingredient_id}`, label: `🧂 ${i.name}` }))
+                  },
+                  {
+                    label: "🛠️ Prep Items",
+                    options: prepItems.map(i => ({ value: `item:${i.item_id}`, label: `🛠️ ${i.name}` }))
+                  }
+                ]}
+                className="w-full border p-1 rounded"
+              />
               <input
                 type="number"
                 placeholder="Qty"

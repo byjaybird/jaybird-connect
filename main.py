@@ -311,13 +311,13 @@ def create_item():
 
         row = cursor.fetchone()
         if not row or 'item_id' not in row:
-            conn.rollback()
+            cursor.connection.rollback()
             return jsonify({'error': 'Item insert failed or item_id not returned'}), 500
 
         new_id = row['item_id']
 
         if not row:
-            conn.rollback()
+            cursor.connection.rollback()
             return jsonify({'error': 'Item insert failed'}), 500
 
         new_id = row[0]
@@ -325,7 +325,7 @@ def create_item():
         return jsonify({'status': 'Item created', 'item_id': new_id})
 
     except Exception as e:
-        conn.rollback()
+        cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
 
     finally:
@@ -418,7 +418,7 @@ def add_recipe():
         return jsonify({'status': 'Recipe saved successfully'})
 
     except Exception as e:
-        conn.rollback()
+        cursor.connection.rollback()
         print(f"Error in add_recipe: {e}")
         return jsonify({'error': str(e)}), 500
 
@@ -459,7 +459,7 @@ def create_price_quote():
         cursor.connection.commit()
         return jsonify({'status': 'Price quote added'}), 201
     except Exception as e:
-        conn.rollback()
+        cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.connection.close()
