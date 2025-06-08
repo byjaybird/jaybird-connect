@@ -55,9 +55,9 @@ function IngredientsPage() {
   };
 
   const sortedFilteredIngredients = ingredients
-    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+    .filter((i) => i.name && i.name.toLowerCase().includes(filterText.toLowerCase()))
     .sort((a, b) => {
-      if (sortField === 'name') return a.name.localeCompare(b.name);
+      if (sortField === 'name') return (a.name || '').localeCompare(b.name || '');
       if (sortField === 'type') return (a.type || '').localeCompare(b.type || '');
       return 0;
     });
@@ -123,4 +123,3 @@ function IngredientsPage() {
 }
 
 export default IngredientsPage;
-
