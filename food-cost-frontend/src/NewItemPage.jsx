@@ -28,7 +28,9 @@ function NewItemForm() {
     fetch(`${API_URL}/ingredients`)
       .then(res => res.json())
       .then(data => {
+        console.log('Fetched ingredients:', data); // Add this line
         const active = data.filter(i => !i.archived);
+        console.log('Active ingredients:', active); // Add this line
         const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
         setIngredients(sorted);
       });
