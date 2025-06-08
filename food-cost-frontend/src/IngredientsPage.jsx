@@ -62,44 +62,14 @@ function IngredientsPage() {
       return 0;
     });
 
-  if (error) {
-    return <div className="p-4 text-red-600 font-semibold">{error}</div>;
-  }
-
-  return (
-    <div className="p-4">
-      <h1 className="text-3xl font-bold mb-6">Ingredients</h1>
-      <div className="mb-4 flex gap-4">
-        <input
-          type="text"
-          placeholder="Filter by name..."
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          className="border px-2 py-1 rounded"
-        />
-        <select
-          value={sortField}
-          onChange={(e) => setSortField(e.target.value)}
-          className="border px-2 py-1 rounded"
-        >
-          <option value="name">Sort by Name</option>
-          <option value="type">Sort by Type</option>
-        </select>
-        <button
-          onClick={handleMerge}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          disabled={selected.length < 2}
-        >
-          Merge Selected
-        </button>
-      </div>
-      <ul className="space-y-2">
-        {sortedFilteredIngredients.map((ingredient) => (
+  const renderIngredients = () => {
+    return sortedFilteredIngredients.map((ingredient) => (
           <li key={ingredient.ingredient_id} className="flex items-center space-x-2">
             <input
               type="checkbox"
               checked={selected.includes(ingredient.ingredient_id)}
-              onChange={() => toggleSelect(ingredient.ingredient_id)}
+          name={`ingredient-${ingredient.ingredient_id}`}
+          onChange={() => toggleSelect(ingredient.ingredient_id)}
             />
             <Link
               to={`/ingredients/${ingredient.ingredient_id}`}
@@ -108,10 +78,49 @@ function IngredientsPage() {
               {ingredient.name}
             </Link>
           </li>
-        ))}
-      </ul>
+    ));
+  };
+
+  if (error) {
+    return <div className="p-4 text-red-600 font-semibold">{error}</div>;
+}
+
+  return (
+    <div className="p-4">
+      <h1 className="text-3xl font-bold mb-6">Ingredients</h1>
+      <div className="mb-4 flex gap-4">
+        <input
+          type="text"
+          id="ingredientFilter"
+          name="ingredientFilter"
+          placeholder="Filter by name..."
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          className="border px-2 py-1 rounded"
+        />
+        <select
+          id="sortField"
+          name="sortField"
+          value={sortField}
+          onChange={(e) => setSortField(e.target.value)}
+          className="border px-2 py-1 rounded"
+        >
+          <option value="name">Sort by Name</option>
+          <option value="type">Sort by Type</option>
+        </select>
+        <button
+          type="button"
+          onClick={handleMerge}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          disabled={selected.length < 2}
+        >
+          Merge Selected
+        </button>
+      </div>
+      <ul className="space-y-2">{renderIngredients()}</ul>
     </div>
   );
 }
 
 export default IngredientsPage;
+
