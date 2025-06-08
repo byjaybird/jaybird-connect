@@ -24,7 +24,6 @@ function NewItemForm() {
   const [yieldUnit, setYieldUnit] = useState('');
   const [filterText, setFilterText] = useState('');
 
-
   useEffect(() => {
     fetch(`${API_URL}/ingredients`)
       .then(res => res.json())
@@ -177,7 +176,13 @@ function NewItemForm() {
                 options={[
                   {
                     label: "🧂 Ingredients",
-                    options: ingredients.map(i => ({ value: `ingredient:${i.ingredient_id}`, label: `🧂 ${i.name}` }))
+                    options: ingredients
+                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .map((i) => (
+                        <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
+                          🧂 {i.name}
+                        </option>
+                      ))
                   },
                   {
                     label: "🛠️ Prep Items",
