@@ -28,10 +28,10 @@ function NewItemForm() {
     fetch(`${API_URL}/ingredients`)
       .then(res => res.json())
       .then(data => {
-        console.log('Ingredients:', data); // Add console logs if necessary
-        const active = data.filter(i => !i.archived);
+        console.log('Ingredients:', data); // Inspect to ensure names are present
+        const active = data.filter(i => !i.archived); // Ensure only active ingredients are used
         const sorted = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        setIngredients(sorted);
+        setIngredients(sorted); // Keep the directory-based method for consistent data structuring
       });
 
     fetch(`${API_URL}/items`)
@@ -53,8 +53,8 @@ function NewItemForm() {
     }
 
     fetch(`${API_URL}/ingredients`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newIngredientName })
     })
       .then(res => res.json())
@@ -179,15 +179,19 @@ function NewItemForm() {
                     label: "🧂 Ingredients",
                     options: ingredients
                       .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                      .map((i) => (
-                        <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                          🧂 {i.name}
-                        </option>
-                      ))
+                      .map((i) => ({
+                        value: `ingredient:${i.ingredient_id}`,
+                        label: `🧂 ${i.name || 'Unnamed Ingredient'}`
+                      }))
                   },
                   {
                     label: "🛠️ Prep Items",
-                    options: prepItems.map(i => ({ value: `item:${i.item_id}`, label: `🛠️ ${i.name}` }))
+                    options: prepItems
+                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .map((i) => ({
+                        value: `item:${i.item_id}`,
+                        label: `🛠️ ${i.name || 'Unnamed Prep Item'}`
+                      }))
                   }
                 ]}
                 className="w-full border p-1 rounded"

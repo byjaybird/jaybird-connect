@@ -232,7 +232,7 @@ function EditItem() {
                     .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
                     .map((i) => (
                       <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                        🧂 {i.name}
+                        🧂 {i.name || 'Unnamed Ingredient'} {/* Handle missing name */}
                       </option>
                   ))}
                 </optgroup>
