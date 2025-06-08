@@ -28,10 +28,9 @@ function NewItemForm() {
     fetch(`${API_URL}/ingredients`)
       .then(res => res.json())
       .then(data => {
-        console.log('Fetched ingredients:', data); // Add this line
+        console.log('Ingredients:', data); // Add console logs if necessary
         const active = data.filter(i => !i.archived);
-        console.log('Active ingredients:', active); // Add this line
-        const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
+        const sorted = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setIngredients(sorted);
       });
 
@@ -39,7 +38,7 @@ function NewItemForm() {
       .then(res => res.json())
       .then(data => {
         const preps = data.filter(i => i.is_prep && !i.is_archived);
-        const sorted = preps.sort((a, b) => a.name.localeCompare(b.name));
+        const sorted = preps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setPrepItems(sorted);
       });
   }, []);

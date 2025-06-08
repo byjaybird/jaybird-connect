@@ -54,7 +54,8 @@ function EditItem() {
       .then((res) => res.json())
       .then((data) => {
         const active = data.filter(i => !i.archived);
-        const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
+        console.log('Ingredients:', active); // Add console logs if necessary
+        const sorted = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setIngredients(sorted);
       });
 
@@ -62,7 +63,7 @@ function EditItem() {
       .then(res => res.json())
       .then((data) => {
         const preps = data.filter(i => i.is_prep && !i.is_archived);
-        const sorted = preps.sort((a, b) => a.name.localeCompare(b.name));
+        const sorted = preps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setPrepItems(sorted);
       });
 
@@ -70,6 +71,7 @@ function EditItem() {
       .then((res) => res.json())
       .then(setRecipe);
   }, [id]);
+
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
