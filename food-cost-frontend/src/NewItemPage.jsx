@@ -164,7 +164,13 @@ function NewItemForm() {
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2 items-center">
               <Select
-                value={ingredients.concat(prepItems).find(i => `${r.source_type}:${r.source_id}` === `${i.source_type}:${i.source_id}`) || ''}
+                value={{
+                  value: `${r.source_type}:${r.source_id}`,
+                  label:
+                    r.source_type === 'ingredient'
+                      ? `🧂 ${ingredients.find(i => i.ingredient_id === r.source_id)?.name || 'Unnamed Ingredient'}`
+                      : `🛠️ ${prepItems.find(i => i.item_id === r.source_id)?.name || 'Unnamed Prep Item'}`
+                }}
                 onChange={(selectedOption) => {
                   if (selectedOption) {
                     const [type, id] = selectedOption.value.split(':');

@@ -31,6 +31,16 @@ function EditItem() {
   const [yieldUnit, setYieldUnit] = useState('');
   const [filterText, setFilterText] = useState('');
 
+  const mapRecipeToOptions = (r) => {
+    if (r.source_type === 'ingredient') {
+      const ingredient = ingredients.find(i => i.ingredient_id === r.source_id);
+      return ingredient ? { value: `ingredient:${ingredient.ingredient_id}`, label: `🧂 ${ingredient.name || 'Unnamed Ingredient'}` } : null;
+    } else {
+      const item = prepItems.find(i => i.item_id === r.source_id);
+      return item ? { value: `item:${item.item_id}`, label: `🛠️ ${item.name || 'Unnamed Prep Item'}` } : null;
+    }
+  };
+
   useEffect(() => {
     fetch(`${API_URL}/items/${id}`)
       .then((res) => res.json())
@@ -215,39 +225,31 @@ function EditItem() {
 
           {recipe.map((r, index) => (
             <div key={index} className="mb-2 flex gap-2 items-center">
-              <select
-                value={`${r.source_type}:${r.source_id}`}
-                onChange={(e) => {
-                  const [type, id] = e.target.value.split(':');
+              <Select
+                value={mapRecipeToOptions(r)}
+                onChange={(selected) => {
+                  const [type, id] = selected.value.split(':');
                   const updated = [...recipe];
-                  updated[index].source_type = type;
-                  updated[index].source_id = parseInt(id);
+                  updated[index] = { ...updated[index], source_type: type, source_id: parseInt(id) };
                   setRecipe(updated);
                 }}
-                className="border p-1 rounded"
-              >
-                <option value="">-- Select Source --</option>
-                <optgroup label="🧂 Ingredients">
-                  {ingredients
-                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                    .map((i) => (
-                      <option key={`ingredient-${i.ingredient_id}`} value={`ingredient:${i.ingredient_id}`}>
-                        🧂 {i.name || 'Unnamed Ingredient'} {/* Handle missing name */}
-                      </option>
-                  ))}
-                </optgroup>
-
-                <optgroup label="🛠️ Prep Items">
-                  {prepItems
-                    .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                    .map((i) => (
-                      <option key={`item-${i.item_id}`} value={`item:${i.item_id}`}>
-                        🛠️ {i.name}
-                      </option>
-                  ))}
-                </optgroup>
-
-              </select>
+                options={[
+                  {
+                    label: '🧂 Ingredients',
+                    options: ingredients
+                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .map(i => ({ value: `ingredient:${i.ingredient_id}`, label: `🧂 ${i.name || 'Unnamed Ingredient'}` }))
+                  },
+                  {
+                    label: '🛠️ Prep Items',
+                    options: prepItems
+                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .map(i => ({ value: `item:${i.item_id}`, label: `🛠️ ${i.name}` }))
+                  }
+                ]}
+                className="basic-single w-full"
+                classNamePrefix="select"
+              />
               <input
                 type="number"
                 placeholder="Qty"
@@ -255,7 +257,7 @@ function EditItem() {
                 value={r.quantity}
                 onChange={(e) => {
                   const updated = [...recipe];
-                  updated[index].quantity = e.target.value;
+                  updated[index] = { ...updated[index], quantity: e.target.value };
                   setRecipe(updated);
                 }}
               />
@@ -265,7 +267,7 @@ function EditItem() {
                 value={r.unit}
                 onChange={(e) => {
                   const updated = [...recipe];
-                  updated[index].unit = e.target.value;
+                  updated[index] = { ...updated[index], unit: e.target.value };
                   setRecipe(updated);
                 }}
               />
@@ -300,7 +302,6 @@ function EditItem() {
                       setFixData(data);
                     }}
                   />
-
                 )
               ) : <span className="text-gray-400">–</span>}
               <button
