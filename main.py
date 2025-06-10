@@ -72,7 +72,6 @@ def ingredients():
         ingredients = cursor.fetchall()
         cursor.connection.close()
         return jsonify(ingredients)
-        return jsonify(ingredients_list)
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_detail(ingredient_id):
     cursor = get_db_cursor()
@@ -315,12 +314,6 @@ def create_item():
             return jsonify({'error': 'Item insert failed or item_id not returned'}), 500
 
         new_id = row['item_id']
-
-        if not row:
-            cursor.connection.rollback()
-            return jsonify({'error': 'Item insert failed'}), 500
-
-        new_id = row[0]
         cursor.connection.commit()
         return jsonify({'status': 'Item created', 'item_id': new_id})
 
