@@ -137,7 +137,7 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
             WHERE (ingredient_id IS NULL AND is_global = TRUE)
             AND from_unit = %s AND to_unit = %s
             LIMIT 1
-        """, (recipe_unit, yield_unit))
+        """, (yield_unit, recipe_unit))
         conversion = cursor.fetchone()
         if not conversion:
             return {
@@ -150,7 +150,7 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
     else:
         conversion_factor = 1
 
-    effective_yield = yield_qty / conversion_factor
+    effective_yield = yield_qty * conversion_factor
     cost_per_unit = total_cost / effective_yield
     final_cost = cost_per_unit * quantity
 
