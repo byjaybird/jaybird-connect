@@ -115,14 +115,14 @@ def update_ingredient(ingredient_id):
             category = %s,
             unit = %s,
             notes = %s,
-            is_archived = %s
+            archived = %s
         WHERE ingredient_id = %s
     """, (
         data.get('name'),
         data.get('category'),
         data.get('unit'),
         data.get('notes'),
-        data.get('is_archived', False),
+        data.get('archived', False),
         ingredient_id
     ))
 
@@ -458,6 +458,7 @@ def create_price_quote():
 @app.route('/api/price_quotes', methods=['GET'])
 def get_price_quotes():
     ingredient_id = request.args.get('ingredient_id')
+    limit = request.args.get('limit', default=1, type=int)  # Default to 1 if not specified
 
     cursor = get_db_cursor()
 
@@ -466,7 +467,8 @@ def get_price_quotes():
             cursor.execute("""
                 SELECT * FROM price_quotes WHERE ingredient_id = %s
                 ORDER BY date_found DESC
-            """, (ingredient_id,))
+                LIMIT %s
+            """, (ingredient_id, limit))
         else:
             cursor.execute("""
                 SELECT 
@@ -483,7 +485,8 @@ def get_price_quotes():
                 FROM price_quotes q
                 JOIN ingredients i ON q.ingredient_id = i.ingredient_id
                 ORDER BY q.date_found DESC
-            """)
+                LIMIT %s
+            """, (limit,))
         quotes = cursor.fetchall()
         return jsonify(quotes)
     except Exception as e:

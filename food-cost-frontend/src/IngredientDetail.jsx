@@ -15,6 +15,8 @@ function IngredientDetail() {
   const [toUnit, setToUnit] = useState('');
   const [factor, setFactor] = useState('');
 
+  const [priceQuotes, setPriceQuotes] = useState([]);
+
   useEffect(() => {
     fetch(`${API_URL}/ingredients/${id}`)
       .then((res) => {
@@ -41,6 +43,18 @@ function IngredientDetail() {
       .catch((err) => {
         console.error('Conversion fetch error:', err);
         setConversions([]);
+      });
+
+     fetch(`${API_URL}/price_quotes?ingredient_id=${id}&limit=10`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch price quotes');
+        return res.json();
+      })
+      .then((data) => {
+        setPriceQuotes(data);
+      })
+      .catch((err) => {
+        console.error('Price quotes fetch error:', err);
       });
   }, [id]);
 
@@ -107,6 +121,38 @@ function IngredientDetail() {
               </li>
             ))}
           </ul>
+        )}
+      </div>
+
+       <div className="mb-8">
+        <h3 className="text-xl font-semibold mb-2">Recent Price Quotes</h3>
+        {priceQuotes.length === 0 ? (
+          <p className="text-gray-600">No recent price quotes available.</p>
+        ) : (
+          <table className="w-full border text-sm text-left">
+            <thead className="bg-gray-100 text-xs uppercase text-gray-700">
+              <tr>
+                <th className="border px-3 py-2">Date</th>
+                <th className="border px-3 py-2">Source</th>
+                <th className="border px-3 py-2">Size Qty</th>
+                <th className="border px-3 py-2">Size Unit</th>
+                <th className="border px-3 py-2">Price</th>
+                <th className="border px-3 py-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {priceQuotes.map((quote, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border px-3 py-2">{new Date(quote.date_found).toLocaleDateString()}</td>
+                  <td className="border px-3 py-2">{quote.source}</td>
+                  <td className="border px-3 py-2">{quote.size_qty}</td>
+                  <td className="border px-3 py-2">{quote.size_unit}</td>
+                  <td className="border px-3 py-2">${quote.price.toFixed(2)}</td>
+                  <td className="border px-3 py-2">{quote.notes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
