@@ -18,6 +18,7 @@ import ItemDetail from './ItemDetail';
 import EditIngredient from './EditIngredient'; 
 import NewPriceQuoteForm from './NewPriceQuoteForm';
 import Prices from './Prices';
+import InventoryDashboard from './InventoryDashboard';
 
 
 
@@ -46,6 +47,9 @@ function Header({ user, onLogout }) {
         </Link>
         <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">
           Prices
+        </Link>
+        <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">
+          Inventory
         </Link>
       </div>
       {user && (
@@ -197,6 +201,7 @@ function App() {
             <Route path="/ingredients/:id/edit" element={<EditIngredient />} />
             <Route path="/prices" element={<Prices />} />
             <Route path="/prices/new" element={<NewPriceQuoteForm />} />
+            <Route path="/inventory" element={<InventoryDashboard />} />
           </Routes>
         </Router>
       </AuthGate>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import CostCell from './components/CostCell'; // adjust path as needed
-
+import { QRCodeCanvas } from 'qrcode.react';  // You may need to install this library
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -22,19 +22,59 @@ function ItemDetail() {
       .then(setRecipe);
   }, [id]);
 
+  const handleDownloadLabel = () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Define label dimensions: 3"x2.5" translates to 288px x 240px at 96 DPI
+    canvas.width = 288;
+    canvas.height = 240;
+
+    // Set a white background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw QR Code
+    const qrCodeCanvas = document.getElementById('qr-code');
+    ctx.drawImage(qrCodeCanvas, 20, 20, 100, 100);
+
+    // Add item name text
+    ctx.fillStyle = '#000';
+    ctx.font = '20px Arial';
+    ctx.fillText(item.name, 140, 60);
+
+    // Trigger download
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `${item.name}-label.png`;
+    link.click();
+  };
+
   if (!item) return <div className="p-4">Loading item...</div>;
 
   return (
     <div className="max-w-2xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">{item.name}</h1>
-        <Link
-          to={`/item/${id}/edit`}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
+        <div className="flex space-x-2">
+          <Link to={`/item/${id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
           ✏️ Edit Item
         </Link>
+          <button onClick={handleDownloadLabel} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+            Get Label
+          </button>
       </div>
+      </div>
+
+      <div style={{ display: 'none' }}>
+        <QRCodeCanvas
+          id="qr-code"
+          value={`${API_URL}/items/${id}`}  // The value here can be customized
+          size={100}
+          level={"H"}
+          includeMargin={true}
+        />
+    </div>
 
       <p className="mb-2"><strong>Category:</strong> {item.category}</p>
       <p className="mb-2"><strong>Description:</strong> {item.description}</p>
