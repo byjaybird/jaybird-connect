@@ -7,17 +7,18 @@ export default function InventoryDashboard() {
   useEffect(() => {
     const fetchInventory = async () => {
       try {
-        const [ingredientsRes, itemsRes] = await Promise.all([
-          fetch('/api/ingredients'),
-          fetch('/api/items?is_prep=true')
-        ]);
-        const ingredients = await ingredientsRes.json();
-        const prepItems = await itemsRes.json();
-        const allItems = [
-          ...ingredients.map(i => ({ ...i, source_type: 'ingredient', source_id: i.ingredient_id })),
-          ...prepItems.map(i => ({ ...i, source_type: 'item', source_id: i.item_id })),
+        const ingredientsRes = await fetch('/api/ingredients');
+        const allIngredients = await ingredientsRes.json();
+        const visibleIngredients = allIngredients.filter(i => !i.archived);
+
+        const itemsRes = await fetch('/api/items?is_prep=true');
+        const allItems = await itemsRes.json();
+        const visibleItems = allItems.filter(i => !i.archived);
+        const allVisible = [
+          ...visibleIngredients.map(i => ({ ...i, source_type: 'ingredient', source_id: i.ingredient_id })),
+          ...visibleItems.map(i => ({ ...i, source_type: 'item', source_id: i.item_id })),
         ];
-        const enriched = await Promise.all(allItems.map(async (item) => {
+        const enriched = await Promise.all(allVisible.map(async (item) => {
           const res = await fetch(`/api/inventory/current?source_type=${item.source_type}&source_id=${item.source_id}`);
           const latest = await res.json();
           return {
@@ -29,7 +30,14 @@ export default function InventoryDashboard() {
             user_id: latest?.user_id || '-'
           };
         }));
-        setInventory(enriched);
+
+        const groupedByCategory = enriched.reduce((acc, item) => {
+          const category = item.category || 'Uncategorized';
+          if (!acc[category]) acc[category] = [];
+          acc[category].push(item);
+          return acc;
+        }, {});
+        setInventory(groupedByCategory);
       } catch (err) {
         console.error('Failed to fetch inventory', err);
       } finally {
@@ -44,6 +52,9 @@ export default function InventoryDashboard() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Inventory Dashboard</h1>
+      {Object.entries(inventory).map(([category, items]) => (
+        <div key={category} className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">{category}</h2>
       <table className="w-full border text-sm">
         <thead className="bg-gray-100">
           <tr>
@@ -57,7 +68,7 @@ export default function InventoryDashboard() {
           </tr>
         </thead>
         <tbody>
-          {inventory.map((item) => (
+              {items.map((item) => (
             <tr key={`${item.source_type}-${item.source_id}`} className="border-b">
               <td className="px-3 py-2 border">{item.name}</td>
               <td className="px-3 py-2 border">{item.source_type}</td>
@@ -72,6 +83,8 @@ export default function InventoryDashboard() {
           ))}
         </tbody>
       </table>
+    </div>
+      ))}
     </div>
   );
 }
