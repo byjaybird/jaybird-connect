@@ -125,7 +125,7 @@ def update_ingredient(ingredient_id):
         data.get('category'),
         data.get('unit'),
         data.get('notes'),
-        data.get('archived', False),
+        data.get('is_archived', False),
         ingredient_id
     ))
 
