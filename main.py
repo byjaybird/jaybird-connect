@@ -461,7 +461,7 @@ def create_price_quote():
 @app.route('/api/price_quotes', methods=['GET'])
 def get_price_quotes():
     ingredient_id = request.args.get('ingredient_id')
-    limit = request.args.get('limit', default=1, type=int)  # Default to 1 if not specified
+    limit = request.args.get('limit', default=100, type=int)  # Default to 1 if not specified
 
     cursor = get_db_cursor()
 
