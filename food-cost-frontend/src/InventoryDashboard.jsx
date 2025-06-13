@@ -8,18 +8,23 @@ export default function InventoryDashboard() {
     const fetchInventory = async () => {
       try {
         const ingredientsRes = await fetch('/api/ingredients');
+        if (!ingredientsRes.ok) throw new Error('Failed to fetch ingredients');
         const allIngredients = await ingredientsRes.json();
         const visibleIngredients = allIngredients.filter(i => !i.archived);
 
         const itemsRes = await fetch('/api/items?is_prep=true');
+        if (!itemsRes.ok) throw new Error('Failed to fetch items');
         const allItems = await itemsRes.json();
         const visibleItems = allItems.filter(i => !i.archived);
+
         const allVisible = [
           ...visibleIngredients.map(i => ({ ...i, source_type: 'ingredient', source_id: i.ingredient_id })),
           ...visibleItems.map(i => ({ ...i, source_type: 'item', source_id: i.item_id })),
         ];
+
         const enriched = await Promise.all(allVisible.map(async (item) => {
           const res = await fetch(`/api/inventory/current?source_type=${item.source_type}&source_id=${item.source_id}`);
+          if (!res.ok) throw new Error(`Failed to fetch inventory for ${item.source_id}`);
           const latest = await res.json();
           return {
             ...item,
