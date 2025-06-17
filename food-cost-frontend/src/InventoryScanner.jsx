@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -10,6 +10,7 @@ function InventoryScanner() {
   const [prepItems, setPrepItems] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const barcodeInputRef = useRef(null); // Create a ref for the input field
 
   useEffect(() => {
     // Load prep items and ingredients for dropdown
@@ -25,19 +26,19 @@ function InventoryScanner() {
     loadItems();
 
     // Autofocus barcode input on page load
-    document.getElementById('barcode-input').focus();
+    barcodeInputRef.current.focus();
   }, []);
 
   const handleScanSubmit = async (e) => {
     e.preventDefault();
     const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
-    if (!res.status===204) {
+    if (res.status === 204) {
       setShowDropdown(true); // If not found, show dropdown
-      setFeedback('Unmapped Barcode.');
+      setFeedback('Unmapped Barcode. Please select an ingredient or prep item.');
     } else if (res.ok) {
       const data = await res.json();
       setItem(data.item);
-      setShowDropdown(false); //reset dropdown visibility if item is found
+      setShowDropdown(false); // Reset dropdown visibility if item is found
     }
   };
 
@@ -60,6 +61,7 @@ function InventoryScanner() {
       });
       setFeedback('Barcode mapped successfully.');
     }
+
     // Reset form after processing
     resetForm();
   };
@@ -70,18 +72,20 @@ function InventoryScanner() {
     setQuantity('');
     setFeedback('');
     setShowDropdown(false);
-    document.getElementById('barcode-input').focus(); // Focus the barcode input again
+    barcodeInputRef.current.focus(); // Focus the barcode input again
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <form onSubmit={handleScanSubmit} className="space-y-4">
         <input
+          ref={barcodeInputRef} // Attach the ref to the input
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           placeholder="Scan barcode..."
           className="border p-2"
+          autoFocus // Ensure the input is focused on mount
         />
         {item && !showDropdown && (
           <div>
