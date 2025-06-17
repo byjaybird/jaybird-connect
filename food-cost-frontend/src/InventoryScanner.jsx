@@ -31,15 +31,14 @@ function InventoryScanner() {
   const handleScanSubmit = async (e) => {
     e.preventDefault();
     const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
-    if (!res.ok) {
+    if (!res.status===204) {
       setShowDropdown(true); // If not found, show dropdown
       setFeedback('Unmapped Barcode.');
-      return;
+    } else if (res.ok) {
+      const data = await res.json();
+      setItem(data.item);
+      setShowDropdown(false); //reset dropdown visibility if item is found
     }
-
-    const data = await res.json();
-    setItem(data.item);
-    setShowDropdown(false); // No dropdown if item is found
   };
 
   const handleSave = async () => {
