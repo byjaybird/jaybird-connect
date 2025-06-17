@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from utils.conversion_helper import convert_to_base
+import traceback
 
 inventory_bp = Blueprint('inventory', __name__)
 
@@ -91,9 +92,11 @@ def get_barcode_map():
             return jsonify({'error': 'Barcode not found'}), 404
 
         return jsonify(barcode_data)
+    except Exception as e:
+        traceback.print_exc()  # Print full error to logs
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
     finally:
         cursor.close()
-
 
 @inventory_bp.route('/inventory/adjustment', methods=['POST'])
 def adjustment():
