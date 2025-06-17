@@ -19,6 +19,7 @@ import EditIngredient from './EditIngredient';
 import NewPriceQuoteForm from './NewPriceQuoteForm';
 import Prices from './Prices';
 import InventoryDashboard from './InventoryDashboard';
+import InventoryScanner from './InventoryScanner';
 
 
 
@@ -202,6 +203,7 @@ function App() {
             <Route path="/prices" element={<Prices />} />
             <Route path="/prices/new" element={<NewPriceQuoteForm />} />
             <Route path="/inventory" element={<InventoryDashboard />} />
+            <Route path="/inventory-scanner" element={<InventoryScanner />} />
           </Routes>
         </Router>
       </AuthGate>

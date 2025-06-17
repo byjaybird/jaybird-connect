@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import CostCell from './components/CostCell'; // adjust path as needed
 import { QRCodeCanvas } from 'qrcode.react';  // You may need to install this library
+import QRCode from 'qrcode.react';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
