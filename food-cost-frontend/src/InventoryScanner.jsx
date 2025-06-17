@@ -38,7 +38,7 @@ function InventoryScanner() {
   const handleScanSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/barcode-map/lookup?barcode=${barcode}`);
+      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
       if (!res.ok) throw new Error('Failed to fetch barcode mapping');
 
       const data = await res.json();
