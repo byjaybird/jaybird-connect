@@ -6,81 +6,63 @@ function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
   const [item, setItem] = useState(null);
   const [quantity, setQuantity] = useState('');
+  const [ingredients, setIngredients] = useState([]);
+  const [prepItems, setPrepItems] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [items, setItems] = useState([]);
-  const [showUnmapped, setShowUnmapped] = useState(false);
 
   useEffect(() => {
+    // Load prep items and ingredients for dropdown
     const loadItems = async () => {
-      try {
-        const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
-        const ingredientsRes = await fetch(`${API_URL}/ingredients`);
-
-        if (!itemsRes.ok || !ingredientsRes.ok) throw new Error('Failed to load items/ingredients');
-
-        const itemsData = await itemsRes.json();
-        const ingredientsData = await ingredientsRes.json();
-
-        setItems([...itemsData, ...ingredientsData]);
-      } catch (err) {
-        console.error('Error loading items/ingredients', err);
-      }
+      const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
+      const ingredientsRes = await fetch(`${API_URL}/ingredients`);
+      const itemsData = await itemsRes.json();
+      const ingredientsData = await ingredientsRes.json();
+      setPrepItems(itemsData);
+      setIngredients(ingredientsData);
     };
 
     loadItems();
-  }, []);
 
-  useEffect(() => {
-    // Autofocus input on page load
-    document.querySelector('#barcode-input').focus();
+    // Autofocus barcode input on page load
+    document.getElementById('barcode-input').focus();
   }, []);
 
   const handleScanSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
-      if (!res.ok) throw new Error('Failed to fetch barcode mapping');
-
-      const data = await res.json();
-      if (data.mapped) {
-        setItem(data.item);
-        setShowUnmapped(false);
-      } else {
-        setShowUnmapped(true);
-        setFeedback('Unmapped Barcode');
-      }
-    } catch (err) {
-      console.error('Error fetching barcode mapping', err);
+    const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
+    if (!res.ok) {
+      setShowDropdown(true); // If not found, show dropdown
+      setFeedback('Unmapped Barcode.');
+      return;
     }
+
+    const data = await res.json();
+    setItem(data.item);
+    setShowDropdown(false); // No dropdown if item is found
   };
 
   const handleSave = async () => {
     if (item) {
-      try {
-        await fetch(`${API_URL}/inventory/upload-scan`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode, quantity }),
-        });
-        setFeedback('Scan saved successfully');
-        resetForm();
-      } catch (err) {
-        console.error('Error saving scan', err);
-      }
+      // Handle saving the scan with mapped item
+      await fetch(`${API_URL}/inventory/upload-scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode, quantity }),
+      });
+      setFeedback('Scan saved successfully.');
     } else {
-      try {
-        const selected = items.find(i => i.id === parseInt(item));
-        await fetch(`${API_URL}/barcode-map`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
-        });
-        setFeedback('Barcode mapped successfully');
-        resetForm();
-      } catch (err) {
-        console.error('Error mapping barcode', err);
-      }
+      // Handle mapping the barcode
+      const selected = ingredients.concat(prepItems).find(i => i.id === parseInt(item));
+      await fetch(`${API_URL}/barcode-map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
+      });
+      setFeedback('Barcode mapped successfully.');
     }
+    // Reset form after processing
+    resetForm();
   };
 
   const resetForm = () => {
@@ -88,24 +70,22 @@ function InventoryScanner() {
     setItem(null);
     setQuantity('');
     setFeedback('');
-    setShowUnmapped(false);
-    document.querySelector('#barcode-input').focus();
+    setShowDropdown(false);
+    document.getElementById('barcode-input').focus(); // Focus the barcode input again
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <form onSubmit={handleScanSubmit} className="space-y-4">
         <input
-          id="barcode-input"
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           placeholder="Scan barcode..."
           className="border p-2"
         />
-        {item && !showUnmapped && (
-          <div className="space-y-4">
-            <div>{`Item: ${item.name} ${item.type}`}</div>
+        {item && !showDropdown && (
+          <div>
             <input
               type="number"
               value={quantity}
@@ -118,11 +98,11 @@ function InventoryScanner() {
             </button>
           </div>
         )}
-        {showUnmapped && (
-          <div className="space-y-4">
+        {showDropdown && (
+          <div>
             <select onChange={(e) => setItem(e.target.value)} className="border p-2">
               <option value="">Select an item</option>
-              {items.map((option) => (
+              {[...prepItems, ...ingredients].map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name} ({option.type})
                 </option>
@@ -134,7 +114,7 @@ function InventoryScanner() {
           </div>
         )}
       </form>
-      {feedback && <div className={`mt-4 p-2 ${showUnmapped ? 'text-red-500' : 'text-green-500'}`}>{feedback}</div>}
+      {feedback && <div className="mt-4 text-green-500">{feedback}</div>}
     </div>
   );
 }
