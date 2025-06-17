@@ -5,7 +5,7 @@ import traceback
 
 inventory_bp = Blueprint('inventory', __name__)
 
-@inventory_bp.route('/inventory/upload-scan', methods=['POST'])
+@inventory_bp.route('/api/inventory/upload-scan', methods=['POST'])
 def upload_scan():
     scans = request.json
     unresolved_barcodes = []
@@ -38,7 +38,7 @@ def upload_scan():
     return jsonify({'unresolvedBarcodes': unresolved_barcodes})
 
 
-@inventory_bp.route('/inventory/unmapped-barcodes', methods=['GET'])
+@inventory_bp.route('/api/inventory/unmapped-barcodes', methods=['GET'])
 def unmapped_barcodes():
     cursor = get_db_cursor()
     try:
@@ -53,7 +53,7 @@ def unmapped_barcodes():
     return jsonify({'unmappedBarcodes': [row['barcode'] for row in unmapped]})
 
 
-@inventory_bp.route('/barcode-map', methods=['POST'])
+@inventory_bp.route('/api/barcode-map', methods=['POST'])
 def barcode_map():
     data = request.json
     barcode = data.get('barcode')
@@ -76,7 +76,7 @@ def barcode_map():
     return jsonify({'status': 'Mapping updated'})
 
 
-@inventory_bp.route('/barcode-map', methods=['GET'])
+@inventory_bp.route('/api/barcode-map', methods=['GET'])
 def get_barcode_map():
     barcode = request.args.get('barcode')
 
@@ -98,7 +98,7 @@ def get_barcode_map():
     finally:
         cursor.close()
 
-@inventory_bp.route('/inventory/adjustment', methods=['POST'])
+@inventory_bp.route('/api/inventory/adjustment', methods=['POST'])
 def adjustment():
     data = request.json
     adjustment_type = data.get('adjustment_type')
@@ -125,7 +125,7 @@ def adjustment():
     return jsonify({'status': 'Adjustment recorded'})
 
 
-@inventory_bp.route('/inventory/current', methods=['GET'])
+@inventory_bp.route('/api/inventory/current', methods=['GET'])
 def current_inventory():
     location = request.args.get('location')
     source_type = request.args.get('source_type')

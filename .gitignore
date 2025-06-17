@@ -4,3 +4,7 @@ dist/
 __pycache__/
 *.db
 .vscode/
+venv/
+.env/
+env/
+.venv/
