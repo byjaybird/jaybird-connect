@@ -10,7 +10,7 @@ function InventoryScanner() {
   const [prepItems, setPrepItems] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const barcodeInputRef = useRef(null); // Create a ref for the input field
+  const barcodeInputRef = useRef(null);
 
   useEffect(() => {
     // Load prep items and ingredients for dropdown
@@ -29,16 +29,19 @@ function InventoryScanner() {
     barcodeInputRef.current.focus();
   }, []);
 
-  const handleScanSubmit = async (e) => {
+ const handleScanSubmit = async (e) => {
     e.preventDefault();
     const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
+
     if (res.status === 204) {
       setShowDropdown(true); // If not found, show dropdown
       setFeedback('Unmapped Barcode. Please select an ingredient or prep item.');
+      setItem(null); // Reset item state since it's not found
     } else if (res.ok) {
       const data = await res.json();
       setItem(data.item);
       setShowDropdown(false); // Reset dropdown visibility if item is found
+      setFeedback('Barcode successfully mapped. Please enter the quantity.');
     }
   };
 
@@ -59,7 +62,7 @@ function InventoryScanner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
       });
-      setFeedback('Barcode mapped successfully.');
+      setFeedback('Barcode mapped successfully. Please enter the inventory quantity now.');
     }
 
     // Reset form after processing
@@ -74,6 +77,8 @@ function InventoryScanner() {
     setShowDropdown(false);
     barcodeInputRef.current.focus(); // Focus the barcode input again
   };
+
+
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
@@ -93,7 +98,7 @@ function InventoryScanner() {
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Enter quantity"
+              placeholder="Enter inventory quantity"
               className="border p-2"
             />
             <button type="button" onClick={handleSave} className="bg-green-500 text-white p-2">
