@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
-
+const SCANNER_WS_URL = 'ws://localhost:8080'; // We'll configure this later
 function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
   const [item, setItem] = useState(null);
@@ -9,8 +8,27 @@ function InventoryScanner() {
   const [feedback, setFeedback] = useState('');
   const [items, setItems] = useState([]);
   const [showUnmapped, setShowUnmapped] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
 
   useEffect(() => {
+    const ws = new WebSocket(SCANNER_WS_URL);
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      setFeedback('Scanner connected');
+    };
+
+    ws.onclose = () => {
+      setWsConnected(false);
+      setFeedback('Scanner disconnected - using manual mode');
+    };
+
+    ws.onmessage = (event) => {
+      const scannedBarcode = event.data;
+      setBarcode(scannedBarcode);
+      handleScanSubmit(null, scannedBarcode);
+    };
+
     const loadItems = async () => {
       try {
         const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
@@ -25,20 +43,20 @@ function InventoryScanner() {
       } catch (err) {
         console.error('Error loading items/ingredients', err);
       }
-    };
+  };
 
     loadItems();
+    return () => {
+      ws.close();
+    };
   }, []);
 
-  useEffect(() => {
-    // Autofocus input on page load
-    document.querySelector('#barcode-input').focus();
-  }, []);
+  const handleScanSubmit = async (e, scannedBarcode = null) => {
+    if (e) e.preventDefault();
+    const barcodeToCheck = scannedBarcode || barcode;
 
-  const handleScanSubmit = async (e) => {
-    e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
+      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcodeToCheck}`);
       if (!res.ok) throw new Error('Failed to fetch barcode mapping');
 
       const data = await res.json();
@@ -94,13 +112,20 @@ function InventoryScanner() {
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
+      <div className="mb-4">
+        {wsConnected ? (
+          <span className="text-green-500">Scanner Connected</span>
+        ) : (
+          <span className="text-gray-500">Manual Mode</span>
+        )}
+    </div>
       <form onSubmit={handleScanSubmit} className="space-y-4">
         <input
           id="barcode-input"
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-          placeholder="Scan barcode..."
+          placeholder="Scan barcode or enter manually..."
           className="border p-2"
         />
         {item && !showUnmapped && (
@@ -140,3 +165,4 @@ function InventoryScanner() {
 }
 
 export default InventoryScanner;
+

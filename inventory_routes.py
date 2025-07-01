@@ -37,7 +37,6 @@ def upload_scan():
 
     return jsonify({'unresolvedBarcodes': unresolved_barcodes})
 
-
 @inventory_bp.route('/api/inventory/unmapped-barcodes', methods=['GET'])
 def unmapped_barcodes():
     cursor = get_db_cursor()
@@ -51,7 +50,6 @@ def unmapped_barcodes():
         cursor.close()
 
     return jsonify({'unmappedBarcodes': [row['barcode'] for row in unmapped]})
-
 
 @inventory_bp.route('/api/barcode-map', methods=['POST'])
 def barcode_map():
@@ -74,7 +72,6 @@ def barcode_map():
         cursor.close()
 
     return jsonify({'status': 'Mapping updated'})
-
 
 @inventory_bp.route('/api/barcode-map', methods=['GET'])
 def get_barcode_map():
@@ -123,7 +120,6 @@ def adjustment():
         cursor.close()
 
     return jsonify({'status': 'Adjustment recorded'})
-
 
 @inventory_bp.route('/api/inventory/current', methods=['GET'])
 def current_inventory():
