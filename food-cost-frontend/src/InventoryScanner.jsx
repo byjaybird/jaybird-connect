@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const SCANNER_WS_URL = 'ws://localhost:8080'; // We'll configure this later
 function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
   const [item, setItem] = useState(null);
   const [quantity, setQuantity] = useState('');
+  const [ingredients, setIngredients] = useState([]);
+  const [prepItems, setPrepItems] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [items, setItems] = useState([]);
   const [showUnmapped, setShowUnmapped] = useState(false);
@@ -30,20 +34,13 @@ function InventoryScanner() {
     };
 
     const loadItems = async () => {
-      try {
-        const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
-        const ingredientsRes = await fetch(`${API_URL}/ingredients`);
-
-        if (!itemsRes.ok || !ingredientsRes.ok) throw new Error('Failed to load items/ingredients');
-
-        const itemsData = await itemsRes.json();
-        const ingredientsData = await ingredientsRes.json();
-
-        setItems([...itemsData, ...ingredientsData]);
-      } catch (err) {
-        console.error('Error loading items/ingredients', err);
-      }
-  };
+      const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
+      const ingredientsRes = await fetch(`${API_URL}/ingredients`);
+      const itemsData = await itemsRes.json();
+      const ingredientsData = await ingredientsRes.json();
+      setPrepItems(itemsData);
+      setIngredients(ingredientsData);
+    };
 
     loadItems();
     return () => {
@@ -51,6 +48,13 @@ function InventoryScanner() {
     };
   }, []);
 
+    // Autofocus barcode input on page load
+    barcodeInputRef.current.focus();
+  }, []);
+
+ const handleScanSubmit = async (e) => {
+    e.preventDefault();
+    const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
   const handleScanSubmit = async (e, scannedBarcode = null) => {
     if (e) e.preventDefault();
     const barcodeToCheck = scannedBarcode || barcode;
@@ -59,46 +63,40 @@ function InventoryScanner() {
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcodeToCheck}`);
       if (!res.ok) throw new Error('Failed to fetch barcode mapping');
 
+    if (res.status === 204) {
+      setShowDropdown(true); // If not found, show dropdown
+      setFeedback('Unmapped Barcode. Please select an ingredient or prep item.');
+      setItem(null); // Reset item state since it's not found
+    } else if (res.ok) {
       const data = await res.json();
-      if (data.mapped) {
-        setItem(data.item);
-        setShowUnmapped(false);
-      } else {
-        setShowUnmapped(true);
-        setFeedback('Unmapped Barcode');
-      }
-    } catch (err) {
-      console.error('Error fetching barcode mapping', err);
+      setItem(data.item);
+      setShowDropdown(false); // Reset dropdown visibility if item is found
+      setFeedback('Barcode successfully mapped. Please enter the quantity.');
     }
   };
 
   const handleSave = async () => {
     if (item) {
-      try {
-        await fetch(`${API_URL}/inventory/upload-scan`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode, quantity }),
-        });
-        setFeedback('Scan saved successfully');
-        resetForm();
-      } catch (err) {
-        console.error('Error saving scan', err);
-      }
+      // Handle saving the scan with mapped item
+      await fetch(`${API_URL}/inventory/upload-scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode, quantity }),
+      });
+      setFeedback('Scan saved successfully.');
     } else {
-      try {
-        const selected = items.find(i => i.id === parseInt(item));
-        await fetch(`${API_URL}/barcode-map`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
-        });
-        setFeedback('Barcode mapped successfully');
-        resetForm();
-      } catch (err) {
-        console.error('Error mapping barcode', err);
-      }
+      // Handle mapping the barcode
+      const selected = ingredients.concat(prepItems).find(i => i.id === parseInt(item));
+      await fetch(`${API_URL}/barcode-map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
+      });
+      setFeedback('Barcode mapped successfully. Please enter the inventory quantity now.');
     }
+
+    // Reset form after processing
+    resetForm();
   };
 
   const resetForm = () => {
@@ -106,9 +104,11 @@ function InventoryScanner() {
     setItem(null);
     setQuantity('');
     setFeedback('');
-    setShowUnmapped(false);
-    document.querySelector('#barcode-input').focus();
+    setShowDropdown(false);
+    barcodeInputRef.current.focus(); // Focus the barcode input again
   };
+
+
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
@@ -121,21 +121,21 @@ function InventoryScanner() {
     </div>
       <form onSubmit={handleScanSubmit} className="space-y-4">
         <input
-          id="barcode-input"
+          ref={barcodeInputRef} // Attach the ref to the input
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           placeholder="Scan barcode or enter manually..."
           className="border p-2"
+          autoFocus // Ensure the input is focused on mount
         />
-        {item && !showUnmapped && (
-          <div className="space-y-4">
-            <div>{`Item: ${item.name} ${item.type}`}</div>
+        {item && !showDropdown && (
+          <div>
             <input
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Enter quantity"
+              placeholder="Enter inventory quantity"
               className="border p-2"
             />
             <button type="button" onClick={handleSave} className="bg-green-500 text-white p-2">
@@ -143,11 +143,11 @@ function InventoryScanner() {
             </button>
           </div>
         )}
-        {showUnmapped && (
-          <div className="space-y-4">
+        {showDropdown && (
+          <div>
             <select onChange={(e) => setItem(e.target.value)} className="border p-2">
               <option value="">Select an item</option>
-              {items.map((option) => (
+              {[...prepItems, ...ingredients].map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name} ({option.type})
                 </option>
@@ -159,7 +159,7 @@ function InventoryScanner() {
           </div>
         )}
       </form>
-      {feedback && <div className={`mt-4 p-2 ${showUnmapped ? 'text-red-500' : 'text-green-500'}`}>{feedback}</div>}
+      {feedback && <div className="mt-4 text-green-500">{feedback}</div>}
     </div>
   );
 }

@@ -86,7 +86,7 @@ def get_barcode_map():
         barcode_data = cursor.fetchone()
 
         if not barcode_data:
-            return jsonify({'error': 'Barcode not found'}), 404
+            return jsonify({'error': 'Barcode not found'}), 204
 
         return jsonify(barcode_data)
     except Exception as e:
