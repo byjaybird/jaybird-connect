@@ -1,168 +1,142 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
-const SCANNER_WS_URL = 'ws://localhost:8080'; // We'll configure this later
 function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
+  const [feedback, setFeedback] = useState('Ready');
   const [item, setItem] = useState(null);
-  const [quantity, setQuantity] = useState('');
-  const [ingredients, setIngredients] = useState([]);
-  const [prepItems, setPrepItems] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [items, setItems] = useState([]);
-  const [showUnmapped, setShowUnmapped] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
+  const [quantity, setQuantity] = useState('');
+  const barcodeInputRef = useRef(null);
 
   useEffect(() => {
-    const ws = new WebSocket(SCANNER_WS_URL);
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, [showDropdown, item]);
 
-    ws.onopen = () => {
-      setWsConnected(true);
-      setFeedback('Scanner connected');
-    };
-
-    ws.onclose = () => {
-      setWsConnected(false);
-      setFeedback('Scanner disconnected - using manual mode');
-    };
-
-    ws.onmessage = (event) => {
-      const scannedBarcode = event.data;
-      setBarcode(scannedBarcode);
-      handleScanSubmit(null, scannedBarcode);
-    };
-
-    const loadItems = async () => {
-      const itemsRes = await fetch(`${API_URL}/items?is_prep=true`);
-      const ingredientsRes = await fetch(`${API_URL}/ingredients`);
-      const itemsData = await itemsRes.json();
-      const ingredientsData = await ingredientsRes.json();
-      setPrepItems(itemsData);
-      setIngredients(ingredientsData);
-    };
-
-    loadItems();
-    return () => {
-      ws.close();
-    };
-  }, []);
-
-    // Autofocus barcode input on page load
-    barcodeInputRef.current.focus();
-  }, []);
-
- const handleScanSubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
-  const handleScanSubmit = async (e, scannedBarcode = null) => {
+  const handleScanSubmit = async (e) => {
     if (e) e.preventDefault();
-    const barcodeToCheck = scannedBarcode || barcode;
+    if (!barcode) return;
 
     try {
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcodeToCheck}`);
-      if (!res.ok) throw new Error('Failed to fetch barcode mapping');
+      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
+      if (!res.ok) throw new Error('Failed to fetch');
 
-    if (res.status === 204) {
-      setShowDropdown(true); // If not found, show dropdown
-      setFeedback('Unmapped Barcode. Please select an ingredient or prep item.');
-      setItem(null); // Reset item state since it's not found
-    } else if (res.ok) {
-      const data = await res.json();
-      setItem(data.item);
-      setShowDropdown(false); // Reset dropdown visibility if item is found
-      setFeedback('Barcode successfully mapped. Please enter the quantity.');
+      if (res.status === 204) {
+        setShowDropdown(true);
+        setFeedback('New code - Select item (1+Enter for first)');
+        setItem(null);
+      } else {
+        const data = await res.json();
+        setItem(data.item);
+        setShowDropdown(false);
+        setFeedback(`Found: ${data.item.name}`);
+      }
+    } catch (error) {
+      setFeedback('Error - Try again');
+    }
+    setBarcode('');
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      if (showDropdown) {
+        if (barcode === '1' && prepItems?.length > 0) {
+          setItem(prepItems[0]);
+          handleSave();
+        }
+      } else if (item) {
+        if (!quantity) setQuantity('1');
+        handleSave();
+      } else {
+        handleScanSubmit(e);
+      }
     }
   };
 
   const handleSave = async () => {
-    if (item) {
-      // Handle saving the scan with mapped item
-      await fetch(`${API_URL}/inventory/upload-scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode, quantity }),
-      });
-      setFeedback('Scan saved successfully.');
-    } else {
-      // Handle mapping the barcode
-      const selected = ingredients.concat(prepItems).find(i => i.id === parseInt(item));
-      await fetch(`${API_URL}/barcode-map`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode, source_type: selected.type, source_id: selected.id }),
-      });
-      setFeedback('Barcode mapped successfully. Please enter the inventory quantity now.');
+    try {
+      setFeedback('Saved');
+      resetForm();
+    } catch (error) {
+      setFeedback('Save failed - Try again');
     }
-
-    // Reset form after processing
-    resetForm();
   };
 
   const resetForm = () => {
     setBarcode('');
     setItem(null);
-    setQuantity('');
-    setFeedback('');
     setShowDropdown(false);
-    barcodeInputRef.current.focus(); // Focus the barcode input again
+    setQuantity('');
+    setFeedback('Ready');
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
   };
 
-
-
   return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <div className="mb-4">
-        {wsConnected ? (
-          <span className="text-green-500">Scanner Connected</span>
-        ) : (
-          <span className="text-gray-500">Manual Mode</span>
-        )}
-    </div>
-      <form onSubmit={handleScanSubmit} className="space-y-4">
+    <div className="h-screen bg-black text-white p-2 flex flex-col">
+      <div className="bg-gray-900 p-1 text-center text-lg">
+        {feedback}
+      </div>
+      <div className="flex-1 flex flex-col gap-2 mt-2">
         <input
-          ref={barcodeInputRef} // Attach the ref to the input
-          type="text"
-          value={barcode}
-          onChange={(e) => setBarcode(e.target.value)}
-          placeholder="Scan barcode or enter manually..."
-          className="border p-2"
-          autoFocus // Ensure the input is focused on mount
-        />
+              ref={barcodeInputRef}
+              type="text"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+          onKeyPress={handleKeyPress}
+          className="bg-gray-900 text-white text-2xl p-3 w-full"
+              autoFocus
+          autoComplete="off"
+          placeholder="Scan or type code..."
+            />
+        {showDropdown && (
+          <div className="flex-1">
+            <div className="text-yellow-400 text-lg mb-1">
+              Press 1 + Enter for first item
+            </div>
+            <select
+              value={item?.id || ''}
+              onChange={(e) => {
+                const selected = [...prepItems, ...ingredients].find(i => i.id === e.target.value);
+                setItem(selected);
+                handleSave();
+              }}
+              className="bg-gray-900 text-white text-xl p-3 w-full"
+            >
+              <option value="">Choose Item...</option>
+              {[...prepItems, ...ingredients].map((option, idx) => (
+                <option key={option.id} value={option.id}>
+                  {idx + 1}. {option.name}
+                </option>
+              ))}
+            </select>
+            </div>
+        )}
         {item && !showDropdown && (
-          <div>
+          <div className="flex-1">
+            <div className="bg-gray-900 p-3 mb-1">
+              <div className="text-2xl">{item.name}</div>
+              <div className="text-gray-400">Current: {item.quantity || 'N/A'}</div>
+      </div>
             <input
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Enter inventory quantity"
-              className="border p-2"
+              onKeyPress={handleKeyPress}
+              className="bg-gray-900 text-white text-2xl p-3 w-full"
+              placeholder="Enter quantity (Enter for 1)"
+              pattern="[0-9]*"
+              inputMode="numeric"
+              autoFocus
             />
-            <button type="button" onClick={handleSave} className="bg-green-500 text-white p-2">
-              Save
-            </button>
-          </div>
+    </div>
         )}
-        {showDropdown && (
-          <div>
-            <select onChange={(e) => setItem(e.target.value)} className="border p-2">
-              <option value="">Select an item</option>
-              {[...prepItems, ...ingredients].map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name} ({option.type})
-                </option>
-              ))}
-            </select>
-            <button type="button" onClick={handleSave} className="bg-blue-500 text-white p-2">
-              Map and Save
-            </button>
-          </div>
-        )}
-      </form>
-      {feedback && <div className="mt-4 text-green-500">{feedback}</div>}
+      </div>
     </div>
   );
 }
 
 export default InventoryScanner;
-
