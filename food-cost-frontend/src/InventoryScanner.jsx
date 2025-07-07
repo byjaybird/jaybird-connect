@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+
 function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
   const [feedback, setFeedback] = useState('Ready');
@@ -57,9 +58,49 @@ function InventoryScanner() {
 
   const handleSave = async () => {
     try {
+      if (!item) return;
+
+      if (showDropdown) {
+        const mappingRes = await fetch(`${API_URL}/barcode-map`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            barcode,
+            source_type: item.type,
+            source_id: item.id
+          })
+        });
+
+        if (!mappingRes.ok) {
+          throw new Error('Failed to create barcode mapping');
+        }
+      }
+
+      const quantityToSave = quantity || '1';
+      const scanData = [{
+        barcode,
+        quantity: quantityToSave,
+        item_id: item.id
+      }];
+
+      const saveRes = await fetch(`${API_URL}/inventory/upload-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(scanData)
+      });
+
+      if (!saveRes.ok) {
+        throw new Error('Failed to save inventory count');
+      }
+
       setFeedback('Saved');
       resetForm();
     } catch (error) {
+      console.error('Save error:', error);
       setFeedback('Save failed - Try again');
     }
   };
@@ -140,3 +181,4 @@ function InventoryScanner() {
 }
 
 export default InventoryScanner;
+
