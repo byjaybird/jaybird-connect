@@ -181,55 +181,6 @@ function InventoryScanner() {
     );
   };
 
-  return (
-    <div className="h-screen bg-black text-white p-2 flex flex-col">
-      <div className="bg-gray-900 p-1 text-center text-lg">
-        {feedback}
-      </div>
-      <div className="flex-1 flex flex-col gap-2 mt-2">
-        <input
-          ref={barcodeInputRef}
-          type="text"
-          value={barcode}
-          onChange={(e) => setBarcode(e.target.value)}
-          onKeyPress={handleKeyPress}
-          className="bg-gray-900 text-white text-2xl p-3 w-full"
-          autoFocus
-          autoComplete="off"
-          placeholder="Scan or type code..."
-        />
-        
-        {/* Separate containers for dropdown and quantity input */}
-        {showDropdown && (
-          <div className="flex-1">
-            {renderDropdown()}
-          </div>
-        )}
-        
-        {item && !showDropdown && (
-          <div className="flex-1">
-            <div className="bg-gray-900 p-3 mb-1">
-              <div className="text-2xl">{item.name}</div>
-              <div className="text-gray-400">Current: {item.quantity || 'N/A'}</div>
-            </div>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="bg-gray-900 text-white text-2xl p-3 w-full"
-              placeholder="Enter quantity (Enter for 1)"
-              pattern="[0-9]*"
-              inputMode="numeric"
-              autoFocus
-            />
-          </div>
-        )}
-      </div>
-    </div>
-    )
-  };
-
   const handleSave = async () => {
     try {
       if (!item) return;
@@ -296,7 +247,7 @@ function InventoryScanner() {
     }
   };
 
-  if (isLoading) {
+   if (isLoading) {
     return (
       <div className="h-screen bg-black text-white p-2 flex items-center justify-center">
         <div className="text-xl">Loading...</div>
@@ -331,34 +282,7 @@ function InventoryScanner() {
         />
         {showDropdown && (
           <div className="flex-1">
-            <div className="text-yellow-400 text-lg mb-1">
-              Press 1 + Enter for first item
-            </div>
-            <select
-              value={item?.id || ''}
-              onChange={(e) => {
-                const selected = [...prepItems, ...ingredients].find(i => i.id === e.target.value);
-                setItem(selected);
-                handleSave();
-              }}
-              className="bg-gray-900 text-white text-xl p-3 w-full"
-            >
-              <option value="">Choose Item...</option>
-              <optgroup label="Prep Items">
-                {prepItems.map((option, idx) => (
-                  <option key={option.id} value={option.id}>
-                    {idx + 1}. {option.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Ingredients">
-                {ingredients.map((option, idx) => (
-                  <option key={option.id} value={option.id}>
-                    {prepItems.length + idx + 1}. {option.name}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+            {renderDropdown()}
           </div>
         )}
         {item && !showDropdown && (
@@ -383,5 +307,6 @@ function InventoryScanner() {
       </div>
     </div>
   );
+}
 
 export default InventoryScanner;
