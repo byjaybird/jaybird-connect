@@ -109,6 +109,12 @@ function InventoryScanner() {
   };
 
   const createBarcodeMapping = async (selectedItem) => {
+    console.log('Creating barcode mapping:', {
+      barcode,
+      sourceType: selectedItem.prep_notes ? 'ingredient' : 'item',
+      sourceId: selectedItem.id
+    });
+
     try {
       const mappingRes = await fetch(`${API_URL}/barcode-map`, {
         method: 'POST',
@@ -127,6 +133,8 @@ function InventoryScanner() {
       }
 
       const mappingData = await mappingRes.json();
+      console.log('Mapping response:', mappingData);
+      
       if (mappingData.status !== 'Mapping updated') {
         throw new Error('Failed to update barcode mapping');
       }
@@ -138,17 +146,18 @@ function InventoryScanner() {
 
   const handleDropdownSelect = async (e) => {
     const selectedId = Number(e.target.value);
+    console.log('Dropdown selected ID:', selectedId);
     if (!selectedId) return;
 
     const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
-    console.log('Selected item:', selected); // Debugging
+    console.log('Found selected item:', selected);
     
     if (selected) {
       try {
-        // Create the barcode mapping first
+        console.log('About to create barcode mapping');
         await createBarcodeMapping(selected);
+        console.log('Barcode mapping created successfully');
         
-        // Then update the UI and save the scan
         setItem(selected);
         setShowDropdown(false);
         setFeedback(`Selected: ${selected.name} - Enter quantity`);
@@ -165,9 +174,18 @@ function InventoryScanner() {
       if (showDropdown) {
         if (barcode === '1' && prepItems?.length > 0) {
           const firstItem = prepItems[0];
-          setItem(firstItem);
-          setShowDropdown(false);
-          setFeedback(`Selected: ${firstItem.name} - Enter quantity`);
+          console.log('Selected first item via keypress:', firstItem);
+          // Create mapping before setting state
+          createBarcodeMapping(firstItem)
+            .then(() => {
+              setItem(firstItem);
+              setShowDropdown(false);
+              setFeedback(`Selected: ${firstItem.name} - Enter quantity`);
+            })
+            .catch(error => {
+              console.error('Error creating mapping:', error);
+              setFeedback('Failed to create barcode mapping');
+            });
         }
       } else if (item && quantity) {
         handleSave();
@@ -197,9 +215,23 @@ function InventoryScanner() {
         <select
           value={item?.id || ''}
           onChange={(e) => {
-            console.log('Selected value:', e.target.value); // Add debug logging
-            console.log('Available items:', [...prepItems, ...ingredients]); // Log available items
-            handleDropdownSelect(e);
+            const selectedId = Number(e.target.value);
+            if (!selectedId) return;
+
+            const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
+            if (selected) {
+              console.log('Selected item from dropdown:', selected);
+              createBarcodeMapping(selected)
+                .then(() => {
+                  setItem(selected);
+                  setShowDropdown(false);
+                  setFeedback(`Selected: ${selected.name} - Enter quantity`);
+                })
+                .catch(error => {
+                  console.error('Error creating mapping:', error);
+                  setFeedback('Failed to create barcode mapping');
+                });
+            }
           }}
           className="bg-gray-900 text-white text-xl p-3 w-full"
         >
