@@ -10,7 +10,43 @@ function InventoryScanner() {
   const [quantity, setQuantity] = useState('');
   const [prepItems, setPrepItems] = useState([]);
   const [ingredients, setIngredients] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const barcodeInputRef = useRef(null);
+
+  // Add data fetching effect
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const [itemsRes, ingredientsRes] = await Promise.all([
+          fetch(`${API_URL}/items?is_prep=true`),
+          fetch(`${API_URL}/ingredients`)
+        ]);
+
+        if (!itemsRes.ok || !ingredientsRes.ok) {
+          throw new Error('Failed to fetch data');
+        }
+
+        const [itemsData, ingredientsData] = await Promise.all([
+          itemsRes.json(),
+          ingredientsRes.json()
+        ]);
+
+        setPrepItems(itemsData);
+        setIngredients(ingredientsData);
+        setFeedback('Ready');
+      } catch (error) {
+        console.error('Fetch error:', error);
+        setError('Failed to load items');
+        setFeedback('Error loading items');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []); // Run once on mount
 
   useEffect(() => {
     if (barcodeInputRef.current) {
@@ -26,18 +62,24 @@ function InventoryScanner() {
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
       if (!res.ok) throw new Error('Failed to fetch');
 
-        const data = await res.json();
+      const data = await res.json();
 
       if (!data.found) {
         setShowDropdown(true);
         setFeedback('New code - Select item (1+Enter for first)');
         setItem(null);
       } else {
-        setItem(data.data.item);
-    setShowDropdown(false);
-        setFeedback(`Found: ${data.data.item.name}`);
-    }
+        // Update to handle the correct data structure
+        const matchedItem = data.data.source_type === 'item' 
+          ? prepItems.find(p => p.id === data.data.source_id)
+          : ingredients.find(i => i.id === data.data.source_id);
+        
+        setItem(matchedItem);
+        setShowDropdown(false);
+        setFeedback(`Found: ${matchedItem?.name || 'Unknown Item'}`);
+      }
     } catch (error) {
+      console.error('Scan error:', error);
       setFeedback('Error - Try again');
     }
     setBarcode('');
@@ -71,7 +113,7 @@ function InventoryScanner() {
           },
           body: JSON.stringify({
             barcode,
-            source_type: item.type,
+            source_type: item.prep_notes ? 'ingredient' : 'item', // Determine type based on item properties
             source_id: item.id
           })
         });
@@ -83,14 +125,15 @@ function InventoryScanner() {
         const mappingData = await mappingRes.json();
         if (mappingData.status !== 'Mapping updated') {
           throw new Error('Failed to update barcode mapping');
-      }
+        }
       }
 
       const quantityToSave = quantity || '1';
       const scanData = [{
         barcode,
         quantity: quantityToSave,
-        item_id: item.id
+        source_type: item.prep_notes ? 'ingredient' : 'item',
+        source_id: item.id
       }];
 
       const saveRes = await fetch(`${API_URL}/inventory/upload-scan`, {
@@ -124,6 +167,22 @@ function InventoryScanner() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="h-screen bg-black text-white p-2 flex items-center justify-center">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen bg-black text-white p-2 flex items-center justify-center">
+        <div className="text-red-500 text-xl">{error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-black text-white p-2 flex flex-col">
       <div className="bg-gray-900 p-1 text-center text-lg">
@@ -135,12 +194,12 @@ function InventoryScanner() {
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="bg-gray-900 text-white text-2xl p-3 w-full"
-              autoFocus
+          onKeyPress={handleKeyPress}
+          className="bg-gray-900 text-white text-2xl p-3 w-full"
+          autoFocus
           autoComplete="off"
           placeholder="Scan or type code..."
-            />
+        />
         {showDropdown && (
           <div className="flex-1">
             <div className="text-yellow-400 text-lg mb-1">
@@ -156,20 +215,29 @@ function InventoryScanner() {
               className="bg-gray-900 text-white text-xl p-3 w-full"
             >
               <option value="">Choose Item...</option>
-              {[...prepItems, ...ingredients].map((option, idx) => (
-                <option key={option.id} value={option.id}>
-                  {idx + 1}. {option.name}
-                </option>
-              ))}
+              <optgroup label="Prep Items">
+                {prepItems.map((option, idx) => (
+                  <option key={option.id} value={option.id}>
+                    {idx + 1}. {option.name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Ingredients">
+                {ingredients.map((option, idx) => (
+                  <option key={option.id} value={option.id}>
+                    {prepItems.length + idx + 1}. {option.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
-            </div>
+          </div>
         )}
         {item && !showDropdown && (
           <div className="flex-1">
             <div className="bg-gray-900 p-3 mb-1">
               <div className="text-2xl">{item.name}</div>
               <div className="text-gray-400">Current: {item.quantity || 'N/A'}</div>
-      </div>
+            </div>
             <input
               type="number"
               value={quantity}
@@ -181,7 +249,7 @@ function InventoryScanner() {
               inputMode="numeric"
               autoFocus
             />
-    </div>
+          </div>
         )}
       </div>
     </div>
