@@ -108,6 +108,34 @@ function InventoryScanner() {
     setBarcode('');
   };
 
+  const createBarcodeMapping = async (selectedItem) => {
+    try {
+      const mappingRes = await fetch(`${API_URL}/barcode-map`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          barcode,
+          source_type: selectedItem.prep_notes ? 'ingredient' : 'item',
+          source_id: selectedItem.id
+        })
+      });
+
+      if (!mappingRes.ok) {
+        throw new Error('Failed to create barcode mapping');
+      }
+
+      const mappingData = await mappingRes.json();
+      if (mappingData.status !== 'Mapping updated') {
+        throw new Error('Failed to update barcode mapping');
+      }
+    } catch (error) {
+      console.error('Mapping error:', error);
+      throw error;
+    }
+  };
+
   const handleDropdownSelect = async (e) => {
     const selectedId = Number(e.target.value);
     if (!selectedId) return;
@@ -116,11 +144,19 @@ function InventoryScanner() {
     console.log('Selected item:', selected); // Debugging
     
     if (selected) {
-      setItem(selected);
-      setShowDropdown(false); // Hide dropdown after selection
-      setFeedback(`Selected: ${selected.name} - Enter quantity`); // Update feedback
-      // After setting the item, call handleSave to create the barcode mapping
-      handleSave();
+      try {
+        // Create the barcode mapping first
+        await createBarcodeMapping(selected);
+        
+        // Then update the UI and save the scan
+        setItem(selected);
+        setShowDropdown(false);
+        setFeedback(`Selected: ${selected.name} - Enter quantity`);
+        handleSave();
+      } catch (error) {
+        console.error('Selection error:', error);
+        setFeedback('Failed to create barcode mapping');
+      }
     }
   };
 
@@ -190,29 +226,6 @@ function InventoryScanner() {
   const handleSave = async () => {
     try {
       if (!item) return;
-
-      if (showDropdown) {
-        const mappingRes = await fetch(`${API_URL}/barcode-map`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            barcode,
-            source_type: item.prep_notes ? 'ingredient' : 'item', // Determine type based on item properties
-            source_id: item.id
-          })
-        });
-
-        if (!mappingRes.ok) {
-          throw new Error('Failed to create barcode mapping');
-        }
-
-        const mappingData = await mappingRes.json();
-        if (mappingData.status !== 'Mapping updated') {
-          throw new Error('Failed to update barcode mapping');
-        }
-      }
 
       const quantityToSave = quantity || '1';
       const scanData = [{
