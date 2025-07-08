@@ -109,7 +109,7 @@ function InventoryScanner() {
   };
 
   const handleDropdownSelect = async (e) => {
-    const selectedId = parseInt(e.target.value);
+    const selectedId = Number(e.target.value);
     if (!selectedId) return;
 
     const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
@@ -158,7 +158,11 @@ function InventoryScanner() {
         </div>
         <select
           value={item?.id || ''}
-          onChange={handleDropdownSelect}
+          onChange={(e) => {
+            console.log('Selected value:', e.target.value); // Add debug logging
+            console.log('Available items:', [...prepItems, ...ingredients]); // Log available items
+            handleDropdownSelect(e);
+          }}
           className="bg-gray-900 text-white text-xl p-3 w-full"
         >
           <option value="">Choose Item...</option>
