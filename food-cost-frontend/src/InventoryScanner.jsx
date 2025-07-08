@@ -63,23 +63,46 @@ function InventoryScanner() {
       if (!res.ok) throw new Error('Failed to fetch');
 
       const data = await res.json();
+      console.log('Barcode map response:', data);
 
       if (!data.found) {
+        if (prepItems.length === 0 || ingredients.length === 0) {
+          const [itemsRes, ingredientsRes] = await Promise.all([
+            fetch(`${API_URL}/items?is_prep=true`),
+            fetch(`${API_URL}/ingredients`)
+          ]);
+
+          const [itemsData, ingredientsData] = await Promise.all([
+            itemsRes.json(),
+            ingredientsRes.json()
+          ]);
+
+          setPrepItems(itemsData);
+          setIngredients(ingredientsData);
+        }
         setShowDropdown(true);
         setFeedback('New code - Select item (1+Enter for first)');
         setItem(null);
       } else {
-        // Update to handle the correct data structure
-        const matchedItem = data.data.source_type === 'item' 
-          ? prepItems.find(p => p.id === data.data.source_id)
-          : ingredients.find(i => i.id === data.data.source_id);
+        // Handle existing barcode mapping
+        const sourceType = data.data.source_type;
+        const sourceId = data.data.source_id;
         
-        setItem(matchedItem);
-        setShowDropdown(false);
-        setFeedback(`Found: ${matchedItem?.name || 'Unknown Item'}`);
+        // Find the matching item based on source type
+        const matchedItem = sourceType === 'item' 
+          ? prepItems.find(p => p.id === sourceId)
+          : ingredients.find(i => i.id === sourceId);
+
+        if (matchedItem) {
+          setItem(matchedItem);
+          setShowDropdown(false);
+          setFeedback(`Found: ${matchedItem.name}`);
+        } else {
+          throw new Error('Mapped item not found in loaded data');
+        }
       }
     } catch (error) {
-      console.error('Scan error:', error);
+      console.error('Scan error:', error); // Add error logging
       setFeedback('Error - Try again');
     }
     setBarcode('');
