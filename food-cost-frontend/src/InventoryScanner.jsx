@@ -119,6 +119,8 @@ function InventoryScanner() {
       setItem(selected);
       setShowDropdown(false); // Hide dropdown after selection
       setFeedback(`Selected: ${selected.name} - Enter quantity`); // Update feedback
+      // After setting the item, call handleSave to create the barcode mapping
+      handleSave();
     }
   };
 
