@@ -108,20 +108,126 @@ function InventoryScanner() {
     setBarcode('');
   };
 
+  const handleDropdownSelect = async (e) => {
+    const selectedId = parseInt(e.target.value);
+    if (!selectedId) return;
+
+    const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
+    console.log('Selected item:', selected); // Debugging
+    
+    if (selected) {
+      setItem(selected);
+      setShowDropdown(false); // Hide dropdown after selection
+      setFeedback(`Selected: ${selected.name} - Enter quantity`); // Update feedback
+    }
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       if (showDropdown) {
         if (barcode === '1' && prepItems?.length > 0) {
-          setItem(prepItems[0]);
-          handleSave();
+          const firstItem = prepItems[0];
+          setItem(firstItem);
+          setShowDropdown(false);
+          setFeedback(`Selected: ${firstItem.name} - Enter quantity`);
         }
+      } else if (item && quantity) {
+        handleSave();
       } else if (item) {
-        if (!quantity) setQuantity('1');
+        setQuantity('1');
         handleSave();
       } else {
         handleScanSubmit(e);
       }
     }
+  };
+
+  const renderDropdown = () => {
+    if (!prepItems.length && !ingredients.length) {
+      return (
+        <div className="text-yellow-400 text-lg mb-1">
+          Loading items...
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-1">
+        <div className="text-yellow-400 text-lg mb-1">
+          Press 1 + Enter for first item
+        </div>
+        <select
+          value={item?.id || ''}
+          onChange={handleDropdownSelect}
+          className="bg-gray-900 text-white text-xl p-3 w-full"
+        >
+          <option value="">Choose Item...</option>
+          <optgroup label="Prep Items">
+            {prepItems.map((option, idx) => (
+              <option key={option.id} value={option.id}>
+                {idx + 1}. {option.name}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Ingredients">
+            {ingredients.map((option, idx) => (
+              <option key={option.id} value={option.id}>
+                {prepItems.length + idx + 1}. {option.name}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-screen bg-black text-white p-2 flex flex-col">
+      <div className="bg-gray-900 p-1 text-center text-lg">
+        {feedback}
+      </div>
+      <div className="flex-1 flex flex-col gap-2 mt-2">
+        <input
+          ref={barcodeInputRef}
+          type="text"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+          onKeyPress={handleKeyPress}
+          className="bg-gray-900 text-white text-2xl p-3 w-full"
+          autoFocus
+          autoComplete="off"
+          placeholder="Scan or type code..."
+        />
+        
+        {/* Separate containers for dropdown and quantity input */}
+        {showDropdown && (
+          <div className="flex-1">
+            {renderDropdown()}
+          </div>
+        )}
+        
+        {item && !showDropdown && (
+          <div className="flex-1">
+            <div className="bg-gray-900 p-3 mb-1">
+              <div className="text-2xl">{item.name}</div>
+              <div className="text-gray-400">Current: {item.quantity || 'N/A'}</div>
+            </div>
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="bg-gray-900 text-white text-2xl p-3 w-full"
+              placeholder="Enter quantity (Enter for 1)"
+              pattern="[0-9]*"
+              inputMode="numeric"
+              autoFocus
+            />
+          </div>
+        )}
+      </div>
+    </div>
+    )
   };
 
   const handleSave = async () => {
@@ -277,6 +383,5 @@ function InventoryScanner() {
       </div>
     </div>
   );
-}
 
 export default InventoryScanner;
