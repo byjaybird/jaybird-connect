@@ -8,6 +8,8 @@ function InventoryScanner() {
   const [item, setItem] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [quantity, setQuantity] = useState('');
+  const [prepItems, setPrepItems] = useState([]);
+  const [ingredients, setIngredients] = useState([]);
   const barcodeInputRef = useRef(null);
 
   useEffect(() => {
@@ -24,16 +26,17 @@ function InventoryScanner() {
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
       if (!res.ok) throw new Error('Failed to fetch');
 
-      if (res.status === 204) {
+        const data = await res.json();
+
+      if (!data.found) {
         setShowDropdown(true);
         setFeedback('New code - Select item (1+Enter for first)');
         setItem(null);
       } else {
-        const data = await res.json();
-        setItem(data.item);
-        setShowDropdown(false);
-        setFeedback(`Found: ${data.item.name}`);
-      }
+        setItem(data.data.item);
+    setShowDropdown(false);
+        setFeedback(`Found: ${data.data.item.name}`);
+    }
     } catch (error) {
       setFeedback('Error - Try again');
     }
@@ -76,6 +79,11 @@ function InventoryScanner() {
         if (!mappingRes.ok) {
           throw new Error('Failed to create barcode mapping');
         }
+
+        const mappingData = await mappingRes.json();
+        if (mappingData.status !== 'Mapping updated') {
+          throw new Error('Failed to update barcode mapping');
+      }
       }
 
       const quantityToSave = quantity || '1';
@@ -123,12 +131,12 @@ function InventoryScanner() {
       </div>
       <div className="flex-1 flex flex-col gap-2 mt-2">
         <input
-              ref={barcodeInputRef}
-              type="text"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-          onKeyPress={handleKeyPress}
-          className="bg-gray-900 text-white text-2xl p-3 w-full"
+          ref={barcodeInputRef}
+          type="text"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="bg-gray-900 text-white text-2xl p-3 w-full"
               autoFocus
           autoComplete="off"
           placeholder="Scan or type code..."
@@ -181,4 +189,3 @@ function InventoryScanner() {
 }
 
 export default InventoryScanner;
-

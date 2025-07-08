@@ -86,11 +86,18 @@ def get_barcode_map():
         barcode_data = cursor.fetchone()
 
         if not barcode_data:
-            return jsonify({'error': 'Barcode not found'}), 204
+            return jsonify({
+                'found': False,
+                'error': 'Barcode not found',
+                'barcode': barcode
+            }), 200
 
-        return jsonify(barcode_data)
+        return jsonify({
+            'found': True,
+            'data': barcode_data
+        }), 200
     except Exception as e:
-        traceback.print_exc()  # Print full error to logs
+        traceback.print_exc()
         return jsonify({'error': 'Database error', 'details': str(e)}), 500
     finally:
         cursor.close()
