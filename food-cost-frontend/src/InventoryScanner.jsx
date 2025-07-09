@@ -174,14 +174,14 @@ const renderDropdown = () => {
     console.log('Raw prepItems:', prepItems);
     console.log('Raw ingredients:', ingredients);
 
-    // Filter prep items - look for is_prep and id
+    // Filter prep items - just check for is_prep true and name
     const filteredPrepItems = prepItems.filter(item => 
       item && 
-      item.is_prep === true &&  
+      item.is_prep === true && 
       item.name
     );
     
-    // Filter ingredients - look for ingredient_id
+    // Keep the working ingredients filter
     const validIngredients = ingredients.filter(item => 
       item && 
       item.ingredient_id && 
@@ -191,7 +191,7 @@ const renderDropdown = () => {
     console.log('Filtered prep items:', filteredPrepItems);
     console.log('Valid ingredients:', validIngredients);
 
-return (
+    return (
       <div className="flex-1">
         <div className="text-yellow-400 text-lg mb-1">
           Select an item from the dropdown
@@ -200,12 +200,10 @@ return (
           value={item?.id || item?.ingredient_id || ''}
           onChange={async (e) => {
             const rawValue = e.target.value;
-            console.log('Current barcode state:', barcode); // Debug log
+            console.log('Raw selected value:', rawValue);
+            console.log('Current barcode:', barcode);
             
-            if (!rawValue) {
-              console.log('Empty selection, returning');
-              return;
-            }
+            if (!rawValue) return;
 
             const selectedId = parseInt(rawValue, 10);
             console.log('Parsed selectedId:', selectedId);
@@ -215,13 +213,33 @@ return (
               validIngredients.find(i => i.ingredient_id === selectedId);
             
             console.log('Found selected item:', selected);
-            console.log('Current barcode for mapping:', barcode); // Debug log
             
             if (selected) {
               try {
-                console.log('About to create barcode mapping with barcode:', barcode); // Debug log
-                await createBarcodeMapping(selected);
-                console.log('Barcode mapping created successfully');
+                console.log('About to create barcode mapping');
+                const mappingPayload = {
+                  barcode: barcode,
+                  source_type: selected.is_prep ? 'item' : 'ingredient',
+                  source_id: selected.is_prep ? selected.id : selected.ingredient_id
+                };
+                console.log('Mapping payload:', mappingPayload);
+
+                const mappingRes = await fetch(`${API_URL}/barcode-map`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(mappingPayload)
+                });
+
+                if (!mappingRes.ok) {
+                  const errorData = await mappingRes.json();
+                  console.error('Mapping response error:', errorData);
+                  throw new Error(`Failed to create barcode mapping: ${errorData.error || mappingRes.statusText}`);
+                }
+
+                const mappingData = await mappingRes.json();
+                console.log('Mapping response:', mappingData);
                 
                 setItem(selected);
                 setShowDropdown(false);
@@ -234,7 +252,31 @@ return (
           }}
           className="bg-gray-900 text-white text-xl p-3 w-full"
         >
-          {/* ... existing options ... */}
+          <option value="">Choose Item...</option>
+          {filteredPrepItems.length > 0 && (
+            <optgroup label="Prep Items">
+              {filteredPrepItems.map((option) => (
+                <option 
+                  key={option.id} 
+                  value={option.id}
+                >
+                  {option.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {validIngredients.length > 0 && (
+            <optgroup label="Ingredients">
+              {validIngredients.map((option) => (
+                <option 
+                  key={option.ingredient_id} 
+                  value={option.ingredient_id}
+                >
+                  {option.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
     );
