@@ -173,7 +173,7 @@ function InventoryScanner() {
     }
   };
 
-  const renderDropdown = () => {
+const renderDropdown = () => {
     if (!prepItems.length && !ingredients.length) {
       return (
         <div className="text-yellow-400 text-lg mb-1">
@@ -190,9 +190,10 @@ function InventoryScanner() {
         <select
           value={item?.id || ''}
           onChange={async (e) => {
-            const selectedId = Number(e.target.value);
+            console.log('Raw dropdown value:', e.target.value); // Debug raw value
+            const selectedId = parseInt(e.target.value, 10); // Use parseInt instead of Number()
             console.log('Dropdown selected ID:', selectedId);
-            if (!selectedId) return;
+            if (isNaN(selectedId)) return; // Better NaN check
 
             const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
             console.log('Found selected item:', selected);
@@ -217,14 +218,14 @@ function InventoryScanner() {
           <option value="">Choose Item...</option>
           <optgroup label="Prep Items">
             {prepItems.map((option, idx) => (
-              <option key={option.id} value={option.id}>
+              <option key={option.id} value={option.id.toString()}> {/* Ensure value is string */}
                 {idx + 1}. {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
             {ingredients.map((option, idx) => (
-              <option key={option.id} value={option.id}>
+              <option key={option.id} value={option.id.toString()}> {/* Ensure value is string */}
                 {prepItems.length + idx + 1}. {option.name}
               </option>
             ))}
