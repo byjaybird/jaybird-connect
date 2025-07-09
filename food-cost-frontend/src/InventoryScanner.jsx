@@ -109,7 +109,12 @@ function InventoryScanner() {
   };
 
 const createBarcodeMapping = async (selectedItem) => {
-    console.log('Creating barcode mapping - selected item:', selectedItem);
+  if (!barcode) {
+      console.error('No barcode available for mapping');
+      throw new Error('No barcode available'); 
+  } 
+  
+  console.log('Creating barcode mapping - selected item:', selectedItem);
     console.log('Barcode being mapped:', barcode);
     
     // Determine if it's a prep item or ingredient and get the correct ID
@@ -151,7 +156,7 @@ const createBarcodeMapping = async (selectedItem) => {
       throw error;
     }
   };
-  
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       if (item && quantity) {
@@ -186,7 +191,7 @@ const renderDropdown = () => {
     console.log('Filtered prep items:', filteredPrepItems);
     console.log('Valid ingredients:', validIngredients);
 
-    return (
+return (
       <div className="flex-1">
         <div className="text-yellow-400 text-lg mb-1">
           Select an item from the dropdown
@@ -195,7 +200,7 @@ const renderDropdown = () => {
           value={item?.id || item?.ingredient_id || ''}
           onChange={async (e) => {
             const rawValue = e.target.value;
-            console.log('Raw selected value:', rawValue);
+            console.log('Current barcode state:', barcode); // Debug log
             
             if (!rawValue) {
               console.log('Empty selection, returning');
@@ -205,16 +210,16 @@ const renderDropdown = () => {
             const selectedId = parseInt(rawValue, 10);
             console.log('Parsed selectedId:', selectedId);
 
-            // Look for the selected item in both arrays, accounting for different ID fields
             const selected = 
               filteredPrepItems.find(i => i.id === selectedId) ||
               validIngredients.find(i => i.ingredient_id === selectedId);
             
             console.log('Found selected item:', selected);
+            console.log('Current barcode for mapping:', barcode); // Debug log
             
             if (selected) {
               try {
-                console.log('About to create barcode mapping');
+                console.log('About to create barcode mapping with barcode:', barcode); // Debug log
                 await createBarcodeMapping(selected);
                 console.log('Barcode mapping created successfully');
                 
@@ -229,27 +234,7 @@ const renderDropdown = () => {
           }}
           className="bg-gray-900 text-white text-xl p-3 w-full"
         >
-          <option value="">Choose Item...</option>
-          <optgroup label="Prep Items">
-            {filteredPrepItems.map((option) => (
-              <option 
-                key={option.id} 
-                value={String(option.id)}
-              >
-                {option.name}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Ingredients">
-            {validIngredients.map((option) => (
-              <option 
-                key={option.ingredient_id} 
-                value={String(option.ingredient_id)}
-              >
-                {option.name}
-              </option>
-            ))}
-          </optgroup>
+          {/* ... existing options ... */}
         </select>
       </div>
     );
