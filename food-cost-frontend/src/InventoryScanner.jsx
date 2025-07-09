@@ -162,13 +162,24 @@ function InventoryScanner() {
     }
   };
 
- const renderDropdown = () => {
+const renderDropdown = () => {
     console.log('Raw prepItems:', prepItems);
     console.log('Raw ingredients:', ingredients);
 
-    // Filter prep items from the items array
-    const filteredPrepItems = prepItems.filter(item => item && item.is_prep === true);
-    const validIngredients = ingredients;
+    // Filter prep items from the items array and ensure all required properties exist
+    const filteredPrepItems = prepItems.filter(item => 
+      item && 
+      item.is_prep === true && 
+      item.id !== undefined && 
+      item.name
+    );
+    
+    // Filter ingredients to ensure they have required properties
+    const validIngredients = ingredients.filter(item => 
+      item && 
+      item.id !== undefined && 
+      item.name
+    );
 
     console.log('Filtered prep items:', filteredPrepItems);
     console.log('Valid ingredients:', validIngredients);
@@ -181,11 +192,9 @@ function InventoryScanner() {
         <select
           value={item?.id || ''}
           onChange={async (e) => {
-            // Debug the actual value coming from the select
             const rawValue = e.target.value;
             console.log('Raw selected value:', rawValue);
             
-            // Ensure we're parsing a non-empty string
             if (!rawValue) {
               console.log('Empty selection, returning');
               return;
@@ -194,7 +203,6 @@ function InventoryScanner() {
             const selectedId = parseInt(rawValue, 10);
             console.log('Parsed selectedId:', selectedId);
 
-            // Find the selected item from either array
             const selected = [...filteredPrepItems, ...validIngredients]
               .find(i => i && i.id === selectedId);
             
@@ -222,17 +230,17 @@ function InventoryScanner() {
             {filteredPrepItems.map((option) => (
               <option 
                 key={option.id} 
-                value={option.id.toString()} // Explicitly convert to string
+                value={String(option.id)} // Use String() instead of toString()
               >
                 {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
-            {validIngredients && validIngredients.map((option) => (
+            {validIngredients.map((option) => (
               <option 
                 key={option.id} 
-                value={option.id.toString()} // Explicitly convert to string
+                value={String(option.id)} // Use String() instead of toString()
               >
                 {option.name}
               </option>
@@ -242,7 +250,7 @@ function InventoryScanner() {
       </div>
     );
   };
-
+  
   const handleSave = async () => {
     try {
       if (!item) return;
