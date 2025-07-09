@@ -163,21 +163,15 @@ function InventoryScanner() {
   };
 
  const renderDropdown = () => {
-    // Only filter prep items, use all ingredients
+    console.log('Raw prepItems:', prepItems);
+    console.log('Raw ingredients:', ingredients);
+
+    // Filter prep items from the items array
     const filteredPrepItems = prepItems.filter(item => item && item.is_prep === true);
-    // Just check for valid ingredients (having an id)
-    const validIngredients = ingredients.filter(item => item && item.id);
+    const validIngredients = ingredients;
 
     console.log('Filtered prep items:', filteredPrepItems);
     console.log('Valid ingredients:', validIngredients);
-
-    if (!filteredPrepItems.length && !validIngredients.length) {
-      return (
-        <div className="text-yellow-400 text-lg mb-1">
-          Loading items...
-        </div>
-      );
-    }
 
     return (
       <div className="flex-1">
@@ -187,12 +181,23 @@ function InventoryScanner() {
         <select
           value={item?.id || ''}
           onChange={async (e) => {
-            console.log('Raw dropdown value:', e.target.value);
-            const selectedId = parseInt(e.target.value, 10);
-            console.log('Dropdown selected ID:', selectedId);
-            if (isNaN(selectedId)) return;
+            // Debug the actual value coming from the select
+            const rawValue = e.target.value;
+            console.log('Raw selected value:', rawValue);
+            
+            // Ensure we're parsing a non-empty string
+            if (!rawValue) {
+              console.log('Empty selection, returning');
+              return;
+            }
 
-            const selected = [...filteredPrepItems, ...validIngredients].find(i => i.id === selectedId);
+            const selectedId = parseInt(rawValue, 10);
+            console.log('Parsed selectedId:', selectedId);
+
+            // Find the selected item from either array
+            const selected = [...filteredPrepItems, ...validIngredients]
+              .find(i => i && i.id === selectedId);
+            
             console.log('Found selected item:', selected);
             
             if (selected) {
@@ -215,14 +220,20 @@ function InventoryScanner() {
           <option value="">Choose Item...</option>
           <optgroup label="Prep Items">
             {filteredPrepItems.map((option) => (
-              <option key={option.id} value={option.id}>
+              <option 
+                key={option.id} 
+                value={option.id.toString()} // Explicitly convert to string
+              >
                 {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
-            {validIngredients.map((option) => (
-              <option key={option.id} value={option.id}>
+            {validIngredients && validIngredients.map((option) => (
+              <option 
+                key={option.id} 
+                value={option.id.toString()} // Explicitly convert to string
+              >
                 {option.name}
               </option>
             ))}
