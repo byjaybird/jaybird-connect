@@ -288,12 +288,17 @@ const renderDropdown = () => {
       if (!item) return;
 
       const quantityToSave = quantity || '1';
+      console.log('Saving inventory with item:', item); // Debug log
+      console.log('Quantity to save:', quantityToSave); // Debug log
+
       const scanData = [{
-        barcode,
+        barcode: barcode,
         quantity: quantityToSave,
-        source_type: item.prep_notes ? 'ingredient' : 'item',
-        source_id: item.id
+        source_type: item.is_prep ? 'item' : 'ingredient',
+        source_id: item.is_prep ? item.id : item.ingredient_id
       }];
+
+      console.log('Inventory save payload:', scanData); // Debug log
 
       const saveRes = await fetch(`${API_URL}/inventory/upload-scan`, {
         method: 'POST',
@@ -304,7 +309,9 @@ const renderDropdown = () => {
       });
 
       if (!saveRes.ok) {
-        throw new Error('Failed to save inventory count');
+        const errorData = await saveRes.json();
+        console.error('Save response error:', errorData);
+        throw new Error(`Failed to save inventory count: ${errorData.error || saveRes.statusText}`);
       }
 
       setFeedback('Saved');
