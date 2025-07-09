@@ -166,18 +166,18 @@ const renderDropdown = () => {
     console.log('Raw prepItems:', prepItems);
     console.log('Raw ingredients:', ingredients);
 
-    // Filter prep items from the items array and ensure all required properties exist
+    // Filter prep items - look for is_prep and id
     const filteredPrepItems = prepItems.filter(item => 
       item && 
       item.is_prep === true && 
-      item.id !== undefined && 
+      item.id && 
       item.name
     );
     
-    // Filter ingredients to ensure they have required properties
+    // Filter ingredients - look for ingredient_id
     const validIngredients = ingredients.filter(item => 
       item && 
-      item.id !== undefined && 
+      item.ingredient_id && 
       item.name
     );
 
@@ -190,7 +190,7 @@ const renderDropdown = () => {
           Select an item from the dropdown
         </div>
         <select
-          value={item?.id || ''}
+          value={item?.id || item?.ingredient_id || ''}
           onChange={async (e) => {
             const rawValue = e.target.value;
             console.log('Raw selected value:', rawValue);
@@ -203,8 +203,10 @@ const renderDropdown = () => {
             const selectedId = parseInt(rawValue, 10);
             console.log('Parsed selectedId:', selectedId);
 
-            const selected = [...filteredPrepItems, ...validIngredients]
-              .find(i => i && i.id === selectedId);
+            // Look for the selected item in both arrays, accounting for different ID fields
+            const selected = 
+              filteredPrepItems.find(i => i.id === selectedId) ||
+              validIngredients.find(i => i.ingredient_id === selectedId);
             
             console.log('Found selected item:', selected);
             
@@ -230,7 +232,7 @@ const renderDropdown = () => {
             {filteredPrepItems.map((option) => (
               <option 
                 key={option.id} 
-                value={String(option.id)} // Use String() instead of toString()
+                value={String(option.id)}
               >
                 {option.name}
               </option>
@@ -239,8 +241,8 @@ const renderDropdown = () => {
           <optgroup label="Ingredients">
             {validIngredients.map((option) => (
               <option 
-                key={option.id} 
-                value={String(option.id)} // Use String() instead of toString()
+                key={option.ingredient_id} 
+                value={String(option.ingredient_id)}
               >
                 {option.name}
               </option>
@@ -250,7 +252,7 @@ const renderDropdown = () => {
       </div>
     );
   };
-  
+
   const handleSave = async () => {
     try {
       if (!item) return;
