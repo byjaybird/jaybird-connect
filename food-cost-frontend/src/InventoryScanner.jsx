@@ -169,8 +169,7 @@ const renderDropdown = () => {
     // Filter prep items - look for is_prep and id
     const filteredPrepItems = prepItems.filter(item => 
       item && 
-      item.is_prep === true && 
-      item.id && 
+      item.is_prep === true &&  
       item.name
     );
     
