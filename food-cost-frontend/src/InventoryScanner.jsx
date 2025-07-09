@@ -108,14 +108,17 @@ function InventoryScanner() {
     setBarcode('');
   };
 
-  const createBarcodeMapping = async (selectedItem) => {
+const createBarcodeMapping = async (selectedItem) => {
     console.log('Creating barcode mapping - selected item:', selectedItem);
     console.log('Barcode being mapped:', barcode);
     
+    // Determine if it's a prep item or ingredient and get the correct ID
+    const sourceId = selectedItem.is_prep ? selectedItem.id : selectedItem.ingredient_id;
+    
     const payload = {
       barcode: barcode,
-      source_type: selectedItem.is_prep ? 'item' : 'ingredient', // Changed to match backend expectations
-      source_id: selectedItem.id
+      source_type: selectedItem.is_prep ? 'item' : 'ingredient',
+      source_id: sourceId
     };
     
     console.log('Barcode mapping payload:', payload);
@@ -148,7 +151,7 @@ function InventoryScanner() {
       throw error;
     }
   };
-
+  
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       if (item && quantity) {
