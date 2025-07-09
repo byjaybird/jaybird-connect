@@ -174,11 +174,14 @@ function InventoryScanner() {
   };
 
   const renderDropdown = () => {
-    // Debug log the arrays
-    console.log('prepItems:', prepItems);
-    console.log('ingredients:', ingredients);
+    // Filter prep items and regular items
+    const filteredPrepItems = prepItems.filter(item => item && item.is_prep === true);
+    const filteredIngredients = ingredients.filter(item => item && item.id);
 
-    if (!prepItems.length && !ingredients.length) {
+    console.log('Filtered prep items:', filteredPrepItems);
+    console.log('Filtered ingredients:', filteredIngredients);
+
+    if (!filteredPrepItems.length && !filteredIngredients.length) {
       return (
         <div className="text-yellow-400 text-lg mb-1">
           Loading items...
@@ -199,7 +202,7 @@ function InventoryScanner() {
             console.log('Dropdown selected ID:', selectedId);
             if (isNaN(selectedId)) return;
 
-            const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
+            const selected = [...filteredPrepItems, ...filteredIngredients].find(i => i.id === selectedId);
             console.log('Found selected item:', selected);
             
             if (selected) {
@@ -221,16 +224,16 @@ function InventoryScanner() {
         >
           <option value="">Choose Item...</option>
           <optgroup label="Prep Items">
-            {prepItems.filter(item => item && item.id && item.name).map((option, idx) => (
+            {filteredPrepItems.map((option, idx) => (
               <option key={option.id} value={option.id}>
                 {idx + 1}. {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
-            {ingredients.filter(item => item && item.id && item.name).map((option, idx) => (
+            {filteredIngredients.map((option, idx) => (
               <option key={option.id} value={option.id}>
-                {prepItems.length + idx + 1}. {option.name}
+                {filteredPrepItems.length + idx + 1}. {option.name}
               </option>
             ))}
           </optgroup>
