@@ -173,7 +173,11 @@ function InventoryScanner() {
     }
   };
 
-const renderDropdown = () => {
+  const renderDropdown = () => {
+    // Debug log the arrays
+    console.log('prepItems:', prepItems);
+    console.log('ingredients:', ingredients);
+
     if (!prepItems.length && !ingredients.length) {
       return (
         <div className="text-yellow-400 text-lg mb-1">
@@ -190,10 +194,10 @@ const renderDropdown = () => {
         <select
           value={item?.id || ''}
           onChange={async (e) => {
-            console.log('Raw dropdown value:', e.target.value); // Debug raw value
-            const selectedId = parseInt(e.target.value, 10); // Use parseInt instead of Number()
+            console.log('Raw dropdown value:', e.target.value);
+            const selectedId = parseInt(e.target.value, 10);
             console.log('Dropdown selected ID:', selectedId);
-            if (isNaN(selectedId)) return; // Better NaN check
+            if (isNaN(selectedId)) return;
 
             const selected = [...prepItems, ...ingredients].find(i => i.id === selectedId);
             console.log('Found selected item:', selected);
@@ -217,15 +221,15 @@ const renderDropdown = () => {
         >
           <option value="">Choose Item...</option>
           <optgroup label="Prep Items">
-            {prepItems.map((option, idx) => (
-              <option key={option.id} value={option.id.toString()}> {/* Ensure value is string */}
+            {prepItems.filter(item => item && item.id && item.name).map((option, idx) => (
+              <option key={option.id} value={option.id}>
                 {idx + 1}. {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
-            {ingredients.map((option, idx) => (
-              <option key={option.id} value={option.id.toString()}> {/* Ensure value is string */}
+            {ingredients.filter(item => item && item.id && item.name).map((option, idx) => (
+              <option key={option.id} value={option.id}>
                 {prepItems.length + idx + 1}. {option.name}
               </option>
             ))}
