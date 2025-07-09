@@ -109,11 +109,16 @@ function InventoryScanner() {
   };
 
   const createBarcodeMapping = async (selectedItem) => {
-    console.log('Creating barcode mapping:', {
-      barcode,
-      sourceType: selectedItem.prep_notes ? 'ingredient' : 'item',
-      sourceId: selectedItem.id
-    });
+    console.log('Creating barcode mapping - selected item:', selectedItem);
+    console.log('Barcode being mapped:', barcode);
+    
+    const payload = {
+      barcode: barcode,
+      source_type: selectedItem.is_prep ? 'item' : 'ingredient', // Changed to match backend expectations
+      source_id: selectedItem.id
+    };
+    
+    console.log('Barcode mapping payload:', payload);
 
     try {
       const mappingRes = await fetch(`${API_URL}/barcode-map`, {
@@ -121,15 +126,13 @@ function InventoryScanner() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          barcode,
-          source_type: selectedItem.prep_notes ? 'ingredient' : 'item',
-          source_id: selectedItem.id
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!mappingRes.ok) {
-        throw new Error('Failed to create barcode mapping');
+        const errorData = await mappingRes.json();
+        console.error('Mapping response error:', errorData);
+        throw new Error(`Failed to create barcode mapping: ${errorData.error || mappingRes.statusText}`);
       }
 
       const mappingData = await mappingRes.json();
@@ -138,6 +141,8 @@ function InventoryScanner() {
       if (mappingData.status !== 'Mapping updated') {
         throw new Error('Failed to update barcode mapping');
       }
+
+      return mappingData;
     } catch (error) {
       console.error('Mapping error:', error);
       throw error;
@@ -146,23 +151,7 @@ function InventoryScanner() {
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      if (showDropdown) {
-        if (barcode === '1' && prepItems?.length > 0) {
-          const firstItem = prepItems[0];
-          console.log('Selected first item via keypress:', firstItem);
-          // Create mapping before setting state
-          createBarcodeMapping(firstItem)
-            .then(() => {
-              setItem(firstItem);
-              setShowDropdown(false);
-              setFeedback(`Selected: ${firstItem.name} - Enter quantity`);
-            })
-            .catch(error => {
-              console.error('Error creating mapping:', error);
-              setFeedback('Failed to create barcode mapping');
-            });
-        }
-      } else if (item && quantity) {
+      if (item && quantity) {
         handleSave();
       } else if (item) {
         setQuantity('1');
@@ -173,15 +162,16 @@ function InventoryScanner() {
     }
   };
 
-  const renderDropdown = () => {
-    // Filter prep items and regular items
+ const renderDropdown = () => {
+    // Only filter prep items, use all ingredients
     const filteredPrepItems = prepItems.filter(item => item && item.is_prep === true);
-    const filteredIngredients = ingredients.filter(item => item && item.id);
+    // Just check for valid ingredients (having an id)
+    const validIngredients = ingredients.filter(item => item && item.id);
 
     console.log('Filtered prep items:', filteredPrepItems);
-    console.log('Filtered ingredients:', filteredIngredients);
+    console.log('Valid ingredients:', validIngredients);
 
-    if (!filteredPrepItems.length && !filteredIngredients.length) {
+    if (!filteredPrepItems.length && !validIngredients.length) {
       return (
         <div className="text-yellow-400 text-lg mb-1">
           Loading items...
@@ -192,7 +182,7 @@ function InventoryScanner() {
     return (
       <div className="flex-1">
         <div className="text-yellow-400 text-lg mb-1">
-          Press 1 + Enter for first item
+          Select an item from the dropdown
         </div>
         <select
           value={item?.id || ''}
@@ -202,7 +192,7 @@ function InventoryScanner() {
             console.log('Dropdown selected ID:', selectedId);
             if (isNaN(selectedId)) return;
 
-            const selected = [...filteredPrepItems, ...filteredIngredients].find(i => i.id === selectedId);
+            const selected = [...filteredPrepItems, ...validIngredients].find(i => i.id === selectedId);
             console.log('Found selected item:', selected);
             
             if (selected) {
@@ -224,16 +214,16 @@ function InventoryScanner() {
         >
           <option value="">Choose Item...</option>
           <optgroup label="Prep Items">
-            {filteredPrepItems.map((option, idx) => (
+            {filteredPrepItems.map((option) => (
               <option key={option.id} value={option.id}>
-                {idx + 1}. {option.name}
+                {option.name}
               </option>
             ))}
           </optgroup>
           <optgroup label="Ingredients">
-            {filteredIngredients.map((option, idx) => (
+            {validIngredients.map((option) => (
               <option key={option.id} value={option.id}>
-                {filteredPrepItems.length + idx + 1}. {option.name}
+                {option.name}
               </option>
             ))}
           </optgroup>
