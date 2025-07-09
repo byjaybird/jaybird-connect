@@ -54,7 +54,7 @@ function InventoryScanner() {
     }
   }, [showDropdown, item]);
 
-  const handleScanSubmit = async (e) => {
+const handleScanSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!barcode) return;
 
@@ -81,14 +81,14 @@ function InventoryScanner() {
           setIngredients(ingredientsData);
         }
         setShowDropdown(true);
-        setFeedback('New code - Select item (1+Enter for first)');
-        setItem(null);
+        setFeedback('Select an item from the dropdown');
+        // Don't clear the barcode here
+        // setBarcode('');
       } else {
         // Handle existing barcode mapping
         const sourceType = data.data.source_type;
         const sourceId = data.data.source_id;
         
-        // Find the matching item based on source type
         const matchedItem = sourceType === 'item' 
           ? prepItems.find(p => p.id === sourceId)
           : ingredients.find(i => i.id === sourceId);
@@ -97,15 +97,16 @@ function InventoryScanner() {
           setItem(matchedItem);
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
+          setBarcode(''); // Only clear barcode after successful mapping
         } else {
           throw new Error('Mapped item not found in loaded data');
         }
       }
     } catch (error) {
-      console.error('Scan error:', error); // Add error logging
+      console.error('Scan error:', error);
       setFeedback('Error - Try again');
+      setBarcode('');
     }
-    setBarcode('');
   };
 
 const createBarcodeMapping = async (selectedItem) => {
