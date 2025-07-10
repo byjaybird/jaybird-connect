@@ -20,6 +20,7 @@ import NewPriceQuoteForm from './NewPriceQuoteForm';
 import Prices from './Prices';
 import InventoryDashboard from './InventoryDashboard';
 import InventoryScanner from './InventoryScanner';
+import NewReceivingForm from './NewReceivingForm';
 
 
 
@@ -204,6 +205,7 @@ function App() {
             <Route path="/prices/new" element={<NewPriceQuoteForm />} />
             <Route path="/inventory" element={<InventoryDashboard />} />
             <Route path="/inventory-scanner" element={<InventoryScanner />} />
+            <Route path="/receiving/new" element={<NewReceivingForm />} />
           </Routes>
         </Router>
       </AuthGate>
