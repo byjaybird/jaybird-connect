@@ -54,14 +54,14 @@ function InventoryScanner() {
     }
   }, [showDropdown, item]);
 
-const handleScanSubmit = async (e) => {
+  const handleScanSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!barcode) return;
 
     try {
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
         headers: {
-          'Authorization': localStorage.getItem('authToken') // Add auth token
+          'Authorization': localStorage.getItem('authToken')
         }
       });
       if (!res.ok) throw new Error('Failed to fetch');
@@ -86,80 +86,55 @@ const handleScanSubmit = async (e) => {
         }
         setShowDropdown(true);
         setFeedback('Select an item from the dropdown');
-        // Don't clear the barcode here
-        // setBarcode('');
       } else {
         // Handle existing barcode mapping
         const sourceType = data.data.source_type;
         const sourceId = data.data.source_id;
         
+        console.log('Looking for mapped item with:', { sourceType, sourceId }); // Debug log
+        
         const matchedItem = sourceType === 'item' 
           ? prepItems.find(p => p.id === sourceId)
-          : ingredients.find(i => i.id === sourceId);
+          : ingredients.find(i => i.ingredient_id === sourceId); // Changed from i.id to i.ingredient_id
+
+        console.log('Found matched item:', matchedItem); // Debug log
 
         if (matchedItem) {
           setItem(matchedItem);
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
-          setBarcode(''); // Only clear barcode after successful mapping
         } else {
-          throw new Error('Mapped item not found in loaded data');
+          // If items aren't loaded yet, load them first
+          const [itemsRes, ingredientsRes] = await Promise.all([
+            fetch(`${API_URL}/items?is_prep=true`),
+            fetch(`${API_URL}/ingredients`)
+          ]);
+
+          const [itemsData, ingredientsData] = await Promise.all([
+            itemsRes.json(),
+            ingredientsRes.json()
+          ]);
+
+          setPrepItems(itemsData);
+          setIngredients(ingredientsData);
+
+          // Try matching again with fresh data
+          const freshMatchedItem = sourceType === 'item'
+            ? itemsData.find(p => p.id === sourceId)
+            : ingredientsData.find(i => i.ingredient_id === sourceId);
+
+          if (freshMatchedItem) {
+            setItem(freshMatchedItem);
+            setShowDropdown(false);
+            setFeedback(`Found: ${freshMatchedItem.name}`);
+          } else {
+            throw new Error(`Item not found for ${sourceType} with ID ${sourceId}`);
+          }
         }
       }
     } catch (error) {
       console.error('Scan error:', error);
       setFeedback('Error - Try again');
-      setBarcode('');
-    }
-  };
-
-const createBarcodeMapping = async (selectedItem) => {
-  if (!barcode) {
-      console.error('No barcode available for mapping');
-      throw new Error('No barcode available'); 
-  } 
-  
-  console.log('Creating barcode mapping - selected item:', selectedItem);
-    console.log('Barcode being mapped:', barcode);
-    
-    // Determine if it's a prep item or ingredient and get the correct ID
-    const sourceId = selectedItem.is_prep ? selectedItem.id : selectedItem.ingredient_id;
-    
-    const payload = {
-      barcode: barcode,
-      source_type: selectedItem.is_prep ? 'item' : 'ingredient',
-      source_id: selectedItem.is_prep ? selectedItem.id : selectedItem.ingredient_id
-    };
-    
-    console.log('Barcode mapping payload:', payload);
-
-    try {
-      const mappingRes = await fetch(`${API_URL}/barcode-map`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': localStorage.getItem('authToken')
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!mappingRes.ok) {
-        const errorData = await mappingRes.json();
-        console.error('Mapping response error:', errorData);
-        throw new Error(`Failed to create barcode mapping: ${errorData.error || mappingRes.statusText}`);
-      }
-
-      const mappingData = await mappingRes.json();
-      console.log('Mapping response:', mappingData);
-      
-      if (mappingData.status !== 'Mapping updated') {
-        throw new Error('Failed to update barcode mapping');
-      }
-
-      return mappingData;
-    } catch (error) {
-      console.error('Mapping error:', error);
-      throw error;
     }
   };
 
