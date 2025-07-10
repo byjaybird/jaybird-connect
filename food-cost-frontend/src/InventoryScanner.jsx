@@ -54,11 +54,37 @@ function InventoryScanner() {
     }
   }, [showDropdown, item]);
 
-  const handleScanSubmit = async (e) => {
+const handleScanSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!barcode) return;
 
     try {
+      // Load the items first to ensure we have data
+      const [itemsRes, ingredientsRes] = await Promise.all([
+        fetch(`${API_URL}/items?is_prep=true`, {
+          headers: {
+            'Authorization': localStorage.getItem('authToken')
+          }
+        }),
+        fetch(`${API_URL}/ingredients`, {
+          headers: {
+            'Authorization': localStorage.getItem('authToken')
+          }
+        })
+      ]);
+
+      const [itemsData, ingredientsData] = await Promise.all([
+        itemsRes.json(),
+        ingredientsRes.json()
+      ]);
+
+      console.log('Loaded prep items:', itemsData);
+      console.log('Loaded ingredients:', ingredientsData);
+
+      setPrepItems(itemsData);
+      setIngredients(ingredientsData);
+
+      // Now check the barcode mapping
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
         headers: {
           'Authorization': localStorage.getItem('authToken')
@@ -70,20 +96,6 @@ function InventoryScanner() {
       console.log('Barcode map response:', data);
 
       if (!data.found) {
-        if (prepItems.length === 0 || ingredients.length === 0) {
-          const [itemsRes, ingredientsRes] = await Promise.all([
-            fetch(`${API_URL}/items?is_prep=true`),
-            fetch(`${API_URL}/ingredients`)
-          ]);
-
-          const [itemsData, ingredientsData] = await Promise.all([
-            itemsRes.json(),
-            ingredientsRes.json()
-          ]);
-
-          setPrepItems(itemsData);
-          setIngredients(ingredientsData);
-        }
         setShowDropdown(true);
         setFeedback('Select an item from the dropdown');
       } else {
@@ -91,45 +103,22 @@ function InventoryScanner() {
         const sourceType = data.data.source_type;
         const sourceId = data.data.source_id;
         
-        console.log('Looking for mapped item with:', { sourceType, sourceId }); // Debug log
+        console.log('Looking for mapped item with:', { sourceType, sourceId });
+        console.log('Available ingredients:', ingredientsData);
+        console.log('Available prep items:', itemsData);
         
         const matchedItem = sourceType === 'item' 
-          ? prepItems.find(p => p.id === sourceId)
-          : ingredients.find(i => i.ingredient_id === sourceId); // Changed from i.id to i.ingredient_id
+          ? itemsData.find(p => p.id === sourceId)
+          : ingredientsData.find(i => i.ingredient_id === sourceId);
 
-        console.log('Found matched item:', matchedItem); // Debug log
+        console.log('Matched item:', matchedItem);
 
         if (matchedItem) {
           setItem(matchedItem);
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
         } else {
-          // If items aren't loaded yet, load them first
-          const [itemsRes, ingredientsRes] = await Promise.all([
-            fetch(`${API_URL}/items?is_prep=true`),
-            fetch(`${API_URL}/ingredients`)
-          ]);
-
-          const [itemsData, ingredientsData] = await Promise.all([
-            itemsRes.json(),
-            ingredientsRes.json()
-          ]);
-
-          setPrepItems(itemsData);
-          setIngredients(ingredientsData);
-
-          // Try matching again with fresh data
-          const freshMatchedItem = sourceType === 'item'
-            ? itemsData.find(p => p.id === sourceId)
-            : ingredientsData.find(i => i.ingredient_id === sourceId);
-
-          if (freshMatchedItem) {
-            setItem(freshMatchedItem);
-            setShowDropdown(false);
-            setFeedback(`Found: ${freshMatchedItem.name}`);
-          } else {
-            throw new Error(`Item not found for ${sourceType} with ID ${sourceId}`);
-          }
+          throw new Error(`Item not found for ${sourceType} with ID ${sourceId} in loaded data`);
         }
       }
     } catch (error) {

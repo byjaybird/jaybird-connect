@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
+const API_URL = 'https://jaybird-connect.ue.r.appspot.com';
+
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
