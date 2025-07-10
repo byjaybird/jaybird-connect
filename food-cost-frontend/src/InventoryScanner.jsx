@@ -59,38 +59,7 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
-      // Load the items first to ensure we have data
-      const [itemsRes, ingredientsRes] = await Promise.all([
-        fetch(`${API_URL}/items?is_prep=true`, {
-          headers: {
-            'Authorization': localStorage.getItem('authToken')
-          }
-        }),
-        fetch(`${API_URL}/ingredients`, {
-          headers: {
-            'Authorization': localStorage.getItem('authToken')
-          }
-        })
-      ]);
-
-      const [itemsData, ingredientsData] = await Promise.all([
-        itemsRes.json(),
-        ingredientsRes.json()
-      ]);
-
-      console.log('Loaded prep items:', itemsData);
-      console.log('Loaded ingredients:', ingredientsData);
-
-      setPrepItems(itemsData);
-      setIngredients(ingredientsData);
-
-      // Now check the barcode mapping
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
-        headers: {
-          'Authorization': localStorage.getItem('authToken')
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch');
+      // ... existing code ...
 
       const data = await res.json();
       console.log('Barcode map response:', data);
@@ -107,9 +76,18 @@ const handleScanSubmit = async (e) => {
         console.log('Available ingredients:', ingredientsData);
         console.log('Available prep items:', itemsData);
         
-        const matchedItem = sourceType === 'item' 
-          ? itemsData.find(p => p.id === sourceId)
-          : ingredientsData.find(i => i.ingredient_id === sourceId);
+        // Modified matching logic
+        let matchedItem;
+        if (sourceType === 'item') {
+          matchedItem = itemsData.find(p => p.id === sourceId);
+        } else {
+          // For ingredients, log the comparison to help debug
+          console.log('Searching for ingredient with ID:', sourceId);
+          matchedItem = ingredientsData.find(i => {
+            console.log('Comparing with ingredient:', i);
+            return Number(i.ingredient_id) === Number(sourceId);
+          });
+        }
 
         console.log('Matched item:', matchedItem);
 
@@ -118,7 +96,7 @@ const handleScanSubmit = async (e) => {
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
         } else {
-          throw new Error(`Item not found for ${sourceType} with ID ${sourceId} in loaded data`);
+          throw new Error(`Mapped item not found in loaded data (${sourceType} ID: ${sourceId})`);
         }
       }
     } catch (error) {
