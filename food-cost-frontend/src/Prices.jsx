@@ -1,7 +1,5 @@
-// pages/Prices.jsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import * as Papa from 'papaparse';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -14,109 +12,110 @@ function Prices() {
       .then(setQuotes);
   }, []);
 
-  const downloadTemplate = () => {
-    const template = Papa.unparse([
-      { ingredient_name: '', source: '', qty_amount: '', qty_unit: '', price: '', date_found: '', notes: '', is_purchase: '' }
-    ], {
-      header: true
-    });
-    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'price_quote_template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      Papa.parse(file, {
-        header: true,
-        complete: (results) => {
-          fetch(`${API_URL}/price_quotes/bulk_insert`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quotes: results.data }),
-          })
-          .then(res => res.json())
-          .then(result => {
-            if (result.errors && result.errors.length > 0) {
-              alert(`Errors: ${result.errors.join(', ')}`);
-            } else {
-              alert('Bulk upload successful!');
-            }
-          });
-        },
-        skipEmptyLines: true
-      });
-    }
-  };
-
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Price Quotes</h1>
-        <div>
-          <button
-            onClick={downloadTemplate}
-            className="bg-green-600 text-white px-4 py-2 rounded mr-2"
-          >
-            Download Template
-          </button>
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleFileUpload}
-            className="mr-2"
-          />
-          <Link
-            to="/prices/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            + Add Quote
-          </Link>
-          <Link
-            to="/receiving/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            + Receive Goods
-          </Link>
+    <div className="max-w-7xl mx-auto p-6">
+      <div className="mb-8">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-800">Price Quotes</h1>
+          <div className="space-x-4">
+            <Link
+              to="/prices/new"
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 ease-in-out inline-flex items-center"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-5 w-5 mr-2" 
+                viewBox="0 0 20 20" 
+                fill="currentColor"
+              >
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Add Quote
+            </Link>
+            <Link
+              to="/receiving/new"
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-150 ease-in-out inline-flex items-center"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-5 w-5 mr-2" 
+                viewBox="0 0 20 20" 
+                fill="currentColor"
+              >
+                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+              </svg>
+              Receive Goods
+            </Link>
+          </div>
         </div>
       </div>
 
-      <table className="min-w-full bg-white border">
-        <thead>
-          <tr>
-            <th className="border px-4 py-2">Ingredient</th>
-            <th className="border px-4 py-2">Source</th>
-            <th className="border px-4 py-2">Size</th>
-            <th className="border px-4 py-2">Price</th>
-            <th className="border px-4 py-2">Date</th>
-            <th className="border px-4 py-2">Notes</th>
-            <th className="border px-4 py-2">Purchased?</th>
-          </tr>
-        </thead>
-        <tbody>
-          {quotes.map((q) => (
-            <tr key={q.id}>
-              <td className="border px-4 py-2">{q.ingredient_name}</td>
-              <td className="border px-4 py-2">{q.source}</td>
-              <td className="border px-4 py-2">
-                {q.size_qty} {q.size_unit}
-              </td>
-              <td className="border px-4 py-2">${q.price.toFixed(2)}</td>
-              <td className="border px-4 py-2">{q.date_found}</td>
-              <td className="border px-4 py-2">{q.notes}</td>
-              <td className="border px-4 py-2">{q.is_purchase ? 'Yes' : ''}</td>
+      <div className="overflow-x-auto bg-white rounded-lg shadow">
+        <table className="min-w-full table-auto">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Ingredient
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Size
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Price
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Notes
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Purchased
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {quotes.map((q) => (
+              <tr key={q.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {q.ingredient_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {q.source}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {q.size_qty} {q.size_unit}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  ${q.price.toFixed(2)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {new Date(q.date_found).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {q.notes}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {q.is_purchase ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      Yes
+                    </span>
+                  ) : (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                      No
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 export default Prices;
-
