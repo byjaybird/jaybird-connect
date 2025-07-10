@@ -59,8 +59,6 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
-      console.log('Starting scan process for barcode:', barcode);
-      
       // Load the items first to ensure we have data
       const [itemsRes, ingredientsRes] = await Promise.all([
         fetch(`${API_URL}/items?is_prep=true`, {
@@ -75,24 +73,13 @@ const handleScanSubmit = async (e) => {
         })
       ]);
 
-      // Check response status
-      console.log('Initial response status - Items:', itemsRes.status, 'Ingredients:', ingredientsRes.status);
-
       const [itemsData, ingredientsData] = await Promise.all([
         itemsRes.json(),
         ingredientsRes.json()
       ]);
 
-      // Log raw data received
-      console.log('Raw itemsData:', itemsData);
-      console.log('Raw ingredientsData:', ingredientsData);
-
-      // Verify data structure
-      console.log('First ingredient structure:', ingredientsData[0]);
-      console.log('Types of IDs in ingredients:', ingredientsData.map(i => ({
-        id: i.ingredient_id,
-        type: typeof i.ingredient_id
-      })));
+      console.log('Loaded items:', itemsData);
+      console.log('Loaded ingredients:', ingredientsData);
 
       setPrepItems(itemsData);
       setIngredients(ingredientsData);
@@ -103,13 +90,10 @@ const handleScanSubmit = async (e) => {
           'Authorization': localStorage.getItem('authToken')
         }
       });
-      
-      console.log('Barcode map response status:', res.status);
-      
       if (!res.ok) throw new Error('Failed to fetch');
 
       const data = await res.json();
-      console.log('Barcode map full response:', data);
+      console.log('Barcode map response:', data);
 
       if (!data.found) {
         setShowDropdown(true);
@@ -119,42 +103,41 @@ const handleScanSubmit = async (e) => {
         const sourceType = data.data.source_type;
         const sourceId = data.data.source_id;
         
-        console.log('Looking for mapped item with:', { 
-          sourceType, 
-          sourceId, 
-          sourceIdType: typeof sourceId 
-        });
+        console.log('Looking for mapped item with:', { sourceType, sourceId });
         
-        // Debug ingredient IDs before search
-        if (sourceType === 'ingredient') {
-          console.log('Available ingredient IDs:', ingredientsData.map(i => ({
-            id: i.ingredient_id,
-            name: i.name
-          })));
-        }
-
         let matchedItem;
         if (sourceType === 'item') {
-          matchedItem = itemsData.find(p => Number(p.id) === Number(sourceId));
+          // For items, match on item_id
+          matchedItem = itemsData.find(p => Number(p.item_id) === Number(sourceId));
         } else {
+          // For ingredients, match on ingredient_id
           matchedItem = ingredientsData.find(i => Number(i.ingredient_id) === Number(sourceId));
         }
 
-        console.log('Search result - matchedItem:', matchedItem);
+        console.log('Matched item:', matchedItem);
 
         if (matchedItem) {
-          setItem(matchedItem);
+          // Normalize the item structure
+          const normalizedItem = {
+            ...matchedItem,
+            // Ensure consistent ID field
+            id: sourceType === 'item' ? matchedItem.item_id : matchedItem.ingredient_id,
+            // Add source type for later use
+            is_prep: sourceType === 'item'
+          };
+          
+          setItem(normalizedItem);
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
         } else {
-          throw new Error(`Item not found for ${sourceType} with ID ${sourceId} in loaded data`);
+          throw new Error(`Mapped item not found in loaded data (${sourceType} ID: ${sourceId})`);
         }
       }
     } catch (error) {
       console.error('Scan error:', error);
       setFeedback('Error - Try again');
     }
-  };
+};
 
 const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
@@ -170,9 +153,6 @@ const handleKeyPress = (e) => {
   };
 
 const renderDropdown = () => {
-    console.log('Raw prepItems:', prepItems);
-    console.log('Raw ingredients:', ingredients);
-
     // Filter prep items - just check for is_prep true and name
     const filteredPrepItems = prepItems.filter(item => 
       item && 
@@ -187,16 +167,13 @@ const renderDropdown = () => {
       item.name
     );
 
-    console.log('Filtered prep items:', filteredPrepItems);
-    console.log('Valid ingredients:', validIngredients);
-
     return (
       <div className="flex-1">
         <div className="text-yellow-400 text-lg mb-1">
           Select an item from the dropdown
         </div>
         <select
-          value={item?.id || item?.ingredient_id || ''}
+          value={item?.id || ''}
           onChange={async (e) => {
             const rawValue = e.target.value;
             console.log('Raw selected value:', rawValue);
@@ -207,19 +184,19 @@ const renderDropdown = () => {
             const selectedId = parseInt(rawValue, 10);
             console.log('Parsed selectedId:', selectedId);
 
+            // Find selected item using correct ID field
             const selected = 
-              filteredPrepItems.find(i => i.id === selectedId) ||
+              filteredPrepItems.find(i => i.item_id === selectedId) ||
               validIngredients.find(i => i.ingredient_id === selectedId);
             
             console.log('Found selected item:', selected);
             
             if (selected) {
               try {
-                console.log('About to create barcode mapping');
                 const mappingPayload = {
                   barcode: barcode,
                   source_type: selected.is_prep ? 'item' : 'ingredient',
-                  source_id: selected.is_prep ? selected.id : selected.ingredient_id
+                  source_id: selected.is_prep ? selected.item_id : selected.ingredient_id
                 };
                 console.log('Mapping payload:', mappingPayload);
 
@@ -227,6 +204,7 @@ const renderDropdown = () => {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': localStorage.getItem('authToken')
                   },
                   body: JSON.stringify(mappingPayload)
                 });
@@ -240,7 +218,14 @@ const renderDropdown = () => {
                 const mappingData = await mappingRes.json();
                 console.log('Mapping response:', mappingData);
                 
-                setItem(selected);
+                // Normalize the item structure when setting
+                const normalizedItem = {
+                  ...selected,
+                  id: selected.is_prep ? selected.item_id : selected.ingredient_id,
+                  is_prep: !!selected.is_prep
+                };
+                
+                setItem(normalizedItem);
                 setShowDropdown(false);
                 setFeedback(`Selected: ${selected.name} - Enter quantity`);
               } catch (error) {
@@ -256,8 +241,8 @@ const renderDropdown = () => {
             <optgroup label="Prep Items">
               {filteredPrepItems.map((option) => (
                 <option 
-                  key={option.id} 
-                  value={option.id}
+                  key={option.item_id} 
+                  value={option.item_id}
                 >
                   {option.name}
                 </option>
