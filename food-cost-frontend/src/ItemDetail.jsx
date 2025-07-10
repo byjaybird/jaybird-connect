@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import CostCell from './components/CostCell'; // adjust path as needed
-import { QRCodeCanvas } from 'qrcode.react';  // You may need to install this library
+import CostCell from './components/CostCell';
+import { QRCodeCanvas } from 'qrcode.react';
 import QRCode from 'qrcode.react';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
@@ -27,26 +27,35 @@ function ItemDetail() {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Define label dimensions: 3"x2.5" translates to 288px x 240px at 96 DPI
-    canvas.width = 288;
-    canvas.height = 240;
+    // Define label dimensions: 3"x2.5" at 300 DPI for better quality
+    canvas.width = 900;
+    canvas.height = 750;
 
-    // Set a white background
+    // Set white background and draw border
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
     // Draw QR Code
     const qrCodeCanvas = document.getElementById('qr-code');
-    ctx.drawImage(qrCodeCanvas, 20, 20, 100, 100);
+    ctx.drawImage(qrCodeCanvas, 50, 50, 300, 300);
 
-    // Add item name text
+    // Add item name
     ctx.fillStyle = '#000';
-    ctx.font = '20px Arial';
-    ctx.fillText(item.name, 140, 60);
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 48px Arial';
+    ctx.fillText(item.name, 400, 50);
+
+    // Add category and price
+    ctx.font = '36px Arial';
+    ctx.fillText(`Category: ${item.category}`, 400, 150);
+    ctx.fillText(`Price: $${item.price?.toFixed(2) ?? 'N/A'}`, 400, 200);
 
     // Trigger download
     const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
+    link.href = canvas.toDataURL('image/png', 1.0);
     link.download = `${item.name}-label.png`;
     link.click();
   };
@@ -70,7 +79,7 @@ function ItemDetail() {
       <div style={{ display: 'none' }}>
         <QRCodeCanvas
           id="qr-code"
-          value={`${API_URL}/items/${id}`}  // The value here can be customized
+          value={`${API_URL}/items/${id}`}
           size={100}
           level={"H"}
           includeMargin={true}
@@ -97,7 +106,7 @@ function ItemDetail() {
                 <span>
                   {r.quantity} {r.unit} of{' '}
                   {r.source_type === 'item' ? (
-                    <Link to={`/items/${r.source_id}`} className="text-blue-600 hover:underline">
+                    <Link to={`/item/${r.source_id}`} className="text-blue-600 hover:underline">
                       {r.source_name}
                     </Link>
                   ) : (
@@ -112,7 +121,7 @@ function ItemDetail() {
                   unit={r.unit}
                   qty={r.quantity}
                   onMissing={(data) => {
-                    setFixingIndex(i); // use the loop index from `.map`
+                    setFixingIndex(i);
                     setFixData(data);
                   }}
                 />
