@@ -9,6 +9,7 @@ from utils.cost_resolver import resolve_ingredient_cost
 from utils.cost_resolver import resolve_item_cost
 from utils.db import get_db_cursor
 from inventory_routes import inventory_bp
+from receiving_routes import receiving_bp
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -16,6 +17,7 @@ app = Flask(__name__)
 CORS(app)
 
 app.register_blueprint(inventory_bp)
+app.register_blueprint(receiving_bp)
 
 try:
     test_conn = psycopg2.connect(

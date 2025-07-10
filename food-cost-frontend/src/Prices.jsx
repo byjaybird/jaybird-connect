@@ -77,6 +77,12 @@ function Prices() {
           >
             + Add Quote
           </Link>
+          <Link
+            to="/receiving/new"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            + Receive Goods
+          </Link>
         </div>
       </div>
 
