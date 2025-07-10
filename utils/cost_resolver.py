@@ -54,8 +54,8 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
                 }
             }
         conversion_factor = conversion["factor"]
-        # Adjust price_per_unit according to conversion
-        price_per_unit /= conversion_factor
+        # Simply multiply by the conversion factor
+        price_per_unit *= conversion_factor
 
     total_cost = price_per_unit * quantity
     return {
@@ -162,4 +162,3 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         "cost_per_unit": round(cost_per_unit, 4),
         "total_cost": round(final_cost, 4)
     }
-

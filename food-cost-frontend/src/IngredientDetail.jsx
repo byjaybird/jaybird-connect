@@ -14,6 +14,9 @@ function IngredientDetail() {
   const [fromUnit, setFromUnit] = useState('');
   const [toUnit, setToUnit] = useState('');
   const [factor, setFactor] = useState('');
+  const [fromAmount, setFromAmount] = useState('');
+  const [toAmount, setToAmount] = useState('');
+
 
   const [priceQuotes, setPriceQuotes] = useState([]);
 
@@ -170,26 +173,26 @@ function IngredientDetail() {
                 <th className="border px-3 py-2 text-center">Global</th>
               </tr>
             </thead>
-              <tbody>
-                {conversions.map((conv, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="border px-3 py-2">{conv.from_unit}</td>
-                    <td className="border px-3 py-2">{conv.to_unit}</td>
-                    <td className="border px-3 py-2">{conv.factor}</td>
-                    <td className="border px-3 py-2 text-center">
-                      {conv.is_global ? '✅' : ''}
-                    </td>
-                    <td className="border px-3 py-2 text-center">
-                      <button
-                        onClick={() => handleDeleteConversion(conv.id)}
-                        className="text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+            <tbody>
+              {conversions.map((conv, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border px-3 py-2">{conv.from_unit}</td>
+                  <td className="border px-3 py-2">{conv.to_unit}</td>
+                  <td className="border px-3 py-2">{conv.factor}</td>
+                  <td className="border px-3 py-2 text-center">
+                    {conv.is_global ? '✅' : ''}
+                  </td>
+                  <td className="border px-3 py-2 text-center">
+                    <button
+                      onClick={() => handleDeleteConversion(conv.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         )}
 
@@ -203,65 +206,76 @@ function IngredientDetail() {
           </button>
 
           {showForm && (
-            <form
-              className="mt-4 space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault();
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!fromAmount || !fromUnit || !toAmount || !toUnit) return;
 
-                const payload = {
-                  ingredient_id: parseInt(id),
-                  from_unit: fromUnit.trim().toLowerCase(),
-                  to_unit: toUnit.trim().toLowerCase(),
-                  factor: parseFloat(factor),
-                };
+              const factor = (parseFloat(fromAmount) / parseFloat(toAmount));
+              
+              const payload = {
+                ingredient_id: parseInt(id),
+                from_unit: fromUnit.trim().toLowerCase(),
+                to_unit: toUnit.trim().toLowerCase(),
+                factor: factor,
+              };
 
-                fetch(`${API_URL}/ingredient_conversions`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload),
-                })
-                  .then((res) => res.json())
-                  .then((newConv) => {
-                    setConversions([...conversions, newConv]);
-                    setShowForm(false);
-                    setFromUnit('');
-                    setToUnit('');
-                    setFactor('');
-                  })
-                  .catch((err) => {
-                    console.error('Failed to save conversion:', err);
-                  });
-              }}
-            >
-              <div className="flex gap-2">
+              fetch(`${API_URL}/ingredient_conversions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              })
+              .then((res) => res.json())
+              .then((newConv) => {
+                setConversions([...conversions, newConv]);
+                setShowForm(false);
+                setFromAmount('');
+                setFromUnit('');
+                setToAmount('');
+                setToUnit('');
+              })
+              .catch((err) => {
+                console.error('Failed to save conversion:', err);
+              });
+            }}>
+              <div className="flex items-center gap-2 mt-4">
+                <input
+                  type="number"
+                  value={fromAmount}
+                  onChange={(e) => setFromAmount(e.target.value)}
+                  placeholder="Amount"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  step="any"
+                  required
+                />
                 <input
                   type="text"
                   value={fromUnit}
                   onChange={(e) => setFromUnit(e.target.value)}
-                  placeholder="From unit (e.g. lb)"
-                  className="border rounded px-2 py-1 text-sm w-28"
+                  placeholder="unit"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  required
+                />
+                <span className="text-gray-500">=</span>
+                <input
+                  type="number"
+                  value={toAmount}
+                  onChange={(e) => setToAmount(e.target.value)}
+                  placeholder="Amount"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  step="any"
                   required
                 />
                 <input
                   type="text"
                   value={toUnit}
                   onChange={(e) => setToUnit(e.target.value)}
-                  placeholder="To unit (e.g. tbsp)"
-                  className="border rounded px-2 py-1 text-sm w-28"
-                  required
-                />
-                <input
-                  type="number"
-                  value={factor}
-                  onChange={(e) => setFactor(e.target.value)}
-                  placeholder="Factor"
+                  placeholder="unit"
                   className="border rounded px-2 py-1 text-sm w-24"
-                  step="any"
                   required
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                  className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
                 >
                   Save
                 </button>
@@ -269,22 +283,52 @@ function IngredientDetail() {
             </form>
           )}
         </div>
+
+        {conversions.length > 0 && (
+          <table className="w-full border text-sm text-left mt-4">
+            <thead>
+              <tr>
+                <th className="border px-3 py-2">Conversion</th>
+                <th className="border px-3 py-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conversions.map((conv, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border px-3 py-2">
+                    {conv.factor > 1 
+                      ? `1 ${conv.to_unit} = ${conv.factor} ${conv.from_unit}`
+                      : `${1/conv.factor} ${conv.from_unit} = 1 ${conv.to_unit}`
+                    }
+                  </td>
+                  <td className="border px-3 py-2 text-center">
+                    <button
+                      onClick={() => handleDeleteConversion(conv.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* Footer navigation buttons */}
+        <div className="mt-6 flex flex-wrap gap-4 items-center">
+          <Link to="/ingredients" className="text-blue-600 hover:underline">
+            ← Back to Ingredients
+          </Link>
+
+          <Link
+            to={`/ingredients/${id}/edit`}
+            className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
+          >
+            ✏️ Edit Ingredient
+          </Link>
+        </div>
       </div>
-
-      {/* Footer navigation buttons */}
-      <div className="mt-6 flex flex-wrap gap-4 items-center">
-        <Link to="/ingredients" className="text-blue-600 hover:underline">
-          ← Back to Ingredients
-        </Link>
-
-        <Link
-          to={`/ingredients/${id}/edit`}
-          className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
-        >
-          ✏️ Edit Ingredient
-        </Link>
-
-    </div>
     </div>
   );
 }
