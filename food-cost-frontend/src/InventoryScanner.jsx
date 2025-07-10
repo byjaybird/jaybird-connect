@@ -59,10 +59,57 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
-      // ... existing code ...
+      console.log('Starting scan process for barcode:', barcode);
+      
+      // Load the items first to ensure we have data
+      const [itemsRes, ingredientsRes] = await Promise.all([
+        fetch(`${API_URL}/items?is_prep=true`, {
+          headers: {
+            'Authorization': localStorage.getItem('authToken')
+          }
+        }),
+        fetch(`${API_URL}/ingredients`, {
+          headers: {
+            'Authorization': localStorage.getItem('authToken')
+          }
+        })
+      ]);
+
+      // Check response status
+      console.log('Initial response status - Items:', itemsRes.status, 'Ingredients:', ingredientsRes.status);
+
+      const [itemsData, ingredientsData] = await Promise.all([
+        itemsRes.json(),
+        ingredientsRes.json()
+      ]);
+
+      // Log raw data received
+      console.log('Raw itemsData:', itemsData);
+      console.log('Raw ingredientsData:', ingredientsData);
+
+      // Verify data structure
+      console.log('First ingredient structure:', ingredientsData[0]);
+      console.log('Types of IDs in ingredients:', ingredientsData.map(i => ({
+        id: i.ingredient_id,
+        type: typeof i.ingredient_id
+      })));
+
+      setPrepItems(itemsData);
+      setIngredients(ingredientsData);
+
+      // Now check the barcode mapping
+      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
+        headers: {
+          'Authorization': localStorage.getItem('authToken')
+        }
+      });
+      
+      console.log('Barcode map response status:', res.status);
+      
+      if (!res.ok) throw new Error('Failed to fetch');
 
       const data = await res.json();
-      console.log('Barcode map response:', data);
+      console.log('Barcode map full response:', data);
 
       if (!data.found) {
         setShowDropdown(true);
@@ -72,31 +119,35 @@ const handleScanSubmit = async (e) => {
         const sourceType = data.data.source_type;
         const sourceId = data.data.source_id;
         
-        console.log('Looking for mapped item with:', { sourceType, sourceId });
-        console.log('Available ingredients:', ingredientsData);
-        console.log('Available prep items:', itemsData);
+        console.log('Looking for mapped item with:', { 
+          sourceType, 
+          sourceId, 
+          sourceIdType: typeof sourceId 
+        });
         
-        // Modified matching logic
-        let matchedItem;
-        if (sourceType === 'item') {
-          matchedItem = itemsData.find(p => p.id === sourceId);
-        } else {
-          // For ingredients, log the comparison to help debug
-          console.log('Searching for ingredient with ID:', sourceId);
-          matchedItem = ingredientsData.find(i => {
-            console.log('Comparing with ingredient:', i);
-            return Number(i.ingredient_id) === Number(sourceId);
-          });
+        // Debug ingredient IDs before search
+        if (sourceType === 'ingredient') {
+          console.log('Available ingredient IDs:', ingredientsData.map(i => ({
+            id: i.ingredient_id,
+            name: i.name
+          })));
         }
 
-        console.log('Matched item:', matchedItem);
+        let matchedItem;
+        if (sourceType === 'item') {
+          matchedItem = itemsData.find(p => Number(p.id) === Number(sourceId));
+        } else {
+          matchedItem = ingredientsData.find(i => Number(i.ingredient_id) === Number(sourceId));
+        }
+
+        console.log('Search result - matchedItem:', matchedItem);
 
         if (matchedItem) {
           setItem(matchedItem);
           setShowDropdown(false);
           setFeedback(`Found: ${matchedItem.name}`);
         } else {
-          throw new Error(`Mapped item not found in loaded data (${sourceType} ID: ${sourceId})`);
+          throw new Error(`Item not found for ${sourceType} with ID ${sourceId} in loaded data`);
         }
       }
     } catch (error) {
