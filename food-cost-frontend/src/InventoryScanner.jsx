@@ -59,7 +59,11 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`);
+      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
+        headers: {
+          'Authorization': localStorage.getItem('authToken') // Add auth token
+        }
+      });
       if (!res.ok) throw new Error('Failed to fetch');
 
       const data = await res.json();
@@ -124,7 +128,7 @@ const createBarcodeMapping = async (selectedItem) => {
     const payload = {
       barcode: barcode,
       source_type: selectedItem.is_prep ? 'item' : 'ingredient',
-      source_id: sourceId
+      source_id: selectedItem.is_prep ? selectedItem.id : selectedItem.ingredient_id
     };
     
     console.log('Barcode mapping payload:', payload);
@@ -134,6 +138,7 @@ const createBarcodeMapping = async (selectedItem) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': localStorage.getItem('authToken')
         },
         body: JSON.stringify(payload)
       });
@@ -158,7 +163,7 @@ const createBarcodeMapping = async (selectedItem) => {
     }
   };
 
-  const handleKeyPress = (e) => {
+const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       if (item && quantity) {
         handleSave();
@@ -283,13 +288,13 @@ const renderDropdown = () => {
     );
   };
 
-  const handleSave = async () => {
+const handleSave = async () => {
     try {
       if (!item) return;
 
       const quantityToSave = quantity || '1';
-      console.log('Saving inventory with item:', item); // Debug log
-      console.log('Quantity to save:', quantityToSave); // Debug log
+      console.log('Saving inventory with item:', item);
+      console.log('Quantity to save:', quantityToSave);
 
       const scanData = [{
         barcode: barcode,
@@ -298,12 +303,13 @@ const renderDropdown = () => {
         source_id: item.is_prep ? item.id : item.ingredient_id
       }];
 
-      console.log('Inventory save payload:', scanData); // Debug log
+      console.log('Inventory save payload:', scanData);
 
       const saveRes = await fetch(`${API_URL}/inventory/upload-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': localStorage.getItem('authToken') // Add auth token
         },
         body: JSON.stringify(scanData)
       });
@@ -321,8 +327,8 @@ const renderDropdown = () => {
       setFeedback('Save failed - Try again');
     }
   };
-
-  const resetForm = () => {
+  
+const resetForm = () => {
     setBarcode('');
     setItem(null);
     setShowDropdown(false);
