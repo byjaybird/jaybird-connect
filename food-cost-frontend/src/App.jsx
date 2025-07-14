@@ -146,6 +146,7 @@ function ItemList() {
 
 function AuthGate({ children, setAppUser }) {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
+  const [loginError, setLoginError] = useState(null);
 
   const handleLoginSuccess = async (credentialResponse) => {
     try {
@@ -173,25 +174,41 @@ function AuthGate({ children, setAppUser }) {
       localStorage.setItem('authToken', authToken);
       localStorage.setItem('user', JSON.stringify(userData));
       
+      setLoginError(null);
       setUser(userData);
       setAppUser(userData);
     } catch (error) {
       console.error('Authentication failed:', error);
-      alert(error.message || 'Authentication failed. Please contact your administrator.');
+      setLoginError(
+        'Access denied. Your email address is not registered with this application. Please contact your administrator to request access.'
+      );
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
     }
   };
 
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <h1 className="text-2xl mb-4">Employee Login</h1>
+        <h1 className="text-2xl mb-4">Welcome to Jaybird Connect</h1>
+        <p className="text-gray-600 mb-6 text-center max-w-md">
+          Please sign in with your registered Google account.
+        </p>
+        {loginError && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 max-w-md text-center">
+            {loginError}
+          </div>
+        )}
         <GoogleLogin
           onSuccess={handleLoginSuccess}
           onError={() => {
             console.error('Login Failed');
-            alert('Login failed. Please try again.');
+            setLoginError('Login failed. Please try again or contact your administrator.');
           }}
         />
+        <p className="text-sm text-gray-500 mt-4 text-center max-w-md">
+          Access is restricted to pre-registered users only. If you need access, please contact your administrator to have your email address added to the system.
+        </p>
       </div>
     );
   }
