@@ -21,18 +21,15 @@ import Prices from './Prices';
 import InventoryDashboard from './InventoryDashboard';
 import InventoryScanner from './InventoryScanner';
 import NewReceivingForm from './NewReceivingForm';
+import TasksPage from './components/TasksPage';
+import UserManagement from './components/UserManagement';
 
-
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
   '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
-const ALLOWED_DOMAINS = [
-  'byjaybird.com',
-  'thebagelbin.com',
-  'mustardpretzel.com',
-  'sonomas.net'
-];
 
 function Header({ user, onLogout }) {
   return (
@@ -41,18 +38,36 @@ function Header({ user, onLogout }) {
         <Link to="/">
           <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
         </Link>
-        <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">
-          Items
-        </Link>
-        <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">
-          Ingredients
-        </Link>
-        <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">
-          Prices
-        </Link>
-        <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">
-          Inventory
-        </Link>
+        
+        {/* Show different navigation based on user role */}
+        {user.role === 'admin' ? (
+          <>
+            <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">
+              Items
+            </Link>
+            <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">
+              Ingredients
+            </Link>
+            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">
+              Prices
+            </Link>
+            <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">
+              Inventory
+            </Link>
+            {user && user.role === 'Admin' && (
+              <Link 
+                to="/users" 
+                className="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                User Management
+              </Link>
+            )}
+          </>
+        ) : (
+          <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">
+            My Tasks
+          </Link>
+        )}
       </div>
       {user && (
         <div className="flex items-center space-x-4">
@@ -138,39 +153,50 @@ function ItemList() {
 function AuthGate({ children, setAppUser }) {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
 
-  useEffect(() => {
-    if (user) {
-      setAppUser(user);
+  const handleLoginSuccess = async (credentialResponse) => {
+    try {
+      const decoded = jwtDecode(credentialResponse.credential);
+      
+      const response = await fetch(`${API_URL}/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: decoded.email,
+          name: decoded.name,
+          googleId: decoded.sub
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Authentication failed');
+      }
+
+      const userData = await response.json();
+      
+      // Store auth info
+      const authToken = `${decoded.sub}|${decoded.email}`;
+      localStorage.setItem('authToken', authToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      setUser(userData);
+      setAppUser(userData);
+    } catch (error) {
+      console.error('Authentication failed:', error);
+      alert(error.message || 'Authentication failed. Please contact your administrator.');
     }
-  }, [user, setAppUser]);
+  };
 
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <h1 className="text-2xl mb-4">Log in to access Jaybird Connect</h1>
+        <h1 className="text-2xl mb-4">Employee Login</h1>
         <GoogleLogin
-          onSuccess={(credentialResponse) => {
-            const decoded = jwtDecode(credentialResponse.credential);
-            const domain = decoded.hd || '';
-            if (!ALLOWED_DOMAINS.includes(domain)) {
-              alert('Access denied. Must log in with a company email.');
-              return;
-            }
-            localStorage.setItem('user', JSON.stringify(decoded));
-            setUser(decoded);
-
-            fetch(`${API_URL}/log-login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: decoded.email,
-                name: decoded.name,
-                domain: domain,
-                timestamp: new Date().toISOString()
-              })
-            }).catch((err) => console.error('Failed to log login event:', err));
+          onSuccess={handleLoginSuccess}
+          onError={() => {
+            console.error('Login Failed');
+            alert('Login failed. Please try again.');
           }}
-          onError={() => console.error('Login Failed')}
         />
       </div>
     );
@@ -206,6 +232,10 @@ function App() {
             <Route path="/inventory" element={<InventoryDashboard />} />
             <Route path="/inventory-scanner" element={<InventoryScanner />} />
             <Route path="/receiving/new" element={<NewReceivingForm />} />
+            <Route path="/tasks" element={<TasksPage user={user} />} />
+             {user && user.role === 'Admin' && (
+                <Route path="/users" element={<UserManagement />} />
+              )}
           </Routes>
         </Router>
       </AuthGate>

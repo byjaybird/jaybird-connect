@@ -10,6 +10,8 @@ from utils.cost_resolver import resolve_item_cost
 from utils.db import get_db_cursor
 from inventory_routes import inventory_bp
 from receiving_routes import receiving_bp
+from tasks_routes import tasks_bp
+from auth_routes import auth_bp
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -18,6 +20,8 @@ CORS(app)
 
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
+app.register_blueprint(tasks_bp)
+app.register_blueprint(auth_bp)
 
 try:
     test_conn = psycopg2.connect(
