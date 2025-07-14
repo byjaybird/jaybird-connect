@@ -24,8 +24,6 @@ import NewReceivingForm from './NewReceivingForm';
 import TasksPage from './components/TasksPage';
 import UserManagement from './components/UserManagement';
 
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 const GOOGLE_CLIENT_ID =
