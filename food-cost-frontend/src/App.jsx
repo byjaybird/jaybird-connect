@@ -23,11 +23,7 @@ import InventoryScanner from './InventoryScanner';
 import NewReceivingForm from './NewReceivingForm';
 import TasksPage from './components/TasksPage';
 import UserManagement from './components/UserManagement';
-
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
-const GOOGLE_CLIENT_ID =
-  '209658083912-mlsfml13aa444o0j7ipj3lkbbjf7mmlg.apps.googleusercontent.com';
+import { API_URL, GOOGLE_CLIENT_ID } from './config';
 
 function Header({ user, onLogout }) {
   return (
