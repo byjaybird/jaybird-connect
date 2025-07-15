@@ -7,12 +7,20 @@ automatic_scaling:
   min_instances: 1
   max_instances: 2
 
+handlers:
+- url: /.*
+  script: auto
+  secure: always
+  redirect_http_response_code: 301
+
 env_variables:
   PORT: 8080
   DB_HOST: /cloudsql/jaybird-connect:us-east1:jaybird-db
   DB_NAME: sonomas_menu
   DB_USER: postgres
   DB_PASSWORD: bagels4life
+  FLASK_ENV: "production"
+  ALLOWED_ORIGINS: "https://jaybird-connect.web.app,http://localhost:5173"
 
 beta_settings:
   cloud_sql_instances: jaybird-connect:us-east1:jaybird-db

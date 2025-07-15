@@ -1,8 +1,6 @@
 from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from functools import wraps
-from flask_cors import cross_origin
-import json
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -15,24 +13,7 @@ def token_required(f):
 
         try:
             google_id = auth_header.split('|')[0] if '|' in auth_header else auth_header
-            print(f"Checking auth for google_id: {google_id}")
             cursor = get_db_cursor()
-            
-            # First, let's see what we find without the active check
-            cursor.execute("""
-                SELECT e.*, d.name as department_name 
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE (e.google_sub = %s OR e.email = %s)
-            """, (google_id, google_id))
-            test_employee = cursor.fetchone()
-            if test_employee:
-                print(f"Found employee without active check: {json.dumps(dict(test_employee))}")
-                print(f"Active status: {test_employee['active']}, Type: {type(test_employee['active'])}")
-            else:
-                print("No employee found at all")
-
-            # Now do the actual query
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
@@ -55,20 +36,9 @@ def token_required(f):
     return decorated
 
 @auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
-@cross_origin(
-    origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
-    methods=["POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-    supports_credentials=True,
-    expose_headers=["Access-Control-Allow-Origin"],
-    allow_origin="*"
-)
 def verify_auth():
     if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
-        response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
-        return response
+        return jsonify({'status': 'ok'})
 
     try:
         data = request.get_json()
@@ -79,8 +49,6 @@ def verify_auth():
         name = data.get('name')
         google_id = data.get('googleId')
 
-        print(f"Verify auth request - Email: {email}, Name: {name}, Google ID: {google_id}")
-
         if not email or not name:
             return jsonify({'error': 'Missing required fields'}), 400
 
@@ -88,21 +56,6 @@ def verify_auth():
         employee = None
         
         try:
-            # First query without active check
-            cursor.execute("""
-                SELECT e.*, d.name as department_name 
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s
-            """, (email,))
-            test_employee = cursor.fetchone()
-            if test_employee:
-                print(f"Found employee without active check: {json.dumps(dict(test_employee))}")
-                print(f"Active status: {test_employee['active']}, Type: {type(test_employee['active'])}")
-            else:
-                print("No employee found at all")
-
-            # Actual query
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
@@ -129,7 +82,7 @@ def verify_auth():
         finally:
             cursor.close()
 
-        response = jsonify({
+        return jsonify({
             'employee_id': employee['employee_id'],
             'name': employee['name'],
             'email': employee['email'],
@@ -138,10 +91,6 @@ def verify_auth():
             'department_id': employee.get('department_id'),
             'isActive': employee['active']
         })
-        
-        response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
-        response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
-        return response
 
     except Exception as e:
         print(f"Error in verify_auth: {str(e)}")
@@ -149,18 +98,8 @@ def verify_auth():
 
 @auth_bp.route('/api/auth/check', methods=['GET'])
 @token_required
-@cross_origin(
-    origins=["http://localhost:5173", "https://jaybird-connect.web.app"],
-    methods=["GET", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-    supports_credentials=True,
-    expose_headers=["Access-Control-Allow-Origin"]
-)
 def check_auth():
-    response = jsonify({
+    return jsonify({
         'status': 'valid',
         'user': request.user
     })
-    response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
-    response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
-    return response
