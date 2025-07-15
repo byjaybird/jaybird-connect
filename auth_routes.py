@@ -6,8 +6,6 @@ from flask_cors import cross_origin
 
 auth_bp = Blueprint('auth', __name__)
 
-# Move token_required decorator into a separate authenticated route
-@auth_bp.route('/api/auth/check', methods=['GET'])
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -38,8 +36,7 @@ def token_required(f):
 
     return decorated
 
-# Initial auth verification - no token required
-@auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
+@auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'], endpoint='verify_auth')
 @cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
              methods=["POST", "OPTIONS"],
              allow_headers=["Content-Type", "Authorization"],
@@ -48,8 +45,8 @@ def verify_auth():
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'})
 
-    try:
         data = request.get_json()
+
         if not data:
             return jsonify({'error': 'No JSON data received'}), 400
 
@@ -62,7 +59,6 @@ def verify_auth():
 
         cursor = get_db_cursor()
         try:
-            # Check if employee exists and is active
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
@@ -76,7 +72,6 @@ def verify_auth():
                     'error': 'User not authorized. Please contact your administrator to request access.'
                 }), 403
 
-            # Update last login and google_sub if provided
             if google_id:
                 cursor.execute("""
                     UPDATE employees
@@ -104,10 +99,13 @@ def verify_auth():
                 'department_id': employee.get('department_id'),
                 'isActive': employee['active']
             })
-
         finally:
             cursor.close()
 
-    except Exception as e:
-        print(f"Error in verify_auth: {str(e)}")
-        return jsonify({'error': 'Internal server error during authentication'}), 500
+@auth_bp.route('/api/auth/check', methods=['GET'])
+@token_required
+def check_auth():
+    return jsonify({
+        'status': 'valid',
+        'user': request.user
+    })

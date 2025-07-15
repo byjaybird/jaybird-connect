@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+# Configure CORS
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:5173", "https://jaybird-connect.web.app"],
@@ -24,6 +25,71 @@ CORS(app, resources={
         "supports_credentials": True
     }
 })
+
+# Global auth middleware
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # Skip auth for these endpoints
+        if request.endpoint in ['verify_auth'] or request.method == 'OPTIONS':
+            return f(*args, **kwargs)
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Authentication token is missing'}), 401
+
+        try:
+            email = auth_header.split('|')[1] if '|' in auth_header else auth_header
+            cursor = get_db_cursor()
+            cursor.execute("""
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.email = %s AND e.active = TRUE
+            """, (email,))
+            employee = cursor.fetchone()
+            cursor.close()
+
+            if not employee:
+                return jsonify({'error': 'Employee not found or inactive'}), 401
+
+            request.user = employee
+            return f(*args, **kwargs)
+        except Exception as e:
+            return jsonify({'error': 'Invalid authentication'}), 401
+
+    return decorated
+
+# Apply auth middleware globally except for excluded routes
+@app.before_request
+def auth_before_request():
+    # Skip auth for verify endpoint and OPTIONS requests
+    if request.endpoint == 'verify_auth' or request.method == 'OPTIONS':
+        return None
+        
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'error': 'Authentication token is missing'}), 401
+
+    try:
+        email = auth_header.split('|')[1] if '|' in auth_header else auth_header
+        cursor = get_db_cursor()
+        cursor.execute("""
+            SELECT e.*, d.name as department_name 
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.department_id
+            WHERE e.email = %s AND e.active = TRUE
+        """, (email,))
+        employee = cursor.fetchone()
+        cursor.close()
+
+        if not employee:
+            return jsonify({'error': 'Employee not found or inactive'}), 401
+
+        request.user = employee
+    except Exception as e:
+        return jsonify({'error': 'Invalid authentication'}), 401
+
 
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
