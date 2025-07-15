@@ -6,6 +6,8 @@ from flask_cors import cross_origin
 
 auth_bp = Blueprint('auth', __name__)
 
+# Move token_required decorator into a separate authenticated route
+@auth_bp.route('/api/auth/check', methods=['GET'])
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -36,14 +38,13 @@ def token_required(f):
 
     return decorated
 
+# Initial auth verification - no token required
 @auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
 @cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
              methods=["POST", "OPTIONS"],
              allow_headers=["Content-Type", "Authorization"],
-             supports_credentials=True,
-             max_age=3600)
+             supports_credentials=True)
 def verify_auth():
-    # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'})
 
@@ -54,13 +55,14 @@ def verify_auth():
 
         email = data.get('email')
         name = data.get('name')
+        google_id = data.get('googleId')
 
         if not email or not name:
             return jsonify({'error': 'Missing required fields (email and name)'}), 400
 
         cursor = get_db_cursor()
         try:
-            # First check if the employee exists and is active
+            # Check if employee exists and is active
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
@@ -74,17 +76,25 @@ def verify_auth():
                     'error': 'User not authorized. Please contact your administrator to request access.'
                 }), 403
 
-            # Update last login time
-            cursor.execute("""
-                UPDATE employees
-                SET last_login = CURRENT_TIMESTAMP
-                WHERE employee_id = %s
-                RETURNING *
-            """, (employee['employee_id'],))
-            
+            # Update last login and google_sub if provided
+            if google_id:
+                cursor.execute("""
+                    UPDATE employees
+                    SET last_login = CURRENT_TIMESTAMP,
+                        google_sub = %s
+                    WHERE employee_id = %s
+                    RETURNING *
+                """, (google_id, employee['employee_id']))
+            else:
+                cursor.execute("""
+                    UPDATE employees
+                    SET last_login = CURRENT_TIMESTAMP
+                    WHERE employee_id = %s
+                    RETURNING *
+                """, (employee['employee_id'],))
+
             cursor.connection.commit()
 
-            # Return user data
             return jsonify({
                 'employee_id': employee['employee_id'],
                 'name': employee['name'],
