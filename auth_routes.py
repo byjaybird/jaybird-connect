@@ -40,63 +40,64 @@ def token_required(f):
 @cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
              methods=["POST", "OPTIONS"],
              allow_headers=["Content-Type", "Authorization"],
-             supports_credentials=True)
+             supports_credentials=True,
+             max_age=3600)
 def verify_auth():
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        return response
+        return jsonify({'status': 'ok'})
 
-    data = request.get_json()
-    email = data.get('email')
-    name = data.get('name')
-    google_id = data.get('googleId')  # This might be None initially
-
-    if not email or not name:  # Only require email and name
-        return jsonify({'error': 'Missing required fields (email and name)'}), 400
-
-    cursor = get_db_cursor()
     try:
-        cursor.execute("""
-            SELECT e.*, d.name as department_name 
-            FROM employees e
-            LEFT JOIN departments d ON e.department_id = d.department_id
-            WHERE e.email = %s AND e.active = TRUE
-        """, (email,))
-        employee = cursor.fetchone()
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
 
-        if not employee:
-            return jsonify({
-                'error': 'User not authorized. Please contact your administrator to request access.'
-            }), 403
+        email = data.get('email')
+        name = data.get('name')
 
-        # Update google_sub only if provided
-        if google_id:
+        if not email or not name:
+            return jsonify({'error': 'Missing required fields (email and name)'}), 400
+
+        cursor = get_db_cursor()
+        try:
+            # First check if the employee exists and is active
             cursor.execute("""
-                UPDATE employees
-                SET last_login = CURRENT_TIMESTAMP,
-                    google_sub = %s
-                WHERE employee_id = %s
-                RETURNING *
-            """, (google_id, employee['employee_id']))
-        else:
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.email = %s AND e.active = TRUE
+            """, (email,))
+            employee = cursor.fetchone()
+
+            if not employee:
+                return jsonify({
+                    'error': 'User not authorized. Please contact your administrator to request access.'
+                }), 403
+
+            # Update last login time
             cursor.execute("""
                 UPDATE employees
                 SET last_login = CURRENT_TIMESTAMP
                 WHERE employee_id = %s
                 RETURNING *
             """, (employee['employee_id'],))
+            
+            cursor.connection.commit()
 
-        cursor.connection.commit()
+            # Return user data
+            return jsonify({
+                'employee_id': employee['employee_id'],
+                'name': employee['name'],
+                'email': employee['email'],
+                'role': employee['role'],
+                'department': employee.get('department_name'),
+                'department_id': employee.get('department_id'),
+                'isActive': employee['active']
+            })
 
-        return jsonify({
-            'employee_id': employee['employee_id'],
-            'name': employee['name'],
-            'email': employee['email'],
-            'role': employee['role'],
-            'department': employee.get('department_name'),
-            'department_id': employee.get('department_id'),
-            'isActive': employee['active']
-        })
-    finally:
-        cursor.close()
+        finally:
+            cursor.close()
+
+    except Exception as e:
+        print(f"Error in verify_auth: {str(e)}")
+        return jsonify({'error': 'Internal server error during authentication'}), 500
