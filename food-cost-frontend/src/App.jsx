@@ -23,6 +23,9 @@ import InventoryScanner from './InventoryScanner';
 import NewReceivingForm from './NewReceivingForm';
 import TasksPage from './components/TasksPage';
 import UserManagement from './components/UserManagement';
+import Login from './components/auth/Login';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
 import { API_URL, GOOGLE_CLIENT_ID } from './config';
 
 function Header({ user, onLogout }) {
@@ -235,6 +238,9 @@ function App() {
           <Header user={user} onLogout={handleLogout} />
           <Routes>
             <Route path="/" element={<ItemsLanding />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/item/:id/edit" element={<EditItem />} />
             <Route path="/item/new" element={<NewItemPage />} />

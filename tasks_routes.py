@@ -1,27 +1,9 @@
 from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from functools import wraps
-from google.oauth2 import id_token
-from google.auth.transport import requests
 import os
-from datetime import datetime
-
+import jwt
 tasks_bp = Blueprint('tasks', __name__)
-
-def verify_google_token(token):
-    try:
-        idinfo = id_token.verify_oauth2_token(
-            token,
-            requests.Request(),
-            os.getenv('GOOGLE_CLIENT_ID')
-        )
-        return {
-            'sub': idinfo['sub'],
-            'email': idinfo['email'],
-            'name': idinfo['name']
-        }
-    except ValueError:
-        return None
 
 def token_required(f):
     @wraps(f)
@@ -29,42 +11,43 @@ def token_required(f):
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'error': 'Authentication token is missing'}), 401
-        if token.startswith('Bearer '):
-            token = token[7:]
-        user_data = verify_google_token(token)
-        if not user_data:
-            return jsonify({'error': 'Invalid or expired token'}), 401
-        request.user = user_data
-        return f(*args, **kwargs)
+        try:
+            if token.startswith('Bearer '):
+                token = token[7:]
+
+            data = jwt.decode(token, os.getenv('JWT_SECRET'), algorithms=['HS256'])
+    cursor = get_db_cursor()
+        cursor.execute("""
+                SELECT e.*, d.name as department_name
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.employee_id = %s AND e.active IS TRUE
+            """, (data['employee_id'],))
+            employee = cursor.fetchone()
+        cursor.close()
+
+            if not employee:
+                return jsonify({'error': 'Employee not found or inactive'}), 401
+
+            request.user = employee
+            return f(*args, **kwargs)
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+    except Exception as e:
+            print(f"Auth error: {str(e)}")
+            return jsonify({'error': 'Invalid authentication'}), 401
+
     return decorated
 
 @tasks_bp.route('/api/auth/verify', methods=['POST'])
+@token_required
 def verify_auth():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': 'Authentication token is missing'}), 401
-    if token.startswith('Bearer '):
-        token = token[7:]
-    user_data = verify_google_token(token)
-    if not user_data:
-        return jsonify({'error': 'Invalid or expired token'}), 401
-    cursor = get_db_cursor()
     try:
-        cursor.execute("""
-            SELECT e.*, d.name as department_name 
-            FROM employees e
-            LEFT JOIN departments d ON e.department_id = d.department_id
-            WHERE e.google_sub = %s AND e.active = TRUE
-        """, (user_data['sub'],))
-        employee = cursor.fetchone()
-        if not employee:
-            cursor.execute("""
-                INSERT INTO employees (email, name, google_sub, role, active)
-                VALUES (%s, %s, %s, 'Employee', TRUE)
-                RETURNING *
-            """, (user_data['email'], user_data['name'], user_data['sub']))
-        employee = cursor.fetchone()
-        cursor.connection.commit()
+        cursor = get_db_cursor()
+        employee = request.user
+
         cursor.execute("""
             UPDATE employees
             SET last_login = NOW()
@@ -143,4 +126,3 @@ def update_task_status(task_id):
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
-
