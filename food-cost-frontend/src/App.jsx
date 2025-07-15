@@ -148,18 +148,25 @@ function AuthGate({ children, setAppUser }) {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
   const [loginError, setLoginError] = useState(null);
 
-  const handleLoginSuccess = async (credentialResponse) => {
+   const handleLoginSuccess = async (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
+      
+      // Prepare auth data - make googleId optional
+      const authData = {
+        email: decoded.email,
+        name: decoded.name
+      };
+
+      // Only include googleId if it exists
+      if (decoded.sub) {
+        authData.googleId = decoded.sub;
+      }
       
       const response = await fetch(`${API_URL}/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: decoded.email,
-          name: decoded.name,
-          googleId: decoded.sub
-        })
+        body: JSON.stringify(authData)
       });
 
       if (!response.ok) {
@@ -169,8 +176,8 @@ function AuthGate({ children, setAppUser }) {
 
       const userData = await response.json();
       
-      // Store auth info
-      const authToken = `${decoded.sub}|${decoded.email}`;
+      // Store auth info - store email only if no Google ID
+      const authToken = decoded.sub ? `${decoded.sub}|${decoded.email}` : decoded.email;
       localStorage.setItem('authToken', authToken);
       localStorage.setItem('user', JSON.stringify(userData));
       
@@ -186,7 +193,7 @@ function AuthGate({ children, setAppUser }) {
       localStorage.removeItem('user');
     }
   };
-
+  
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">

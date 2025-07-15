@@ -43,8 +43,8 @@ def verify_auth():
     name = data.get('name')
     google_id = data.get('googleId')
 
-    if not all([email, name, google_id]):
-        return jsonify({'error': 'Missing required fields'}), 400
+    if not email or not name:
+        return jsonify({'error': 'Missing required fields (email and name)'}), 400
 
     cursor = get_db_cursor()
     try:
@@ -61,6 +61,7 @@ def verify_auth():
                 'error': 'User not authorized. Please contact your administrator to request access.'
             }), 403
 
+        if google_id:
         cursor.execute("""
             UPDATE employees
             SET last_login = CURRENT_TIMESTAMP,
@@ -68,6 +69,14 @@ def verify_auth():
             WHERE employee_id = %s
             RETURNING *
         """, (google_id, employee['employee_id']))
+        else:
+            cursor.execute("""
+                UPDATE employees
+                SET last_login = CURRENT_TIMESTAMP
+                WHERE employee_id = %s
+                RETURNING *
+            """, (employee['employee_id'],))
+
         cursor.connection.commit()
 
         return jsonify({
