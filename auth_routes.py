@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from functools import wraps
-from datetime import datetime
 from flask_cors import cross_origin
 
 auth_bp = Blueprint('auth', __name__)
@@ -64,9 +63,8 @@ def verify_auth():
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND (e.active = 'true' OR e.active = TRUE)
+                WHERE e.email = %s AND LOWER(e.active::text) = 'true'
             """, (email,))
-
             employee = cursor.fetchone()
 
             if not employee:
@@ -81,10 +79,10 @@ def verify_auth():
                 WHERE employee_id = %s
                 RETURNING *
             """, (google_id, employee['employee_id']))
-            
+
             cursor.connection.commit()
 
-            return jsonify({
+    return jsonify({
                 'employee_id': employee['employee_id'],
                 'name': employee['name'],
                 'email': employee['email'],
@@ -92,7 +90,7 @@ def verify_auth():
                 'department': employee.get('department_name'),
                 'department_id': employee.get('department_id'),
                 'isActive': employee['active']
-            })
+    })
         finally:
             cursor.close()
 
