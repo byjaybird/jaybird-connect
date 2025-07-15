@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from functools import wraps
 from flask_cors import cross_origin
+import json
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -14,12 +15,29 @@ def token_required(f):
 
         try:
             google_id = auth_header.split('|')[0] if '|' in auth_header else auth_header
+            print(f"Checking auth for google_id: {google_id}")
             cursor = get_db_cursor()
+            
+            # First, let's see what we find without the active check
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE (e.google_sub = %s OR e.email = %s) AND e.active = TRUE
+                WHERE (e.google_sub = %s OR e.email = %s)
+            """, (google_id, google_id))
+            test_employee = cursor.fetchone()
+            if test_employee:
+                print(f"Found employee without active check: {json.dumps(dict(test_employee))}")
+                print(f"Active status: {test_employee['active']}, Type: {type(test_employee['active'])}")
+            else:
+                print("No employee found at all")
+
+            # Now do the actual query
+            cursor.execute("""
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE (e.google_sub = %s OR e.email = %s) AND e.active IS TRUE
             """, (google_id, google_id))
             employee = cursor.fetchone()
             cursor.close()
@@ -61,6 +79,8 @@ def verify_auth():
         name = data.get('name')
         google_id = data.get('googleId')
 
+        print(f"Verify auth request - Email: {email}, Name: {name}, Google ID: {google_id}")
+
         if not email or not name:
             return jsonify({'error': 'Missing required fields'}), 400
 
@@ -68,13 +88,26 @@ def verify_auth():
         employee = None
         
         try:
-            print(f"Attempting to verify user - Email: {email}, Google ID: {google_id}")
-            
+            # First query without active check
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND e.active = TRUE
+                WHERE e.email = %s
+            """, (email,))
+            test_employee = cursor.fetchone()
+            if test_employee:
+                print(f"Found employee without active check: {json.dumps(dict(test_employee))}")
+                print(f"Active status: {test_employee['active']}, Type: {type(test_employee['active'])}")
+            else:
+                print("No employee found at all")
+
+            # Actual query
+            cursor.execute("""
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.email = %s AND e.active IS TRUE
             """, (email,))
             employee = cursor.fetchone()
 
