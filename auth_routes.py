@@ -14,9 +14,7 @@ def token_required(f):
                 return jsonify({'error': 'Authentication token is missing'}), 401
 
         try:
-            # Handle both token formats
             google_id = auth_header.split('|')[0] if '|' in auth_header else auth_header
-            
             cursor = get_db_cursor()
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
@@ -39,7 +37,6 @@ def token_required(f):
 
     return decorated
 
-# Remove @token_required from verify endpoint
 @auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
 @cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
              methods=["POST", "OPTIONS"],
@@ -58,18 +55,18 @@ def verify_auth():
         name = data.get('name')
         google_id = data.get('googleId')
 
-        if not email or not name or not google_id:
+        if not email or not name:
             return jsonify({'error': 'Missing required fields'}), 400
 
         cursor = get_db_cursor()
         try:
-            # First check by email since that's what's in the employees table
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND e.active = TRUE
+                WHERE e.email = %s AND (e.active = 'true' OR e.active = TRUE)
             """, (email,))
+
             employee = cursor.fetchone()
 
             if not employee:
@@ -77,7 +74,6 @@ def verify_auth():
                     'error': 'User not authorized. Please contact your administrator to request access.'
                 }), 403
 
-            # Update the Google ID and last login
             cursor.execute("""
                 UPDATE employees
                 SET last_login = CURRENT_TIMESTAMP,
@@ -104,7 +100,6 @@ def verify_auth():
         print(f"Error in verify_auth: {str(e)}")
         return jsonify({'error': 'Internal server error during authentication'}), 500
 
-# Keep @token_required for protected routes
 @auth_bp.route('/api/auth/check', methods=['GET'])
 @token_required
 def check_auth():
