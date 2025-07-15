@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from functools import wraps
 from datetime import datetime
+from flask_cors import cross_origin
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -35,15 +36,23 @@ def token_required(f):
 
     return decorated
 
-@auth_bp.route('/api/auth/verify', methods=['POST'])
+@auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
+@cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
+             methods=["POST", "OPTIONS"],
+             allow_headers=["Content-Type", "Authorization"],
+             supports_credentials=True)
 def verify_auth():
-    data = request.get_json()
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        return response
 
+    data = request.get_json()
     email = data.get('email')
     name = data.get('name')
-    google_id = data.get('googleId')
+    google_id = data.get('googleId')  # This might be None initially
 
-    if not email or not name:
+    if not email or not name:  # Only require email and name
         return jsonify({'error': 'Missing required fields (email and name)'}), 400
 
     cursor = get_db_cursor()
@@ -61,14 +70,15 @@ def verify_auth():
                 'error': 'User not authorized. Please contact your administrator to request access.'
             }), 403
 
+        # Update google_sub only if provided
         if google_id:
-        cursor.execute("""
-            UPDATE employees
-            SET last_login = CURRENT_TIMESTAMP,
-                google_sub = %s
-            WHERE employee_id = %s
-            RETURNING *
-        """, (google_id, employee['employee_id']))
+            cursor.execute("""
+                UPDATE employees
+                SET last_login = CURRENT_TIMESTAMP,
+                    google_sub = %s
+                WHERE employee_id = %s
+                RETURNING *
+            """, (google_id, employee['employee_id']))
         else:
             cursor.execute("""
                 UPDATE employees
