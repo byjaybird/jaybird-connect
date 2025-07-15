@@ -58,6 +58,8 @@ def verify_auth():
             return jsonify({'error': 'Missing required fields'}), 400
 
         cursor = get_db_cursor()
+        employee = None
+        
         try:
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
@@ -81,18 +83,18 @@ def verify_auth():
             """, (google_id, employee['employee_id']))
 
             cursor.connection.commit()
-
-    return jsonify({
-                'employee_id': employee['employee_id'],
-                'name': employee['name'],
-                'email': employee['email'],
-                'role': employee['role'],
-                'department': employee.get('department_name'),
-                'department_id': employee.get('department_id'),
-                'isActive': employee['active']
-    })
         finally:
             cursor.close()
+
+        return jsonify({
+            'employee_id': employee['employee_id'],
+            'name': employee['name'],
+            'email': employee['email'],
+            'role': employee['role'],
+            'department': employee.get('department_name'),
+            'department_id': employee.get('department_id'),
+            'isActive': employee['active']
+        })
 
     except Exception as e:
         print(f"Error in verify_auth: {str(e)}")
