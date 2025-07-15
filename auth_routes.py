@@ -37,13 +37,20 @@ def token_required(f):
     return decorated
 
 @auth_bp.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
-             methods=["POST", "OPTIONS"],
-             allow_headers=["Content-Type", "Authorization"],
-             supports_credentials=True)
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app"], 
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+    supports_credentials=True,
+    expose_headers=["Access-Control-Allow-Origin"],
+    allow_origin="*"
+)
 def verify_auth():
     if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'})
+        response = jsonify({'status': 'ok'})
+        response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
+        response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
+        return response
 
     try:
         data = request.get_json()
@@ -61,15 +68,18 @@ def verify_auth():
         employee = None
         
         try:
+            print(f"Attempting to verify user - Email: {email}, Google ID: {google_id}")
+            
             cursor.execute("""
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND LOWER(e.active::text) = 'true'
+                WHERE e.email = %s AND e.active = TRUE
             """, (email,))
             employee = cursor.fetchone()
 
             if not employee:
+                print(f"No active employee found for email: {email}")
                 return jsonify({
                     'error': 'User not authorized. Please contact your administrator to request access.'
                 }), 403
@@ -86,7 +96,7 @@ def verify_auth():
         finally:
             cursor.close()
 
-        return jsonify({
+        response = jsonify({
             'employee_id': employee['employee_id'],
             'name': employee['name'],
             'email': employee['email'],
@@ -95,6 +105,10 @@ def verify_auth():
             'department_id': employee.get('department_id'),
             'isActive': employee['active']
         })
+        
+        response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
+        response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
+        return response
 
     except Exception as e:
         print(f"Error in verify_auth: {str(e)}")
@@ -102,8 +116,18 @@ def verify_auth():
 
 @auth_bp.route('/api/auth/check', methods=['GET'])
 @token_required
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app"],
+    methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+    supports_credentials=True,
+    expose_headers=["Access-Control-Allow-Origin"]
+)
 def check_auth():
-    return jsonify({
+    response = jsonify({
         'status': 'valid',
         'user': request.user
     })
+    response.headers['Cross-Origin-Opener-Policy'] = 'unsafe-none'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
+    return response
