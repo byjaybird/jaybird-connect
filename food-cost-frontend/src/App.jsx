@@ -152,21 +152,17 @@ function AuthGate({ children, setAppUser }) {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
       
-      // Prepare auth data - make googleId optional
-      const authData = {
-        email: decoded.email,
-        name: decoded.name
-      };
-
-      // Only include googleId if it exists
-      if (decoded.sub) {
-        authData.googleId = decoded.sub;
-      }
-      
       const response = await fetch(`${API_URL}/auth/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(authData)
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': decoded.sub  // Add Google ID as Authorization header
+        },
+        body: JSON.stringify({
+          email: decoded.email,
+          name: decoded.name,
+          googleId: decoded.sub
+        })
       });
 
       if (!response.ok) {
@@ -176,8 +172,8 @@ function AuthGate({ children, setAppUser }) {
 
       const userData = await response.json();
       
-      // Store auth info - store email only if no Google ID
-      const authToken = decoded.sub ? `${decoded.sub}|${decoded.email}` : decoded.email;
+      // Store auth info using Google ID
+      const authToken = decoded.sub;
       localStorage.setItem('authToken', authToken);
       localStorage.setItem('user', JSON.stringify(userData));
       
