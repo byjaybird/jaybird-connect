@@ -15,14 +15,15 @@ from auth_routes import auth_bp
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)
-# Configure CORS
+app = Flask(__name__)# Configure CORS
 CORS(app, resources={
-    r"/api/*": {
+    r"/*": {
         "origins": ["http://localhost:5173", "https://jaybird-connect.web.app"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
+        "expose_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "max_age": 600
     }
 })
 

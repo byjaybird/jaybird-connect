@@ -12,13 +12,14 @@ const handleSubmit = async (e) => {
   e.preventDefault();
   setError('');
 
-  try {
-    const response = await fetch(`${API_URL}/auth/login`, {
+  try {const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
+      mode: 'cors',
+      credentials: 'include'
     });
 
     const data = await response.json();
