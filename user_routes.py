@@ -5,7 +5,7 @@ from datetime import datetime
 
 user_bp = Blueprint('user', __name__)
 
-@user_bp.route('/api/users', methods=['GET'])
+@user_bp.route('/users', methods=['GET'])
 @token_required
 def get_users():
     cursor = get_db_cursor()
@@ -25,11 +25,17 @@ def get_users():
             ORDER BY e.created_at DESC
         """)
         users = cursor.fetchall()
+        # Convert datetime objects to strings to make them JSON serializable
+        for user in users:
+            if user['created_at']:
+                user['created_at'] = user['created_at'].isoformat()
+            if user['last_login']:
+                user['last_login'] = user['last_login'].isoformat()
         return jsonify(users)
     finally:
         cursor.close()
 
-@user_bp.route('/api/users', methods=['POST'])
+@user_bp.route('/users', methods=['POST'])
 @token_required
 def create_user():
     if request.user['role'] != 'Admin':
@@ -68,7 +74,7 @@ def create_user():
     finally:
         cursor.close()
 
-@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@user_bp.route('/users/<int:user_id>', methods=['PATCH'])
 @token_required
 def update_user(user_id):
     if request.user['role'] != 'Admin':

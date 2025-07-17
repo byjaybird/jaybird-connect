@@ -19,16 +19,16 @@ function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/users`, {
+      const response = await fetch(`${API_URL}/users`, {
         headers: {
-          'Authorization': localStorage.getItem('authToken')
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
-      setUsers(data);
-    } catch (error) {
+      setUsers(data);} catch (error) {
       console.error('Error fetching users:', error);
+      alert('Failed to load users: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -37,16 +37,17 @@ function UserManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/users`, {
+      const response = await fetch(`${API_URL}/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': localStorage.getItem('authToken')
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(newUser)
-      });
-      
-      if (!response.ok) throw new Error('Failed to create user');
+      });const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user');
+      }
       
       await fetchUsers(); // Refresh user list
       setNewUser({ // Reset form
@@ -55,20 +56,19 @@ function UserManagement() {
         role: 'Employee',
         department_id: '',
         active: true
-      });
-    } catch (error) {
+      });} catch (error) {
       console.error('Error creating user:', error);
-      alert('Failed to create user');
+      alert(error.message || 'Failed to create user');
     }
   };
 
   const toggleUserActive = async (userId, currentActive) => {
     try {
-      const response = await fetch(`${API_URL}/api/users/${userId}`, {
+      const response = await fetch(`${API_URL}/users/${userId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': localStorage.getItem('authToken')
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ active: !currentActive })
       });

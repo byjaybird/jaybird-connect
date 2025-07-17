@@ -22,13 +22,12 @@ const handleSubmit = async (e) => {
       credentials: 'include'
     });
 
-    const data = await response.json();if (response.ok) {
-      console.log('✅ Login successful:', data);
+    const data = await response.json();if (response.ok) {console.log('✅ Login successful:', data);
       localStorage.setItem('token', data.token);
       // Set the user state with the employee data
       setUser(data.employee);
-      // Navigate to the home page
-      navigate('/');
+      // Keep the dashboard navigation - we'll build this page later
+      navigate('/dashboard');
     } else {
       console.warn('❌ Login failed:', data);
 

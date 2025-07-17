@@ -94,11 +94,12 @@ function App() {
   return (
         <Router>
           <Header user={user} onLogout={handleLogout} />
-          <Routes>
-        <Route path="/login" element={<Login setUser={setUser} />} />
+          <Routes><Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
+        {/* Temporary dashboard redirect until we build the dashboard */}
+        <Route path="/dashboard" element={<PrivateRoute><Navigate to="/" replace /></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><ItemsLanding /></PrivateRoute>} />
         <Route path="/item/:id" element={<PrivateRoute><ItemDetail /></PrivateRoute>} />
         <Route path="/item/:id/edit" element={<PrivateRoute><EditItem /></PrivateRoute>} />

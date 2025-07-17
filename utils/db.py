@@ -11,10 +11,13 @@ def get_db_connection():
     )
     conn.autocommit = True
     return conn
-
 def get_db_cursor():
-    conn = get_db_connection()
-    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        conn = get_db_connection()
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    except Exception as e:
+        print(f"Database connection error: {str(e)}")
+        raise
 def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
     cursor = get_db_cursor()
     try:
