@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
+import { checkAuthStatus, getAuthHeaders } from '../utils/auth';
 
 function UserManagement() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newUser, setNewUser] = useState({
@@ -15,18 +18,34 @@ function UserManagement() {
   // Fetch users
   useEffect(() => {
     fetchUsers();
-  }, []);const fetchUsers = async () => {
+  }, []);
+
+  const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('token');
-      console.log('Token being used:', token); // Debug log
+      // Check auth status first
+      await checkAuthStatus();
+      
       const response = await fetch(`${API_URL}/users`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include'
       });
-      if (!response.ok) throw new Error('Failed to fetch users');
+
+      if (response.status === 401) {
+        console.error('Unauthorized - Token might be invalid or expired');
+        const responseText = await response.text();
+        console.error('Response:', responseText);
+        navigate('/login');
+        throw new Error('Please login again');
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
       const data = await response.json();
-      setUsers(data);} catch (error) {
+      setUsers(data);
+    } catch (error) {
       console.error('Error fetching users:', error);
       alert('Failed to load users: ' + (error.message || 'Unknown error'));
     } finally {
@@ -35,16 +54,16 @@ function UserManagement() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
+    e.preventDefault();try {
+      await checkAuthStatus();
+      
       const response = await fetch(`${API_URL}/users`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(newUser)
-      });const data = await response.json();
+      });
+      
+      const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create user');
       }
@@ -64,12 +83,11 @@ function UserManagement() {
 
   const toggleUserActive = async (userId, currentActive) => {
     try {
+      await checkAuthStatus();
+      
       const response = await fetch(`${API_URL}/users/${userId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ active: !currentActive })
       });
       
