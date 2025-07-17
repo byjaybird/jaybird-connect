@@ -6,12 +6,11 @@ automatic_scaling:
   target_cpu_utilization: 0.65
   min_instances: 1
   max_instances: 2
-
 handlers:
 - url: /.*
-  script: autow
   secure: always
   redirect_http_response_code: 301
+  script: auto
 
 env_variables:
   PORT: 8080
