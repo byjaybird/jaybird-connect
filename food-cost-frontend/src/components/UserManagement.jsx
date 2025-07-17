@@ -15,10 +15,10 @@ function UserManagement() {
   // Fetch users
   useEffect(() => {
     fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  }, []);const fetchUsers = async () => {
     try {
+      const token = localStorage.getItem('token');
+      console.log('Token being used:', token); // Debug log
       const response = await fetch(`${API_URL}/users`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

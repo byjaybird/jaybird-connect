@@ -3,11 +3,12 @@ from flask_cors import cross_origin
 from utils.db import get_db_cursor
 from auth_routes import token_required
 from datetime import datetime
+from functools import wraps
 
 user_bp = Blueprint('user', __name__)
 
 # Add OPTIONS request handling
-@user_bp.route('/users', methods=['GET'])
+@user_bp.route('/api/users', methods=['OPTIONS'])
 @cross_origin()
 def handle_users_options():
     response = make_response()
@@ -22,8 +23,6 @@ def handle_user_options(user_id):
     response.headers.add('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     return response
-
-user_bp = Blueprint('user', __name__)
 
 @user_bp.route('/api/users', methods=['GET'])
 @cross_origin()
@@ -54,11 +53,9 @@ def get_users():
                 user['last_login'] = user['last_login'].isoformat()
         return jsonify(users)
     finally:
-        cursor.close()
-
-@user_bp.route('/users', methods=['POST'])
-@cross_origin()
+        cursor.close()@user_bp.route('/api/users', methods=['POST'])
 @token_required
+@cross_origin()
 def create_user():
     if request.user['role'] != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
@@ -94,11 +91,9 @@ def create_user():
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()
-
-@user_bp.route('/users/<int:user_id>', methods=['PATCH'])
-@cross_origin()
+        cursor.close()@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
 @token_required
+@cross_origin()
 def update_user(user_id):
     if request.user['role'] != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
