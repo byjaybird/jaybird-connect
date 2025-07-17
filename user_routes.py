@@ -5,27 +5,60 @@ from auth_routes import token_required
 from datetime import datetime
 from functools import wraps
 
-user_bp = Blueprint('user', __name__)
-
-# Add OPTIONS request handling
+user_bp = Blueprint('user', __name__)# Add OPTIONS request handling
 @user_bp.route('/api/users', methods=['OPTIONS'])
-@cross_origin()
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "User-Agent",
+        "Accept",
+        "Origin",
+        "Referer",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-Dest",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+    ],
+    methods=["GET", "POST", "PATCH", "OPTIONS"],
+    supports_credentials=True,
+    max_age=600
+)
 def handle_users_options():
     response = make_response()
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     return response
 
 @user_bp.route('/api/users/<int:user_id>', methods=['OPTIONS'])
-@cross_origin()
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "User-Agent",
+        "Accept",
+        "Origin",
+        "Referer",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-Dest",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+    ],
+    methods=["GET", "PATCH", "OPTIONS"],
+    supports_credentials=True,
+    max_age=600
+)
 def handle_user_options(user_id):
     response = make_response()
-    response.headers.add('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    return response
-
-@user_bp.route('/api/users', methods=['GET'])
-@cross_origin()
+    return response@user_bp.route('/api/users', methods=['GET'])
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
+    supports_credentials=True
+)
 @token_required
 def get_users():
     cursor = get_db_cursor()
@@ -54,8 +87,11 @@ def get_users():
         return jsonify(users)
     finally:
         cursor.close()@user_bp.route('/api/users', methods=['POST'])
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
+    supports_credentials=True
+)
 @token_required
-@cross_origin()
 def create_user():
     if request.user['role'] != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
@@ -92,8 +128,11 @@ def create_user():
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@cross_origin(
+    origins=["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
+    supports_credentials=True
+)
 @token_required
-@cross_origin()
 def update_user(user_id):
     if request.user['role'] != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
