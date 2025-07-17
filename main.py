@@ -22,9 +22,22 @@ CORS(app, resources={r"/*": {
             "http://localhost:5173",
             "https://jaybird-connect.web.app",
             "https://jaybird-connect.ue.r.appspot.com"
-            ],
+        ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization"],
+        "allow_headers": [
+            "Content-Type",
+            "Authorization",
+            "User-Agent",
+            "Accept",
+            "Origin",
+            "Referer",
+            "Sec-Fetch-Mode",
+            "Sec-Fetch-Site",
+            "Sec-Fetch-Dest",
+            "sec-ch-ua",
+            "sec-ch-ua-mobile",
+            "sec-ch-ua-platform"
+        ],
         "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
         "max_age": 600
