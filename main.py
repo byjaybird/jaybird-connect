@@ -16,9 +16,13 @@ from user_routes import user_bp
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)# Configure CORS
+app = Flask(__name__)  # Create Flask app
 CORS(app, resources={r"/*": {
-        "origins": ["http://localhost:5173", "https://jaybird-connect.web.app"],
+        "origins": [
+            "http://localhost:5173",
+            "https://jaybird-connect.web.app",
+            "https://jaybird-connect.ue.r.appspot.com"
+            ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Content-Type", "Authorization"],

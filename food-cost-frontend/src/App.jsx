@@ -41,7 +41,7 @@ function Header({ user, onLogout }) {
             <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
             <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
             {user?.role === 'Admin' && (
-              <Link to="/users" className="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">User Management</Link>
+              <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
             )}
           </>
         ) : user ? (
