@@ -12,14 +12,14 @@ from inventory_routes import inventory_bp
 from receiving_routes import receiving_bp
 from tasks_routes import tasks_bp
 from auth_routes import auth_bp
+from user_routes import user_bp
 from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)# Configure CORS
-CORS(app, resources={
-    r"/*": {
+CORS(app, resources={r"/*": {
         "origins": ["http://localhost:5173", "https://jaybird-connect.web.app"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
@@ -95,6 +95,7 @@ app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(user_bp)
 
 try:
     test_conn = psycopg2.connect(
