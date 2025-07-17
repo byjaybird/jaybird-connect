@@ -60,11 +60,10 @@ def require_auth(f):
 
     return decorated
 
-# Apply auth middleware globally except for excluded routes
-@app.before_request
+# Apply auth middleware globally except for excluded routes@app.before_request
 def auth_before_request():
-    # Skip auth for verify endpoint and OPTIONS requests
-    if request.endpoint == 'verify_auth' or request.method == 'OPTIONS':
+    # Skip auth for login, verify endpoint and OPTIONS requests
+    if request.endpoint in ['auth.login', 'verify_auth'] or request.method == 'OPTIONS':
         return None
         
     auth_header = request.headers.get('Authorization')
