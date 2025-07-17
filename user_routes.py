@@ -4,6 +4,8 @@ from utils.db import get_db_cursor
 from auth_routes import token_required
 from datetime import datetime
 
+user_bp = Blueprint('user', __name__)
+
 # Add OPTIONS request handling
 @user_bp.route('/users', methods=['GET'])
 @cross_origin()
