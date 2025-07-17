@@ -5,7 +5,7 @@ from auth_routes import token_required
 from datetime import datetime
 
 # Add OPTIONS request handling
-@user_bp.route('/api/users', methods=['OPTIONS'])
+@user_bp.route('/users', methods=['GET'])
 @cross_origin()
 def handle_users_options():
     response = make_response()
@@ -54,7 +54,7 @@ def get_users():
     finally:
         cursor.close()
 
-@user_bp.route('/api/users', methods=['POST'])
+@user_bp.route('/users', methods=['POST'])
 @cross_origin()
 @token_required
 def create_user():
@@ -94,7 +94,7 @@ def create_user():
     finally:
         cursor.close()
 
-@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@user_bp.route('/users/<int:user_id>', methods=['PATCH'])
 @cross_origin()
 @token_required
 def update_user(user_id):
