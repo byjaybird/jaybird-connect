@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)# Configure CORS
-CORS(app, resources={r"/*": {
+CORS(app, resources={r"/api/*": {
         "origins": ["http://localhost:5173", "https://jaybird-connect.web.app"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization"],

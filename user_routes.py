@@ -1,11 +1,30 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
+from flask_cors import cross_origin
 from utils.db import get_db_cursor
 from auth_routes import token_required
 from datetime import datetime
 
+# Add OPTIONS request handling
+@user_bp.route('/api/users', methods=['OPTIONS'])
+@cross_origin()
+def handle_users_options():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return response
+
+@user_bp.route('/api/users/<int:user_id>', methods=['OPTIONS'])
+@cross_origin()
+def handle_user_options(user_id):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return response
+
 user_bp = Blueprint('user', __name__)
 
-@user_bp.route('/users', methods=['GET'])
+@user_bp.route('/api/users', methods=['GET'])
+@cross_origin()
 @token_required
 def get_users():
     cursor = get_db_cursor()
@@ -35,7 +54,8 @@ def get_users():
     finally:
         cursor.close()
 
-@user_bp.route('/users', methods=['POST'])
+@user_bp.route('/api/users', methods=['POST'])
+@cross_origin()
 @token_required
 def create_user():
     if request.user['role'] != 'Admin':
@@ -74,7 +94,8 @@ def create_user():
     finally:
         cursor.close()
 
-@user_bp.route('/users/<int:user_id>', methods=['PATCH'])
+@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@cross_origin()
 @token_required
 def update_user(user_id):
     if request.user['role'] != 'Admin':
