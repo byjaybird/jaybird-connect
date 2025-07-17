@@ -7,32 +7,49 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
 
-      const data = await response.json();
-      
-      if (response.ok) {
-        // Store the token in localStorage
-        localStorage.setItem('token', data.token);
-        navigate('/dashboard');
-      } else {
-        setError(data.message || 'Login failed');
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('✅ Login successful:', data);
+      localStorage.setItem('token', data.token);
+      navigate('/dashboard');
+    } else {
+      console.warn('❌ Login failed:', data);
+
+      // Check for known messages and display them
+      let userMessage = 'Login failed';
+
+      if (data.message === 'User not found') {
+        userMessage = 'No account found with that email address.';
+      } else if (data.message === 'Incorrect password') {
+        userMessage = 'Incorrect password. Please try again.';
+      } else if (data.message === 'User not active') {
+        userMessage = 'Account is not active. Please contact support.';
+      } else if (data.message) {
+        userMessage = data.message;
       }
-    } catch (err) {
-      setError('An error occurred during login');
+
+      setError(userMessage);
     }
-  };
+  } catch (err) {
+    console.error('💥 Network or server error during login:', err);
+    setError('An error occurred during login. Please try again later.');
+  }
+};
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

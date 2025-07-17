@@ -79,16 +79,19 @@ def login():
                 SELECT e.*, d.name as department_name 
                 FROM employees e
                 LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND e.active IS TRUE
+                WHERE e.email = %s
             """, (email,))
             employee = cursor.fetchone()
 
             if not employee:
-                return jsonify({'error': 'Invalid email or password'}), 401
+                return jsonify({'message': 'User not found'}), 401
 
-            # Verify password
+            if not employee['active']:
+                return jsonify({'message': 'User not active'}), 403
+
             if not bcrypt.checkpw(password.encode('utf-8'), employee['password_hash'].encode('utf-8')):
-                return jsonify({'error': 'Invalid email or password'}), 401
+                return jsonify({'message': 'Incorrect password'}), 401
+
 
             # Generate JWT token
             token = jwt.encode({
