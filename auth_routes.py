@@ -9,56 +9,19 @@ import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from utils.auth_decorator import token_required
 
 auth_bp = Blueprint('auth', __name__)
 
 # Secret key for JWT - in production, use a secure environment variable
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-here')
+JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
 SMTP_USERNAME = os.getenv('SMTP_USERNAME')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL')
 
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': 'Authentication token is missing'}), 401
 
-        try:
-            # Remove 'Bearer ' if present
-            if token.startswith('Bearer '):
-                token = token[7:]
-            
-            data = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-            
-            cursor = get_db_cursor()
-            cursor.execute("""
-                SELECT e.*, d.name as department_name 
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.employee_id = %s AND e.active IS TRUE
-            """, (data['employee_id'],))
-            employee = cursor.fetchone()
-            cursor.close()
-
-            if not employee:
-                return jsonify({'error': 'Employee not found or inactive'}), 401
-
-            request.user = employee
-            return f(*args, **kwargs)
-        
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token'}), 401
-        except Exception as e:
-            print(f"Auth error: {str(e)}")
-            return jsonify({'error': 'Invalid authentication'}), 401
-
-    return decorated
 
 @auth_bp.route('/api/auth/login', methods=['POST'])
 def login():
