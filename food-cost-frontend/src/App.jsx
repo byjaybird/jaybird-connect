@@ -34,7 +34,7 @@ function Header({ user, onLogout }) {
           <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
         </Link>
         
-        {user?.role === 'admin' ? (
+        {user?.role === 'Admin' ? (
           <>
             <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">Items</Link>
             <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">Ingredients</Link>

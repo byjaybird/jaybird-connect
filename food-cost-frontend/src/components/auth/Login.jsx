@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../../config';
 
-const Login = () => {
+const Login = ({ setUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,12 +22,13 @@ const handleSubmit = async (e) => {
       credentials: 'include'
     });
 
-    const data = await response.json();
-
-    if (response.ok) {
+    const data = await response.json();if (response.ok) {
       console.log('✅ Login successful:', data);
       localStorage.setItem('token', data.token);
-      navigate('/dashboard');
+      // Set the user state with the employee data
+      setUser(data.employee);
+      // Navigate to the home page
+      navigate('/');
     } else {
       console.warn('❌ Login failed:', data);
 
