@@ -150,9 +150,9 @@ const ShiftPatternConfigurator = () => {
         ? patternToEdit.days_of_week.replace(/[{"}]/g, '').split(',')
         : [];
     
-    // Format times for input fields (extract HH:mm from ISO string)
-    const startTime = new Date(patternToEdit.start_time).toTimeString().slice(0, 5);
-    const endTime = new Date(patternToEdit.end_time).toTimeString().slice(0, 5);
+    // Format times for input fields (extract HH:mm from time string)
+    const startTime = patternToEdit.start_time.split('T')[1].slice(0, 5);
+    const endTime = patternToEdit.end_time.split('T')[1].slice(0, 5);
     
     setPattern({
       ...patternToEdit,
@@ -259,7 +259,7 @@ const ShiftPatternConfigurator = () => {
   : typeof pattern.days_of_week === 'string' 
     ? pattern.days_of_week.replace(/[{"}]/g, '').split(',').join(', ')
     : ''}</p>
-                <p>Time: {new Date(pattern.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(pattern.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                <p>Time: {pattern.start_time.split('T')[1].slice(0, 5)} - {pattern.end_time.split('T')[1].slice(0, 5)}</p>
                 <p>Department: {departments.find(d => d.department_id === pattern.department_id)?.name || 'Unknown'}</p>
                 <p>Number of Shifts: {pattern.number_of_shifts}</p>
               </div>
