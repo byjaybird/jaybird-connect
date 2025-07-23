@@ -19,9 +19,18 @@ const ShiftPatternConfigurator = () => {
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
     try {
-      return timeStr.split('T')[1]?.slice(0, 5) || '';
+      // Handle different possible formats
+      if (timeStr.includes('T')) {
+        // ISO format like "0000-01-01T11:00:00Z"
+        const time = timeStr.split('T')[1];
+        return time.slice(0, 5); // Get "HH:mm"
+      } else if (timeStr.includes(':')) {
+        // Already in HH:mm:ss format
+        return timeStr.slice(0, 5); // Get "HH:mm"
+      }
+      return '';
     } catch (e) {
-      console.error('Error parsing time:', e);
+      console.error('Error parsing time:', e, timeStr);
       return '';
     }
   };
@@ -84,7 +93,15 @@ const ShiftPatternConfigurator = () => {
     try {
       setIsCreating(true);
       const token = localStorage.getItem('token');
-      await axios.put(`${API_URL}/shifts/patterns/${editingPattern}`, updatedPattern, {
+
+      // Format the data for the API
+      const formattedPattern = {
+        ...updatedPattern,
+        start_time: `0000-01-01T${updatedPattern.start_time}:00Z`,
+        end_time: `0000-01-01T${updatedPattern.end_time}:00Z`
+      };
+
+      await axios.put(`${API_URL}/shifts/patterns/${editingPattern}`, formattedPattern, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -121,7 +138,15 @@ const ShiftPatternConfigurator = () => {
     try {
       setIsCreating(true);
       const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/shifts/patterns`, newPattern, {
+      
+      // Format the data for the API
+      const formattedPattern = {
+        ...newPattern,
+        start_time: `0000-01-01T${newPattern.start_time}:00Z`,
+        end_time: `0000-01-01T${newPattern.end_time}:00Z`
+      };
+
+      await axios.post(`${API_URL}/shifts/patterns`, formattedPattern, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -161,17 +186,6 @@ const ShiftPatternConfigurator = () => {
         ? patternToEdit.days_of_week.replace(/[{"}]/g, '').split(',')
         : [];
     
-    // Format times for input fields (extract HH:mm from time string)
-    const formatTime = (timeStr) => {
-      if (!timeStr) return '';
-      try {
-        return timeStr.split('T')[1]?.slice(0, 5) || '';
-      } catch (e) {
-        console.error('Error parsing time:', e);
-        return '';
-      }
-    };
-
     const startTime = formatTime(patternToEdit.start_time);
     const endTime = formatTime(patternToEdit.end_time);
     
