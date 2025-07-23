@@ -76,10 +76,10 @@ const ShiftPatternConfigurator = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id) {
-      await handleCreatePattern(pattern);
+      handleCreatePattern(pattern);
     }
   };
 
@@ -100,11 +100,11 @@ const ShiftPatternConfigurator = () => {
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4">Existing Patterns</h3>
         {isLoading && <div>Loading patterns...</div>}
-        {isError && (
-        <div className="text-red-600">
-          Error loading patterns: {error?.response?.data?.message || error?.message || 'Unknown error'}
-        </div>
-      )}
+        {error && (
+          <div className="text-red-600">
+            {error}
+          </div>
+        )}
         {patterns && patterns.length === 0 && <div>No patterns defined yet</div>}
         {patterns && patterns.length > 0 && (
           <div className="grid gap-4">
