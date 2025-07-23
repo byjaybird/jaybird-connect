@@ -24,6 +24,9 @@ import UserManagement from './components/UserManagement';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ResetPassword from './components/auth/ResetPassword';
+import ShiftSchedulePlanner from './components/ShiftSchedulePlanner';
+import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
+import EmployeeDashboard from './components/EmployeeDashboard';
 import { API_URL } from './config';
 
 function Header({ user, onLogout }) {
@@ -38,10 +41,13 @@ function Header({ user, onLogout }) {
           <>
             <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">Items</Link>
             <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">Ingredients</Link>
-            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
-            <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
+            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link><Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
+            <Link to="/shifts/dashboard" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
             {user?.role === 'Admin' && (
-              <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
+              <>
+                <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
+                <Link to="/shifts/patterns" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Patterns</Link>
+              </>
             )}
           </>
         ) : user ? (
@@ -111,8 +117,10 @@ function App() {
         <Route path="/prices/new" element={<PrivateRoute><NewPriceQuoteForm /></PrivateRoute>} />
         <Route path="/inventory" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
         <Route path="/inventory-scanner" element={<PrivateRoute><InventoryScanner /></PrivateRoute>} />
-        <Route path="/receiving/new" element={<PrivateRoute><NewReceivingForm /></PrivateRoute>} />
-        <Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
+        <Route path="/receiving/new" element={<PrivateRoute><NewReceivingForm /></PrivateRoute>} /><Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
+        <Route path="/shifts/schedule" element={<PrivateRoute><ShiftSchedulePlanner /></PrivateRoute>} />
+        <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
+        <Route path="/shifts/dashboard" element={<PrivateRoute><EmployeeDashboard /></PrivateRoute>} />
         {user?.role === 'Admin' && (
           <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
               )}

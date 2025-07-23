@@ -61,14 +61,19 @@ def login():
                 'employee_id': employee['employee_id'],
                 'email': employee['email'],
                 'exp': datetime.utcnow() + timedelta(days=1)  # Token expires in 1 day
-            }, JWT_SECRET, algorithm='HS256')
-
-            # Update last login
+            }, JWT_SECRET, algorithm='HS256')# Update last login
             cursor.execute("""
                 UPDATE employees
                 SET last_login = CURRENT_TIMESTAMP
                 WHERE employee_id = %s
             """, (employee['employee_id'],))
+            
+            # Log the login
+            cursor.execute('''
+                INSERT INTO login_logs (email, name, domain, timestamp)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ''', (employee['email'], employee['name'], employee.get('department_name')))
+            
             cursor.connection.commit()
 
             return jsonify({

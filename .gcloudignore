@@ -21,3 +21,54 @@ venv/
 .env/
 env/
 .venv/
+
+# Frontend development files
+food-cost-frontend/node_modules/
+food-cost-frontend/.firebase/
+food-cost-frontend/src/
+food-cost-frontend/public/
+**/node_modules/
+**/.firebase/
+
+# Development and test files
+**/*.test.js
+**/*.spec.js
+**/tests/
+**/__tests__/
+**/__pycache__/
+**/.pytest_cache/
+**/.coverage
+**/coverage/
+
+# Documentation
+/docs/
+README.md
+*.md
+
+# Development configs
+.eslintrc*
+.prettier*
+.editorconfig
+*.config.js
+.babelrc
+.env*
+.firebaserc
+firebase.json
+
+# Version control and IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+**/.DS_Store
+
+# Build artifacts and cache
+**/dist/
+**/build/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/__pycache__/
+.pytest_cache/
+.coverage
+coverage/

@@ -13,6 +13,9 @@ from receiving_routes import receiving_bp
 from tasks_routes import tasks_bp
 from auth_routes import auth_bp
 from user_routes import user_bp
+from shift_routes import shift_routes as shift_bp
+from services.shift_api import ShiftAPI
+from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -113,6 +116,7 @@ app.register_blueprint(receiving_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
+app.register_blueprint(shift_bp)
 
 try:
     test_conn = psycopg2.connect(
@@ -144,18 +148,6 @@ def parse_float(val):
 @app.route('/')
 def index():
     return "Food Cost Tracker API Running"
-
-@app.route('/api/log-login', methods=['POST'])
-def log_login():
-    data = request.get_json()
-    cursor = get_db_cursor()
-    cursor.execute('''
-        INSERT INTO login_logs (email, name, domain, timestamp)
-        VALUES (%s, %s, %s, %s)
-    ''', (data.get('email'), data.get('name'), data.get('domain'), data.get('timestamp')))
-    cursor.connection.commit()
-    cursor.connection.close()
-    return jsonify({'status': 'login logged'})
 
 @app.route('/api/ingredients', methods=['GET', 'POST'])
 def ingredients():
