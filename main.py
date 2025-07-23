@@ -14,6 +14,7 @@ from tasks_routes import tasks_bp
 from auth_routes import auth_bp
 from user_routes import user_bp
 from shift_routes import shift_routes as shift_bp
+from departments_routes import departments_bp
 from services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
@@ -117,6 +118,7 @@ app.register_blueprint(tasks_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(shift_bp)
+app.register_blueprint(departments_bp)
 
 try:
     test_conn = psycopg2.connect(
