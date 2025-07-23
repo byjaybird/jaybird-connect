@@ -17,7 +17,11 @@ const ShiftPatternConfigurator = () => {
   
   const [pattern, setPattern] = useState({
     days_of_week: [],
-    number_of_shifts: 1
+    number_of_shifts: 1,
+    label: '',
+    start_time: '',
+    end_time: '',
+    department_id: ''
   });
   const [patterns, setPatterns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +70,14 @@ const ShiftPatternConfigurator = () => {
       setPatterns(response.data);
       
       // Reset form
-      setPattern({ days_of_week: [], number_of_shifts: 1 });
+      setPattern({
+        days_of_week: [],
+        number_of_shifts: 1,
+        label: '',
+        start_time: '',
+        end_time: '',
+        department_id: ''
+      });
       setError(null);
     } catch (err) {
       console.error('Error creating pattern:', err);
@@ -76,10 +87,17 @@ const ShiftPatternConfigurator = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id) {
-      handleCreatePattern(pattern);
+    try {
+      if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id && pattern.days_of_week.length > 0) {
+        await handleCreatePattern(pattern);
+      } else {
+        setError('Please fill in all required fields and select at least one day');
+      }
+    } catch (err) {
+      console.error('Error in handleSubmit:', err);
+      setError(err.message || 'Failed to submit pattern');
     }
   };
 
@@ -101,7 +119,7 @@ const ShiftPatternConfigurator = () => {
         <h3 className="text-xl font-semibold mb-4">Existing Patterns</h3>
         {isLoading && <div>Loading patterns...</div>}
         {error && (
-          <div className="text-red-600">
+          <div className="text-red-600 mb-4">
             {error}
           </div>
         )}

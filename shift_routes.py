@@ -10,19 +10,43 @@ def get_shift_patterns():
     """Get all shift patterns."""
     cursor = get_db_cursor()
     
-    cursor.execute("""
-        SELECT * FROM shift_patterns 
-        WHERE archived IS NULL OR archived = FALSE
-        ORDER BY created_at DESC
-    """)
-    patterns = cursor.fetchall()
-    
-    return jsonify(patterns)
+    try:
+        cursor.execute("""
+            SELECT pattern_id, label, days_of_week, 
+                   start_time::text, end_time::text,
+                   department_id, number_of_shifts,
+                   created_at, updated_at
+            FROM shift_patterns 
+            WHERE archived IS FALSE OR archived IS NULL
+            ORDER BY created_at DESC
+        """)
+        patterns = cursor.fetchall()
+        print("Retrieved patterns:", patterns)  # Debug log
+        return jsonify(patterns)
+    except Exception as e:
+        print("Error in get_shift_patterns:", str(e))  # Debug log
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        cursor.close()
 
 @shift_routes.route('/api/shifts/patterns', methods=['POST'])
 def create_shift_pattern():
     """Create a new shift pattern."""
     data = request.json
+    print("Received data:", data)  # Debug log
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+        
+    required_fields = ['label', 'days_of_week', 'start_time', 'end_time', 'department_id']
+    missing_fields = [field for field in required_fields if field not in data]
+    
+    if missing_fields:
+        return jsonify({
+            'error': 'Missing required fields',
+            'missing_fields': missing_fields
+        }), 400
+    
     cursor = get_db_cursor()
     
     try:
@@ -31,7 +55,9 @@ def create_shift_pattern():
                 label, days_of_week, start_time, end_time,
                 department_id, number_of_shifts
             ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING pattern_id
+            RETURNING pattern_id, label, days_of_week, 
+                      start_time::text, end_time::text,
+                      department_id, number_of_shifts
         """, (
             data['label'],
             data['days_of_week'],
@@ -41,16 +67,20 @@ def create_shift_pattern():
             data.get('number_of_shifts', 1)
         ))
         
-        pattern_id = cursor.fetchone()['pattern_id']
+        new_pattern = cursor.fetchone()
         cursor.connection.commit()
+        print("Created pattern:", new_pattern)  # Debug log
         
         return jsonify({
-            'pattern_id': pattern_id,
-            'message': 'Pattern created successfully'
+            'message': 'Pattern created successfully',
+            'pattern': new_pattern
         })
     except Exception as e:
+        print("Error in create_shift_pattern:", str(e))  # Debug log
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
 
 @shift_routes.route('/api/shifts/generate', methods=['POST'])
 def generate_shifts():
