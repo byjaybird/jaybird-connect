@@ -366,20 +366,10 @@ const ShiftPatternConfigurator = () => {
       setScheduleLoading(true);
       setScheduleError(null);
       const token = localStorage.getItem('token');
-
-      // First get the current patterns
-      const patternsResponse = await axios.get(`${API_URL}/shifts/patterns`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
       
-      // Then generate shifts based on patterns
+      // Generate shifts with just the days_ahead parameter
       await axios.post(`${API_URL}/shifts/generate`, 
-        { 
-          days_ahead: daysAhead,
-          patterns: patternsResponse.data  // Pass the patterns to the generate endpoint
-        },
+        { days_ahead: daysAhead },
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -391,7 +381,11 @@ const ShiftPatternConfigurator = () => {
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error generating shifts:', err);
-      setScheduleError('Failed to generate shifts');
+      if (err.response?.data?.message) {
+        setScheduleError(err.response.data.message);
+      } else {
+        setScheduleError('Failed to generate shifts: ' + err.message);
+      }
     } finally {
       setScheduleLoading(false);
     }
