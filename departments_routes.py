@@ -11,9 +11,9 @@ def get_departments():
     
     try:
         cursor.execute("""
-            SELECT department_id, name, active
+            SELECT department_id, name, description, created_at
             FROM departments
-            WHERE active = TRUE
+            WHERE (archived IS NULL OR archived = FALSE)
             ORDER BY name
         """)
         departments = cursor.fetchall()

@@ -143,8 +143,12 @@ const ShiftPatternConfigurator = () => {
   };
 
   const handleEdit = (patternToEdit) => {
-    // Convert the PostgreSQL array string to actual array
-    const daysArray = patternToEdit.days_of_week.replace(/[{"}]/g, '').split(',');
+    // Handle days_of_week regardless if it's an array or string
+    const daysArray = Array.isArray(patternToEdit.days_of_week) 
+      ? patternToEdit.days_of_week 
+      : typeof patternToEdit.days_of_week === 'string'
+        ? patternToEdit.days_of_week.replace(/[{"}]/g, '').split(',')
+        : [];
     
     // Format times for input fields (extract HH:mm from ISO string)
     const startTime = new Date(patternToEdit.start_time).toTimeString().slice(0, 5);
@@ -186,10 +190,16 @@ const ShiftPatternConfigurator = () => {
     e.preventDefault();
     try {
       if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id && pattern.days_of_week.length > 0) {
+        // Prepare data for API - ensure days_of_week is in correct format
+        const patternData = {
+          ...pattern,
+          days_of_week: Array.isArray(pattern.days_of_week) ? pattern.days_of_week : [pattern.days_of_week]
+        };
+        
         if (editingPattern) {
-          await handleUpdatePattern(pattern);
+          await handleUpdatePattern(patternData);
         } else {
-          await handleCreatePattern(pattern);
+          await handleCreatePattern(patternData);
         }
       } else {
         setError('Please fill in all required fields and select at least one day');
@@ -244,7 +254,11 @@ const ShiftPatternConfigurator = () => {
                     </button>
                   </div>
                 </div>
-                <p>Days: {pattern.days_of_week.replace(/[{"}]/g, '').split(',').join(', ')}</p>
+                <p>Days: {Array.isArray(pattern.days_of_week) 
+  ? pattern.days_of_week.join(', ')
+  : typeof pattern.days_of_week === 'string' 
+    ? pattern.days_of_week.replace(/[{"}]/g, '').split(',').join(', ')
+    : ''}</p>
                 <p>Time: {new Date(pattern.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(pattern.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 <p>Department: {departments.find(d => d.department_id === pattern.department_id)?.name || 'Unknown'}</p>
                 <p>Number of Shifts: {pattern.number_of_shifts}</p>
