@@ -5,6 +5,53 @@ from utils.db import get_db_cursor
 
 shift_routes = Blueprint('shifts', __name__)
 
+@shift_routes.route('/api/shifts/patterns', methods=['GET'])
+def get_shift_patterns():
+    """Get all shift patterns."""
+    cursor = get_db_cursor()
+    
+    cursor.execute("""
+        SELECT * FROM shift_patterns 
+        WHERE archived IS NULL OR archived = FALSE
+        ORDER BY created_at DESC
+    """)
+    patterns = cursor.fetchall()
+    
+    return jsonify(patterns)
+
+@shift_routes.route('/api/shifts/patterns', methods=['POST'])
+def create_shift_pattern():
+    """Create a new shift pattern."""
+    data = request.json
+    cursor = get_db_cursor()
+    
+    try:
+        cursor.execute("""
+            INSERT INTO shift_patterns (
+                label, days_of_week, start_time, end_time,
+                department_id, number_of_shifts
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING pattern_id
+        """, (
+            data['label'],
+            data['days_of_week'],
+            data['start_time'],
+            data['end_time'],
+            data['department_id'],
+            data.get('number_of_shifts', 1)
+        ))
+        
+        pattern_id = cursor.fetchone()['pattern_id']
+        cursor.connection.commit()
+        
+        return jsonify({
+            'pattern_id': pattern_id,
+            'message': 'Pattern created successfully'
+        })
+    except Exception as e:
+        cursor.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @shift_routes.route('/api/shifts/generate', methods=['POST'])
 def generate_shifts():
     """Generate shifts for the next N days."""
