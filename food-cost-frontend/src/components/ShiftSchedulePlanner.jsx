@@ -47,20 +47,63 @@ console.log('API Response:', response.data);
     }
   };
 
+  const [patterns, setPatterns] = useState([]);
+
+  const fetchPatterns = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/shifts/patterns`);
+      console.log('Fetched patterns:', response.data);
+      setPatterns(response.data || []);
+      return response.data;
+    } catch (err) {
+      console.error('Error fetching patterns:', err.response?.data);
+      throw new Error('Failed to fetch shift patterns');
+    }
+  };
+
   const generateShifts = async (daysAhead = 14) => {
     try {
       setLoading(true);
       setError(null);
+
+      // First fetch patterns to validate we have some to work with
+      const patterns = await fetchPatterns();
+      
+      if (!patterns || patterns.length === 0) {
+        throw new Error('No shift patterns found. Please create at least one shift pattern before generating shifts.');
+      }
+
       console.log('Generating shifts for days:', daysAhead);
-      await axios.post(`${API_URL}/shifts/generate`, { days_ahead: daysAhead });
+      console.log('Using patterns:', patterns);
+
+      const response = await axios.post(
+        `${API_URL}/shifts/generate`, 
+        { 
+          days_ahead: daysAhead,
+          patterns: patterns // Send patterns to the generate endpoint
+        },
+        { 
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Generation response:', response.data);
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error generating shifts:', err.response?.data);
-      setError('Failed to generate shifts');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to generate shifts';
+      setError(`Failed to generate shifts: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
+
+  // Fetch patterns when component mounts
+  useEffect(() => {
+    fetchPatterns();
+  }, []);
 
   useEffect(() => {
     fetchWeeklyShifts(selectedWeekStart);
@@ -120,12 +163,39 @@ console.log('API Response:', response.data);
       </div>
 
       <div className="shift-controls">
+        <div className="existing-patterns mb-4">
+          <h3 className="text-lg font-semibold mb-2">Existing Patterns</h3>
+          {patterns.length === 0 ? (
+            <p className="text-gray-600">No shift patterns found. Please create patterns before generating shifts.</p>
+          ) : (
+            <div className="patterns-grid grid gap-2">
+              {patterns.map(pattern => (
+                <div key={pattern.pattern_id} className="pattern-card p-3 border rounded">
+                  <div className="font-medium">{pattern.label}</div>
+                  <div className="text-sm text-gray-600">
+                    {pattern.start_time} - {pattern.end_time}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Days: {pattern.days_of_week.join(', ')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button 
           onClick={() => generateShifts(14)}
-          disabled={loading}
+          disabled={loading || patterns.length === 0}
+          className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
         >
-          Generate Next 2 Weeks
+          {loading ? 'Generating...' : 'Generate Next 2 Weeks'}
         </button>
+        {error && (
+          <div className="error-message mt-2 text-red-500">
+            {error}
+          </div>
+        )}
       </div>
 
       <div className="add-shift-form">

@@ -183,14 +183,19 @@ def generate_shifts():
         cursor = get_db_cursor()
         
         try:
-            # Get all shift patterns
-            cursor.execute("""
-                SELECT pattern_id, label, days_of_week, start_time, end_time,
-                       department_id, number_of_shifts 
-                FROM shift_patterns 
-                WHERE archived IS NULL OR archived = FALSE
-            """)
-            patterns = cursor.fetchall()
+            # Get all shift patterns if not provided in request
+            if 'patterns' in data and data['patterns']:
+                patterns = data['patterns']
+                print(f"Using {len(patterns)} patterns from request")
+            else:
+                cursor.execute("""
+                    SELECT pattern_id, label, days_of_week, start_time, end_time,
+                           department_id, number_of_shifts 
+                    FROM shift_patterns 
+                    WHERE archived IS NULL OR archived = FALSE
+                """)
+                patterns = cursor.fetchall()
+                print(f"Fetched {len(patterns)} patterns from database")
             
             if not patterns:
                 return jsonify({'message': 'No shift patterns found to generate from'}), 200
