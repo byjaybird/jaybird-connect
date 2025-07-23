@@ -29,6 +29,91 @@ def get_shift_patterns():
     finally:
         cursor.close()
 
+@shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['PUT'])
+def update_shift_pattern(pattern_id):
+    """Update an existing shift pattern."""
+    data = request.json
+    print("Updating pattern:", pattern_id, "with data:", data)  # Debug log
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+        
+    required_fields = ['label', 'days_of_week', 'start_time', 'end_time', 'department_id']
+    missing_fields = [field for field in required_fields if field not in data]
+    
+    if missing_fields:
+        return jsonify({
+            'error': 'Missing required fields',
+            'missing_fields': missing_fields
+        }), 400
+    
+    cursor = get_db_cursor()
+    
+    try:
+        cursor.execute("""
+            UPDATE shift_patterns 
+            SET label = %s,
+                days_of_week = %s,
+                start_time = %s,
+                end_time = %s,
+                department_id = %s,
+                number_of_shifts = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE pattern_id = %s
+            RETURNING pattern_id, label, days_of_week, 
+                      start_time::text, end_time::text,
+                      department_id, number_of_shifts
+        """, (
+            data['label'],
+            data['days_of_week'],
+            data['start_time'],
+            data['end_time'],
+            data['department_id'],
+            data.get('number_of_shifts', 1),
+            pattern_id
+        ))
+        
+        updated_pattern = cursor.fetchone()
+        if not updated_pattern:
+            return jsonify({'error': 'Pattern not found'}), 404
+            
+        cursor.connection.commit()
+        print("Updated pattern:", updated_pattern)  # Debug log
+        
+        return jsonify({
+            'message': 'Pattern updated successfully',
+            'pattern': updated_pattern
+        })
+    except Exception as e:
+        print("Error in update_shift_pattern:", str(e))  # Debug log
+        cursor.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+
+@shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['DELETE'])
+def delete_shift_pattern(pattern_id):
+    """Delete a shift pattern."""
+    cursor = get_db_cursor()
+    
+    try:
+        # First check if pattern exists
+        cursor.execute("SELECT pattern_id FROM shift_patterns WHERE pattern_id = %s", (pattern_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Pattern not found'}), 404
+            
+        # Delete the pattern
+        cursor.execute("DELETE FROM shift_patterns WHERE pattern_id = %s", (pattern_id,))
+        cursor.connection.commit()
+        
+        return jsonify({'message': 'Pattern deleted successfully'})
+    except Exception as e:
+        print("Error in delete_shift_pattern:", str(e))  # Debug log
+        cursor.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+
 @shift_routes.route('/api/shifts/patterns', methods=['POST'])
 def create_shift_pattern():
     """Create a new shift pattern."""
