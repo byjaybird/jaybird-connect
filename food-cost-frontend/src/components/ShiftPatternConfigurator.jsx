@@ -14,6 +14,17 @@ const DAYS_OF_WEEK = [
 
 const ShiftPatternConfigurator = () => {
   console.log('ShiftPatternConfigurator rendering');
+
+  // Utility function to safely format time strings
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    try {
+      return timeStr.split('T')[1]?.slice(0, 5) || '';
+    } catch (e) {
+      console.error('Error parsing time:', e);
+      return '';
+    }
+  };
   
   const [departments, setDepartments] = useState([]);
   const [pattern, setPattern] = useState({
@@ -151,8 +162,18 @@ const ShiftPatternConfigurator = () => {
         : [];
     
     // Format times for input fields (extract HH:mm from time string)
-    const startTime = patternToEdit.start_time.split('T')[1].slice(0, 5);
-    const endTime = patternToEdit.end_time.split('T')[1].slice(0, 5);
+    const formatTime = (timeStr) => {
+      if (!timeStr) return '';
+      try {
+        return timeStr.split('T')[1]?.slice(0, 5) || '';
+      } catch (e) {
+        console.error('Error parsing time:', e);
+        return '';
+      }
+    };
+
+    const startTime = formatTime(patternToEdit.start_time);
+    const endTime = formatTime(patternToEdit.end_time);
     
     setPattern({
       ...patternToEdit,
@@ -259,7 +280,7 @@ const ShiftPatternConfigurator = () => {
   : typeof pattern.days_of_week === 'string' 
     ? pattern.days_of_week.replace(/[{"}]/g, '').split(',').join(', ')
     : ''}</p>
-                <p>Time: {pattern.start_time.split('T')[1].slice(0, 5)} - {pattern.end_time.split('T')[1].slice(0, 5)}</p>
+                <p>Time: {formatTime(pattern.start_time)} - {formatTime(pattern.end_time)}</p>
                 <p>Department: {departments.find(d => d.department_id === pattern.department_id)?.name || 'Unknown'}</p>
                 <p>Number of Shifts: {pattern.number_of_shifts}</p>
               </div>
