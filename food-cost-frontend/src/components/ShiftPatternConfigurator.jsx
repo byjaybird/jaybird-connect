@@ -61,7 +61,7 @@ const ShiftPatternConfigurator = () => {
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchPatternsAndDepartments = async () => {
       try {
         const token = localStorage.getItem('token');
         
@@ -73,26 +73,23 @@ const ShiftPatternConfigurator = () => {
         });
         setDepartments(deptResponse.data);
 
-        // Fetch users instead of employees
-        const usersResponse = await axios.get(`${API_URL}/users`, {
+        // Fetch patterns
+        const patternsResponse = await axios.get(`${API_URL}/shifts/patterns`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        // Map users to employees format
-        const employeesList = usersResponse.data.map(user => ({
-          employee_id: user.user_id, // map user_id to employee_id
-          name: user.name,
-          department_id: user.department_id
-        }));
-        setEmployees(employeesList);
+        setPatterns(patternsResponse.data);
+        setError(null);
       } catch (err) {
-        console.error('Error fetching initial data:', err);
-        setError(err.response?.data?.message || err.message || 'Failed to load initial data');
+        console.error('Error fetching patterns and departments:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load patterns and departments');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchInitialData();
+    fetchPatternsAndDepartments();
   }, []);
 
   const handleAssignEmployee = async (employeeId) => {
@@ -369,14 +366,28 @@ const ShiftPatternConfigurator = () => {
       setScheduleLoading(true);
       setScheduleError(null);
       const token = localStorage.getItem('token');
+
+      // First get the current patterns
+      const patternsResponse = await axios.get(`${API_URL}/shifts/patterns`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Then generate shifts based on patterns
       await axios.post(`${API_URL}/shifts/generate`, 
-        { days_ahead: daysAhead },
+        { 
+          days_ahead: daysAhead,
+          patterns: patternsResponse.data  // Pass the patterns to the generate endpoint
+        },
         {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         }
       );
+
+      // Refresh the displayed shifts
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error generating shifts:', err);
