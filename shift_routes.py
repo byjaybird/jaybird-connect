@@ -170,48 +170,88 @@ def create_shift_pattern():
 @shift_routes.route('/api/shifts/generate', methods=['POST'])
 def generate_shifts():
     """Generate shifts for the next N days."""
-    days_ahead = request.json.get('days_ahead', 14)
-    start_date = datetime.now().date()
-    
-    cursor = get_db_cursor()
-    
-    # Get all shift patterns
-    cursor.execute("""
-        SELECT * FROM shift_patterns 
-        WHERE archived IS NULL OR archived = FALSE
-    """)
-    patterns = cursor.fetchall()
-    
-    # Generate shifts for each day and pattern
-    for day_offset in range(days_ahead):
-        current_date = start_date + timedelta(days=day_offset)
-        weekday = current_date.strftime("%A")
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        days_ahead = data.get('days_ahead', 14)
+        if not isinstance(days_ahead, int) or days_ahead < 1:
+            return jsonify({'error': 'days_ahead must be a positive integer'}), 400
+            
+        start_date = datetime.now().date()
+        cursor = get_db_cursor()
         
-        for pattern in patterns:
-            if weekday in pattern['days_of_week']:
-                # Check for existing shifts
-                cursor.execute("""
-                    SELECT * FROM shifts 
-                    WHERE date = %s AND label = %s AND start_time = %s
-                """, (current_date, pattern['label'], pattern['start_time']))
+        try:
+            # Get all shift patterns
+            cursor.execute("""
+                SELECT pattern_id, label, days_of_week, start_time, end_time,
+                       department_id, number_of_shifts 
+                FROM shift_patterns 
+                WHERE archived IS NULL OR archived = FALSE
+            """)
+            patterns = cursor.fetchall()
+            
+            if not patterns:
+                return jsonify({'message': 'No shift patterns found to generate from'}), 200
+            
+            shifts_generated = 0
+            # Generate shifts for each day and pattern
+            for day_offset in range(days_ahead):
+                current_date = start_date + timedelta(days=day_offset)
+                weekday = current_date.strftime("%A")
                 
-                if not cursor.fetchone():
-                    # Generate the required number of shifts
-                    for _ in range(pattern['number_of_shifts']):
-                        cursor.execute("""
-                            INSERT INTO shifts (
-                                department_id, start_time, end_time, date, label, 
-                                generated_from_template, source_label, is_part_of_schedule, 
-                                schedule_pattern_id
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            pattern['department_id'], pattern['start_time'], pattern['end_time'],
-                            current_date, pattern['label'], True, pattern['label'], True,
-                            pattern['pattern_id']
-                        ))
-    
-    cursor.connection.commit()
-    return jsonify({'message': f'Generated shifts for next {days_ahead} days'})
+                for pattern in patterns:
+                    # Validate required pattern fields
+                    required_fields = ['days_of_week', 'label', 'start_time', 'department_id', 'number_of_shifts']
+                    if not all(field in pattern for field in required_fields):
+                        print(f"Warning: Pattern {pattern.get('pattern_id')} missing required fields")
+                        continue
+                        
+                    try:
+                        if weekday in pattern['days_of_week']:
+                            # Check for existing shifts
+                            cursor.execute("""
+                                SELECT COUNT(*) as count FROM shifts 
+                                WHERE date = %s AND label = %s AND start_time = %s
+                            """, (current_date, pattern['label'], pattern['start_time']))
+                            
+                            if cursor.fetchone()['count'] == 0:
+                                # Generate the required number of shifts
+                                num_shifts = pattern['number_of_shifts'] or 1
+                                for _ in range(num_shifts):
+                                    cursor.execute("""
+                                        INSERT INTO shifts (
+                                            department_id, start_time, end_time, date, label, 
+                                            generated_from_template, source_label, is_part_of_schedule, 
+                                            schedule_pattern_id
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, (
+                                        pattern['department_id'], pattern['start_time'], pattern['end_time'],
+                                        current_date, pattern['label'], True, pattern['label'], True,
+                                        pattern['pattern_id']
+                                    ))
+                                    shifts_generated += 1
+                    except Exception as pattern_error:
+                        print(f"Error processing pattern {pattern.get('pattern_id')}: {str(pattern_error)}")
+                        continue
+            
+            cursor.connection.commit()
+            return jsonify({
+                'message': f'Generated {shifts_generated} shifts for next {days_ahead} days',
+                'shifts_generated': shifts_generated
+            })
+            
+        except Exception as db_error:
+            cursor.connection.rollback()
+            print("Database error in generate_shifts:", str(db_error))
+            return jsonify({'error': 'Database error', 'details': str(db_error)}), 500
+        finally:
+            cursor.close()
+            
+    except Exception as e:
+        print("Error in generate_shifts:", str(e))
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @shift_routes.route('/api/shifts/manual', methods=['POST'])
 def create_manual_shift():
