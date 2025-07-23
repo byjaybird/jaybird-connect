@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://your-backend-url',
+        target: 'https://jaybird-connect.ue.r.appspot.com',
         changeOrigin: true,
         secure: false
       }
