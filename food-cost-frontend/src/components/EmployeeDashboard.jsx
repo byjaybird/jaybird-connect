@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, startOfWeek, addDays } from 'date-fns';
+import { format, startOfWeek } from 'date-fns';
 import axios from 'axios';
 
 const EmployeeDashboard = () => {
@@ -7,7 +7,6 @@ const EmployeeDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch employee's shifts for the current week
   const fetchEmployeeShifts = async () => {
     try {
       setLoading(true);
@@ -16,14 +15,14 @@ const EmployeeDashboard = () => {
       const response = await axios.get('/api/shifts/weekly', {
         params: {
           start_date: startDate,
-          // You'll need to get the employee's ID from your auth context or similar
           employee_id: localStorage.getItem('employeeId') 
         }
       });
       
-      // Filter shifts to only show ones assigned to this employee
+      console.log('API Response:', response.data);
       const employeeId = localStorage.getItem('employeeId');
-      const employeeShifts = response.data.shifts.filter(shift => 
+      const shifts = response.data.shifts || [];
+      const employeeShifts = shifts.filter(shift =>
         shift.assignments.some(assignment => assignment.employee_id === employeeId)
       );
       
@@ -43,7 +42,6 @@ const EmployeeDashboard = () => {
   return (
     <div className="employee-dashboard">
       <h2>My Upcoming Shifts</h2>
-
       {loading ? (
         <div className="loading">Loading your shifts...</div>
       ) : error ? (
