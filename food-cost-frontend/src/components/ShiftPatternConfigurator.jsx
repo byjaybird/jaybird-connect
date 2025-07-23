@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL } from '../config';
 
@@ -14,35 +13,73 @@ const DAYS_OF_WEEK = [
 ];
 
 const ShiftPatternConfigurator = () => {
+  console.log('ShiftPatternConfigurator rendering');
+  
   const [pattern, setPattern] = useState({
     days_of_week: [],
     number_of_shifts: 1
   });
+  const [patterns, setPatterns] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const queryClient = useQueryClient();
-
-  // Query to fetch existing patterns
-  const { data: patterns, isLoading, isError } = useQuery(['patterns'], async () => {
-    const response = await axios.get(`${API_URL}/shifts/patterns`);
-    return response.data;
-  });
-
-  const createPatternMutation = useMutation(
-    (newPattern) => {
-      return axios.post(`${API_URL}/shifts/patterns`, newPattern);
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['patterns']);
-        setPattern({ days_of_week: [], number_of_shifts: 1 });
+  useEffect(() => {
+    const fetchPatterns = async () => {
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/shifts/patterns`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setPatterns(response.data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching patterns:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load patterns');
+      } finally {
+        setIsLoading(false);
       }
-    }
-  );
+    };
 
-  const handleSubmit = (e) => {
+    fetchPatterns();
+  }, []);
+
+  const handleCreatePattern = async (newPattern) => {
+    try {
+      setIsCreating(true);
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/shifts/patterns`, newPattern, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Refresh patterns after creating new one
+      const response = await axios.get(`${API_URL}/shifts/patterns`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setPatterns(response.data);
+      
+      // Reset form
+      setPattern({ days_of_week: [], number_of_shifts: 1 });
+      setError(null);
+    } catch (err) {
+      console.error('Error creating pattern:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to create pattern');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id) {
-      createPatternMutation.mutate(pattern);
+      await handleCreatePattern(pattern);
     }
   };
 
@@ -63,7 +100,11 @@ const ShiftPatternConfigurator = () => {
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4">Existing Patterns</h3>
         {isLoading && <div>Loading patterns...</div>}
-        {isError && <div className="text-red-600">Error loading patterns</div>}
+        {isError && (
+        <div className="text-red-600">
+          Error loading patterns: {error?.response?.data?.message || error?.message || 'Unknown error'}
+        </div>
+      )}
         {patterns && patterns.length === 0 && <div>No patterns defined yet</div>}
         {patterns && patterns.length > 0 && (
           <div className="grid gap-4">
@@ -171,16 +212,16 @@ const ShiftPatternConfigurator = () => {
 
         <button
           type="submit"
-          disabled={createPatternMutation.isLoading}
+          disabled={isCreating}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {createPatternMutation.isLoading ? 'Creating...' : 'Create Pattern'}
+          {isCreating ? 'Creating...' : 'Create Pattern'}
         </button>
       </form>
 
-      {createPatternMutation.isError && (
+      {error && (
         <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-md">
-          Failed to create pattern. Please try again.
+          {error}
         </div>
       )}
     </div>
