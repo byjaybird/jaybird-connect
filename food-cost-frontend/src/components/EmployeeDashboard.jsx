@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { format, startOfWeek } from 'date-fns';
+import { format, startOfWeek, addDays } from 'date-fns';
 import axios from 'axios';
+
+const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
 const EmployeeDashboard = () => {
   const [shifts, setShifts] = useState([]);
@@ -12,7 +14,13 @@ const EmployeeDashboard = () => {
       setLoading(true);
       setError(null);
       const startDate = format(startOfWeek(new Date()), 'yyyy-MM-dd');
-      const response = await axios.get('/api/shifts/weekly', {
+      console.log('Making request to:', `${API_URL}/shifts/weekly`);
+      console.log('With params:', {
+          start_date: startDate,
+          employee_id: localStorage.getItem('employeeId') 
+      });
+      
+      const response = await axios.get(`${API_URL}/shifts/weekly`, {
         params: {
           start_date: startDate,
           employee_id: localStorage.getItem('employeeId') 
@@ -20,6 +28,7 @@ const EmployeeDashboard = () => {
       });
       
       console.log('API Response:', response.data);
+
       const employeeId = localStorage.getItem('employeeId');
       const shifts = response.data.shifts || [];
       const employeeShifts = shifts.filter(shift =>
@@ -28,8 +37,10 @@ const EmployeeDashboard = () => {
       
       setShifts(employeeShifts);
     } catch (err) {
+      console.error('Full error object:', err);
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
       setError('Failed to fetch your shifts');
-      console.error('Error fetching shifts:', err);
     } finally {
       setLoading(false);
     }

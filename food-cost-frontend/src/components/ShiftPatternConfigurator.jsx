@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+
+const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
 const DAYS_OF_WEEK = [
   'Monday',
@@ -21,8 +24,7 @@ const ShiftPatternConfigurator = () => {
 
   const createPatternMutation = useMutation(
     (newPattern) => {
-      // This would call your API endpoint to create the pattern
-      return Promise.resolve(newPattern);
+      return axios.post(`${API_URL}/shifts/patterns`, newPattern);
     },
     {
       onSuccess: () => {
