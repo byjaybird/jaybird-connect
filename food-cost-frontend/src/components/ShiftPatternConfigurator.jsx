@@ -94,11 +94,11 @@ const ShiftPatternConfigurator = () => {
       setIsCreating(true);
       const token = localStorage.getItem('token');
 
-      // Format the data for the API
+      // Format the data for the API - send only the time portion
       const formattedPattern = {
         ...updatedPattern,
-        start_time: `0000-01-01T${updatedPattern.start_time}:00Z`,
-        end_time: `0000-01-01T${updatedPattern.end_time}:00Z`
+        start_time: `${updatedPattern.start_time}:00`,
+        end_time: `${updatedPattern.end_time}:00`
       };
 
       await axios.put(`${API_URL}/shifts/patterns/${editingPattern}`, formattedPattern, {
@@ -139,11 +139,11 @@ const ShiftPatternConfigurator = () => {
       setIsCreating(true);
       const token = localStorage.getItem('token');
       
-      // Format the data for the API
+      // Format the data for the API - send only the time portion
       const formattedPattern = {
         ...newPattern,
-        start_time: `0000-01-01T${newPattern.start_time}:00Z`,
-        end_time: `0000-01-01T${newPattern.end_time}:00Z`
+        start_time: `${newPattern.start_time}:00`,
+        end_time: `${newPattern.end_time}:00`
       };
 
       await axios.post(`${API_URL}/shifts/patterns`, formattedPattern, {
