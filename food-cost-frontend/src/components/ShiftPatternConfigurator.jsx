@@ -73,13 +73,19 @@ const ShiftPatternConfigurator = () => {
         });
         setDepartments(deptResponse.data);
 
-        // Fetch employees
-        const empResponse = await axios.get(`${API_URL}/employees`, {
+        // Fetch users instead of employees
+        const usersResponse = await axios.get(`${API_URL}/users`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        setEmployees(empResponse.data);
+        // Map users to employees format
+        const employeesList = usersResponse.data.map(user => ({
+          employee_id: user.user_id, // map user_id to employee_id
+          name: user.name,
+          department_id: user.department_id
+        }));
+        setEmployees(employeesList);
       } catch (err) {
         console.error('Error fetching initial data:', err);
         setError(err.response?.data?.message || err.message || 'Failed to load initial data');
@@ -94,7 +100,7 @@ const ShiftPatternConfigurator = () => {
       setScheduleLoading(true);
       const token = localStorage.getItem('token');
       await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
-        { employee_id: employeeId },
+        { user_id: employeeId }, // Changed from employee_id to user_id
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -116,7 +122,7 @@ const ShiftPatternConfigurator = () => {
     try {
       setScheduleLoading(true);
       const token = localStorage.getItem('token');
-      await axios.delete(`${API_URL}/shifts/${shiftId}/assign/${employeeId}`, {
+      await axios.delete(`${API_URL}/shifts/${shiftId}/assign/${employeeId}`, { // The endpoint might need to be adjusted if it expects user_id
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -598,9 +604,9 @@ const ShiftPatternConfigurator = () => {
                           <div className="text-sm text-gray-600">{shift.label}</div>
                         )}
                         {shift.assignments?.map(assignment => {
-                          const employee = employees.find(e => e.employee_id === assignment.employee_id);
+                          const employee = employees.find(e => e.employee_id === assignment.user_id);
                           return (
-                            <div key={assignment.employee_id} className="text-xs flex justify-between items-center mt-1">
+                            <div key={assignment.user_id} className="text-xs flex justify-between items-center mt-1">
                               <span className="text-gray-700">
                                 {employee ? employee.name : `Employee ${assignment.employee_id}`}
                               </span>
@@ -731,7 +737,7 @@ const ShiftPatternConfigurator = () => {
             <div className="max-h-60 overflow-y-auto">
               {employees
                 .filter(emp => !selectedShift.assignments?.some(
-                  assignment => assignment.employee_id === emp.employee_id
+                  assignment => assignment.user_id === emp.employee_id // Changed to check user_id in assignments
                 ))
                 .map(employee => (
                   <button
