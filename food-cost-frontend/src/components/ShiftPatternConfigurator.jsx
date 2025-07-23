@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL } from '../config';
+import { format, startOfWeek, addDays } from 'date-fns';
 
 const DAYS_OF_WEEK = [
   'Monday',
@@ -49,45 +50,106 @@ const ShiftPatternConfigurator = () => {
   const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [editingPattern, setEditingPattern] = useState(null);
+  
+  // Schedule state
+  const [selectedWeekStart, setSelectedWeekStart] = useState(startOfWeek(new Date()));
+  const [shifts, setShifts] = useState([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [selectedShift, setSelectedShift] = useState(null);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchDepartments = async () => {
+    const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_URL}/departments`, {
+        
+        // Fetch departments
+        const deptResponse = await axios.get(`${API_URL}/departments`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        setDepartments(response.data);
-      } catch (err) {
-        console.error('Error fetching departments:', err);
-        setError(err.response?.data?.message || err.message || 'Failed to load departments');
-      }
-    };
+        setDepartments(deptResponse.data);
 
-    const fetchPatterns = async () => {
-      try {
-        setIsLoading(true);
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_URL}/shifts/patterns`, {
+        // Fetch employees
+        const empResponse = await axios.get(`${API_URL}/employees`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        setPatterns(response.data);
-        setError(null);
+        setEmployees(empResponse.data);
       } catch (err) {
-        console.error('Error fetching patterns:', err);
-        setError(err.response?.data?.message || err.message || 'Failed to load patterns');
-      } finally {
-        setIsLoading(false);
+        console.error('Error fetching initial data:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load initial data');
       }
     };
 
-    fetchDepartments();
-    fetchPatterns();
+    fetchInitialData();
   }, []);
+
+  const handleAssignEmployee = async (employeeId) => {
+    try {
+      setScheduleLoading(true);
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
+        { employee_id: employeeId },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      await fetchWeeklyShifts(selectedWeekStart);
+      setAssignmentModalOpen(false);
+      setSelectedShift(null);
+    } catch (err) {
+      console.error('Error assigning employee:', err);
+      setScheduleError('Failed to assign employee to shift');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleRemoveAssignment = async (shiftId, employeeId) => {
+    try {
+      setScheduleLoading(true);
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/shifts/${shiftId}/assign/${employeeId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      await fetchWeeklyShifts(selectedWeekStart);
+    } catch (err) {
+      console.error('Error removing assignment:', err);
+      setScheduleError('Failed to remove employee from shift');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // Original fetchDepartments function removed since it's now part of fetchInitialData
+  // Fetch patterns function
+  const fetchPatterns = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/shifts/patterns`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setPatterns(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching patterns:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to load patterns');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleUpdatePattern = async (updatedPattern) => {
     try {
@@ -254,6 +316,75 @@ const ShiftPatternConfigurator = () => {
     }));
   };
 
+  // Schedule management functions
+  const fetchWeeklyShifts = async (startDate) => {
+    try {
+      setScheduleLoading(true);
+      setScheduleError(null);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/shifts/weekly`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        params: {
+          start_date: format(startDate, 'yyyy-MM-dd')
+        }
+      });
+      setShifts(response.data.shifts || []);
+    } catch (err) {
+      console.error('Error fetching shifts:', err);
+      setScheduleError('Failed to fetch shifts');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const addManualShift = async (shiftData) => {
+    try {
+      setScheduleLoading(true);
+      setScheduleError(null);
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/shifts/manual`, shiftData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      await fetchWeeklyShifts(selectedWeekStart);
+    } catch (err) {
+      console.error('Error creating shift:', err);
+      setScheduleError('Failed to create shift');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const generateShifts = async (daysAhead = 14) => {
+    try {
+      setScheduleLoading(true);
+      setScheduleError(null);
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/shifts/generate`, 
+        { days_ahead: daysAhead },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      await fetchWeeklyShifts(selectedWeekStart);
+    } catch (err) {
+      console.error('Error generating shifts:', err);
+      setScheduleError('Failed to generate shifts');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // Fetch shifts when week changes
+  useEffect(() => {
+    fetchWeeklyShifts(selectedWeekStart);
+  }, [selectedWeekStart]);
+
   return (
     <div className="shift-pattern-configurator p-6">
       <h2 className="text-2xl font-bold mb-6">Shift Patterns</h2>
@@ -411,6 +542,217 @@ const ShiftPatternConfigurator = () => {
       {error && (
         <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-md">
           {error}
+        </div>
+      )}
+
+      {/* Weekly Schedule Section */}
+      <div className="mt-12">
+        <h2 className="text-2xl font-bold mb-6">Weekly Schedule</h2>
+        
+        <div className="flex justify-between items-center mb-4">
+          <button
+            onClick={() => setSelectedWeekStart(date => addDays(date, -7))}
+            className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300"
+          >
+            Previous Week
+          </button>
+          <span className="text-lg font-semibold">
+            Week of {format(selectedWeekStart, 'MMM d, yyyy')}
+          </span>
+          <button
+            onClick={() => setSelectedWeekStart(date => addDays(date, 7))}
+            className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300"
+          >
+            Next Week
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-4 mb-6">
+          {scheduleLoading ? (
+            <div className="col-span-7 text-center py-4">Loading shifts...</div>
+          ) : scheduleError ? (
+            <div className="col-span-7 text-center py-4 text-red-600">{scheduleError}</div>
+          ) : (
+            [...Array(7)].map((_, index) => {
+              const date = addDays(selectedWeekStart, index);
+              const dateStr = format(date, 'yyyy-MM-dd');
+              const dayShifts = shifts.filter(shift => shift.date === dateStr);
+              
+              return (
+                <div key={dateStr} className="border rounded-lg p-4">
+                  <h3 className="font-semibold mb-2">{format(date, 'EEE, MMM d')}</h3>
+                  <div className="space-y-2">
+                    {dayShifts.map(shift => (
+                      <div 
+                        key={shift.shift_id} 
+                        className="bg-blue-50 p-2 rounded cursor-pointer hover:bg-blue-100"
+                        onClick={() => {
+                          setSelectedShift(shift);
+                          setAssignmentModalOpen(true);
+                        }}
+                      >
+                        <div className="text-sm font-medium">
+                          {shift.start_time} - {shift.end_time}
+                        </div>
+                        {shift.label && (
+                          <div className="text-sm text-gray-600">{shift.label}</div>
+                        )}
+                        {shift.assignments?.map(assignment => {
+                          const employee = employees.find(e => e.employee_id === assignment.employee_id);
+                          return (
+                            <div key={assignment.employee_id} className="text-xs flex justify-between items-center mt-1">
+                              <span className="text-gray-700">
+                                {employee ? employee.name : `Employee ${assignment.employee_id}`}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveAssignment(shift.shift_id, assignment.employee_id);
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex gap-4 mb-8">
+          <button
+            onClick={() => generateShifts(14)}
+            disabled={scheduleLoading}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-green-300"
+          >
+            Generate Next 2 Weeks
+          </button>
+        </div>
+
+        {/* Manual Shift Form */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-xl font-semibold mb-4">Add Manual Shift</h3>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            addManualShift({
+              date: formData.get('date'),
+              start_time: formData.get('start_time'),
+              end_time: formData.get('end_time'),
+              department_id: formData.get('department_id'),
+              label: formData.get('label')
+            });
+            e.target.reset();
+          }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input type="date" name="date" required 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                <input type="time" name="start_time" required 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                <input type="time" name="end_time" required 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                <select name="department_id" required 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                  <option value="">Select Department</option>
+                  {departments.map(dept => (
+                    <option key={dept.department_id} value={dept.department_id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Shift Label</label>
+                <input type="text" name="label" placeholder="Optional" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={scheduleLoading}
+              className="mt-4 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-blue-300"
+            >
+              Add Shift
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Employee Assignment Modal */}
+      {assignmentModalOpen && selectedShift && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">
+                Assign Employee to Shift
+              </h3>
+              <button
+                onClick={() => {
+                  setAssignmentModalOpen(false);
+                  setSelectedShift(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                {format(new Date(selectedShift.date), 'MMMM d, yyyy')}
+              </p>
+              <p className="text-sm text-gray-600">
+                {selectedShift.start_time} - {selectedShift.end_time}
+              </p>
+              {selectedShift.label && (
+                <p className="text-sm text-gray-600">
+                  {selectedShift.label}
+                </p>
+              )}
+            </div>
+
+            <div className="max-h-60 overflow-y-auto">
+              {employees
+                .filter(emp => !selectedShift.assignments?.some(
+                  assignment => assignment.employee_id === emp.employee_id
+                ))
+                .map(employee => (
+                  <button
+                    key={employee.employee_id}
+                    onClick={() => handleAssignEmployee(employee.employee_id)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded mb-1"
+                  >
+                    <div className="font-medium">{employee.name}</div>
+                    <div className="text-sm text-gray-500">
+                      {departments.find(d => d.department_id === employee.department_id)?.name}
+                    </div>
+                  </button>
+              ))}
+              
+              {employees.length === 0 && (
+                <p className="text-center text-gray-500 py-4">
+                  No available employees found
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
