@@ -61,7 +61,7 @@ const ShiftPatternConfigurator = () => {
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchPatternsAndDepartments = async () => {
+    const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem('token');
         
@@ -80,16 +80,25 @@ const ShiftPatternConfigurator = () => {
           }
         });
         setPatterns(patternsResponse.data);
+
+        // Fetch employees
+        const employeesResponse = await axios.get(`${API_URL}/users`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setEmployees(employeesResponse.data.filter(emp => emp.active)); // Only get active employees
+
         setError(null);
       } catch (err) {
-        console.error('Error fetching patterns and departments:', err);
-        setError(err.response?.data?.message || err.message || 'Failed to load patterns and departments');
+        console.error('Error fetching initial data:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load initial data');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchPatternsAndDepartments();
+    fetchInitialData();
   }, []);
 
   const handleAssignEmployee = async (employeeId) => {
@@ -741,9 +750,14 @@ const ShiftPatternConfigurator = () => {
 
             <div className="max-h-60 overflow-y-auto">
               {employees
-                .filter(emp => !selectedShift.assignments?.some(
-                  assignment => assignment.user_id === emp.employee_id // Changed to check user_id in assignments
-                ))
+                .filter(emp => 
+                  // Check if employee is not already assigned to this shift
+                  !selectedShift.assignments?.some(
+                    assignment => assignment.user_id === emp.employee_id
+                  ) &&
+                  // Check if employee is in the same department as the shift
+                  emp.department_id === selectedShift.department_id
+                )
                 .map(employee => (
                   <button
                     key={employee.employee_id}
