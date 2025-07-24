@@ -67,29 +67,27 @@ console.log('API Response:', response.data);
       setError(null);
 
       // First fetch patterns to validate we have some to work with
-      const patterns = await fetchPatterns();
+      console.log('Fetching current patterns...');
+      const response = await axios.get(`${API_URL}/shifts/patterns`);
+      const currentPatterns = response.data;
       
-      if (!patterns || patterns.length === 0) {
+      console.log('Current patterns:', currentPatterns);
+      
+      if (!currentPatterns || currentPatterns.length === 0) {
         throw new Error('No shift patterns found. Please create at least one shift pattern before generating shifts.');
       }
 
       console.log('Generating shifts for days:', daysAhead);
-      console.log('Using patterns:', patterns);
 
-      const response = await axios.post(
+      const generateResponse = await axios.post(
         `${API_URL}/shifts/generate`, 
-        { 
-          days_ahead: daysAhead,
-          patterns: patterns // Send patterns to the generate endpoint
-        },
-        { 
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
+        { days_ahead: daysAhead },
+        { headers: { 'Content-Type': 'application/json' } }
       );
 
-      console.log('Generation response:', response.data);
+      console.log('Generation response:', generateResponse.data);
+
+      // Refresh the weekly view
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error generating shifts:', err.response?.data);

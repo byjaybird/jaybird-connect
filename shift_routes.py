@@ -172,6 +172,8 @@ def generate_shifts():
     """Generate shifts for the next N days."""
     try:
         data = request.json
+        print("Received data in generate_shifts:", data)  # Debug log
+        
         if not data:
             return jsonify({'error': 'No data provided'}), 400
             
@@ -183,19 +185,18 @@ def generate_shifts():
         cursor = get_db_cursor()
         
         try:
-            # Get all shift patterns if not provided in request
-            if 'patterns' in data and data['patterns']:
-                patterns = data['patterns']
-                print(f"Using {len(patterns)} patterns from request")
-            else:
-                cursor.execute("""
-                    SELECT pattern_id, label, days_of_week, start_time, end_time,
-                           department_id, number_of_shifts 
-                    FROM shift_patterns 
-                    WHERE archived IS NULL OR archived = FALSE
-                """)
-                patterns = cursor.fetchall()
-                print(f"Fetched {len(patterns)} patterns from database")
+            # Get shift patterns from database
+            cursor.execute("""
+                SELECT pattern_id, label, days_of_week, start_time, end_time,
+                       department_id, number_of_shifts 
+                FROM shift_patterns 
+                WHERE archived IS NULL OR archived = FALSE
+            """)
+            patterns = cursor.fetchall()
+            print(f"Found {len(patterns)} patterns in database") # Debug log
+            
+            if not patterns:
+                return jsonify({'error': 'No shift patterns found in database'}), 400
             
             if not patterns:
                 return jsonify({'message': 'No shift patterns found to generate from'}), 200
