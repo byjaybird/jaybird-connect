@@ -103,10 +103,11 @@ const ShiftPatternConfigurator = () => {
 
   const handleAssignEmployee = async (employeeId) => {
     try {
+      console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
       setScheduleLoading(true);
       const token = localStorage.getItem('token');
       await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
-        { user_id: employeeId }, // Changed from employee_id to user_id
+        { employee_id: employeeId },
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -342,7 +343,21 @@ const ShiftPatternConfigurator = () => {
           start_date: format(startDate, 'yyyy-MM-dd')
         }
       });
-      setShifts(response.data.shifts || []);
+      
+      const shiftsData = response.data.shifts || [];
+      console.log('Fetched shifts:', shiftsData);
+      
+      // Verify shift data structure
+      shiftsData.forEach(shift => {
+        console.log(`Shift ${shift.shift_id}:`, {
+          department_id: shift.department_id,
+          assignments: shift.assignments,
+          date: shift.date,
+          times: `${shift.start_time} - ${shift.end_time}`
+        });
+      });
+      
+      setShifts(shiftsData);
     } catch (err) {
       console.error('Error fetching shifts:', err);
       setScheduleError('Failed to fetch shifts');
@@ -749,31 +764,63 @@ const ShiftPatternConfigurator = () => {
             </div>
 
             <div className="max-h-60 overflow-y-auto">
-              {employees
-                .filter(emp => 
-                  // Check if employee is not already assigned to this shift
-                  !selectedShift.assignments?.some(
-                    assignment => assignment.user_id === emp.employee_id
-                  ) &&
-                  // Check if employee is in the same department as the shift
-                  emp.department_id === selectedShift.department_id
-                )
-                .map(employee => (
-                  <button
-                    key={employee.employee_id}
-                    onClick={() => handleAssignEmployee(employee.employee_id)}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded mb-1"
-                  >
-                    <div className="font-medium">{employee.name}</div>
-                    <div className="text-sm text-gray-500">
-                      {departments.find(d => d.department_id === employee.department_id)?.name}
-                    </div>
-                  </button>
-              ))}
+              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
+                <div>Total Employees: {employees.length}</div>
+                <div>Shift Department: {selectedShift.department_id}</div>
+                <div>Current Assignments: {JSON.stringify(selectedShift.assignments || [])}</div>
+              </div>
               
-              {employees.length === 0 && (
+              {employees.length > 0 ? (
+                employees
+                  .filter(emp => {
+                    // Check if employee is already assigned (checking both user_id and employee_id)
+                    const notAssigned = !selectedShift.assignments?.some(
+                      assignment => (
+                        assignment.user_id === emp.employee_id || 
+                        assignment.employee_id === emp.employee_id
+                      )
+                    );
+                    
+                    // Check department match
+                    const sameDepartment = Number(emp.department_id) === Number(selectedShift.department_id);
+                    
+                    console.log('Filtering employee:', {
+                      name: emp.name,
+                      empId: emp.employee_id,
+                      empDept: emp.department_id,
+                      shiftDept: selectedShift.department_id,
+                      notAssigned,
+                      sameDepartment
+                    });
+                    
+                    return notAssigned && sameDepartment;
+                  })
+                  .map(employee => (
+                    <button
+                      key={employee.employee_id}
+                      onClick={() => handleAssignEmployee(employee.employee_id)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded mb-1"
+                    >
+                      <div className="font-medium">{employee.name}</div>
+                      <div className="text-sm text-gray-500">
+                        Department: {departments.find(d => d.department_id === employee.department_id)?.name || 'Unknown'} (ID: {employee.department_id})
+                      </div>
+                    </button>
+                  ))
+              ) : (
                 <p className="text-center text-gray-500 py-4">
-                  No available employees found
+                  No employees loaded
+                </p>
+              )}
+              
+              {employees.length > 0 && employees.filter(emp => 
+                !selectedShift.assignments?.some(
+                  assignment => assignment.user_id === emp.employee_id
+                ) &&
+                emp.department_id === selectedShift.department_id
+              ).length === 0 && (
+                <p className="text-center text-gray-500 py-4">
+                  No available employees found for this shift's department
                 </p>
               )}
             </div>
