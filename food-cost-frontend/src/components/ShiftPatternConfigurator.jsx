@@ -59,11 +59,21 @@ const ShiftPatternConfigurator = () => {
   const [employees, setEmployees] = useState([]);
   const [selectedShift, setSelectedShift] = useState(null);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem('token');
+        
+        // Fetch all available tasks
+        const tasksResponse = await axios.get(`${API_URL}/tasks/unassigned`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setTasks(tasksResponse.data);
         
         // Fetch departments
         const deptResponse = await axios.get(`${API_URL}/departments`, {
@@ -106,6 +116,8 @@ const ShiftPatternConfigurator = () => {
       console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
       setScheduleLoading(true);
       const token = localStorage.getItem('token');
+      
+      // Assign employee to shift
       await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
         { employee_id: employeeId },
         {
@@ -114,6 +126,18 @@ const ShiftPatternConfigurator = () => {
           }
         }
       );
+
+      // If there are selected tasks, assign them to the shift as well
+      if (selectedTaskIds.length > 0) {
+        await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/tasks`, 
+          { task_ids: selectedTaskIds },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+      }
       await fetchWeeklyShifts(selectedWeekStart);
       setAssignmentModalOpen(false);
       setSelectedShift(null);
@@ -742,6 +766,7 @@ const ShiftPatternConfigurator = () => {
                 onClick={() => {
                   setAssignmentModalOpen(false);
                   setSelectedShift(null);
+                  setSelectedTaskIds([]);
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -763,39 +788,12 @@ const ShiftPatternConfigurator = () => {
               )}
             </div>
 
-            <div className="max-h-60 overflow-y-auto">
-              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
-                <div>Total Employees: {employees.length}</div>
-                <div>Shift Department: {selectedShift.department_id}</div>
-                <div>Current Assignments: {JSON.stringify(selectedShift.assignments || [])}</div>
-              </div>
-              
-              {employees.length > 0 ? (
-                employees
-                  .filter(emp => {
-                    // Check if employee is already assigned (checking both user_id and employee_id)
-                    const notAssigned = !selectedShift.assignments?.some(
-                      assignment => (
-                        assignment.user_id === emp.employee_id || 
-                        assignment.employee_id === emp.employee_id
-                      )
-                    );
-                    
-                    // Check department match
-                    const sameDepartment = Number(emp.department_id) === Number(selectedShift.department_id);
-                    
-                    console.log('Filtering employee:', {
-                      name: emp.name,
-                      empId: emp.employee_id,
-                      empDept: emp.department_id,
-                      shiftDept: selectedShift.department_id,
-                      notAssigned,
-                      sameDepartment
-                    });
-                    
-                    return notAssigned && sameDepartment;
-                  })
-                  .map(employee => (
+            {/* Employee Selection Section */}
+            <div>
+              <h4 className="font-medium mb-2">Select Employee</h4>
+              <div className="max-h-60 overflow-y-auto">
+                {employees.length > 0 ? (
+                  employees.map(employee => (
                     <button
                       key={employee.employee_id}
                       onClick={() => handleAssignEmployee(employee.employee_id)}
@@ -807,22 +805,50 @@ const ShiftPatternConfigurator = () => {
                       </div>
                     </button>
                   ))
-              ) : (
-                <p className="text-center text-gray-500 py-4">
-                  No employees loaded
-                </p>
-              )}
-              
-              {employees.length > 0 && employees.filter(emp => 
-                !selectedShift.assignments?.some(
-                  assignment => assignment.user_id === emp.employee_id
-                ) &&
-                emp.department_id === selectedShift.department_id
-              ).length === 0 && (
-                <p className="text-center text-gray-500 py-4">
-                  No available employees found for this shift's department
-                </p>
-              )}
+                ) : (
+                  <p className="text-center text-gray-500 py-4">
+                    No employees found in the system
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Task Assignment Section */}
+            <div className="mt-6 border-t pt-4">
+              <h4 className="font-medium mb-2">Assign Tasks to Shift</h4>
+              <div className="max-h-40 overflow-y-auto">
+                {tasks.length > 0 ? (
+                  tasks.map(task => (
+                    <label key={task.task_id} className="flex items-start p-2 hover:bg-gray-50 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIds.includes(task.task_id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTaskIds(prev => [...prev, task.task_id]);
+                          } else {
+                            setSelectedTaskIds(prev => prev.filter(id => id !== task.task_id));
+                          }
+                        }}
+                        className="mt-1 mr-2"
+                      />
+                      <div>
+                        <div className="font-medium">{task.title}</div>
+                        <div className="text-sm text-gray-500">{task.description}</div>
+                        {task.due_date && (
+                          <div className="text-xs text-gray-400">
+                            Due: {format(new Date(task.due_date), 'MMM d, yyyy')}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 py-2">
+                    No unassigned tasks available
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
