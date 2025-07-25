@@ -14,6 +14,9 @@ const DAYS_OF_WEEK = [
 ];
 
 function TasksPage({ user }) {
+  if (!user) {
+    return <div className="p-6">Loading user data...</div>;
+  }
   // State for managing task patterns
   const [patterns, setPatterns] = useState([]);
   const [isCreatingPattern, setIsCreatingPattern] = useState(false);
@@ -21,12 +24,11 @@ function TasksPage({ user }) {
     title: '',
     description: '',
     priority: 'medium',
-    department_id: user.department_id || '',
+    department_id: user?.department_id || '',  // Use optional chaining
     week_number: 1,
     day_of_week: 0,
     due_time: ''
   });
-
   // State for managing actual tasks
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);

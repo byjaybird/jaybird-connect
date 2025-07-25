@@ -290,9 +290,8 @@ def create_manual_shift():
     })
 
 @shift_routes.route('/api/shifts/<int:shift_id>/assign', methods=['POST'])
-def assign_shift():
+def assign_shift(shift_id):
     """Assign an employee to a shift."""
-    shift_id = request.view_args['shift_id']
     employee_id = request.json['employee_id']
     cursor = get_db_cursor()
     
