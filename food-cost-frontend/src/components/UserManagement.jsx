@@ -23,9 +23,7 @@ function UserManagement() {
   const fetchUsers = async () => {
     try {
       // Check auth status first
-      await checkAuthStatus();
-      
-      const response = await fetch(`${API_URL}/users`, {
+      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users`, {
         method: 'GET',
         headers: getAuthHeaders(),
         credentials: 'include'
@@ -55,9 +53,7 @@ function UserManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();try {
-      await checkAuthStatus();
-      
-      const response = await fetch(`${API_URL}/users`, {
+      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(newUser)
@@ -83,9 +79,7 @@ function UserManagement() {
 
   const toggleUserActive = async (userId, currentActive) => {
     try {
-      await checkAuthStatus();
-      
-      const response = await fetch(`${API_URL}/users/${userId}`, {
+      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users/${userId}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({ active: !currentActive })
