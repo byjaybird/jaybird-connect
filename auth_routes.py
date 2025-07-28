@@ -23,7 +23,7 @@ SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL')
 
 
 
-@auth_bp.route('/api/auth/login', methods=['POST'])
+@auth_bp.route('/auth/login', methods=['POST'])
 def login():
     try:
         data = request.get_json()
@@ -95,7 +95,7 @@ def login():
         print(f"Error in login: {str(e)}")
         return jsonify({'error': 'Internal server error during authentication'}), 500
 
-@auth_bp.route('/api/auth/register', methods=['POST'])
+@auth_bp.route('/auth/register', methods=['POST'])
 @token_required  # Only authenticated admins can register new users
 def register():
     if request.user['role'] != 'admin':
@@ -149,7 +149,7 @@ def register():
         print(f"Error in register: {str(e)}")
         return jsonify({'error': 'Internal server error during registration'}), 500
 
-@auth_bp.route('/api/auth/change-password', methods=['POST'])
+@auth_bp.route('/auth/change-password', methods=['POST'])
 @token_required
 def change_password():
     try:
@@ -237,7 +237,7 @@ def send_reset_email(email, reset_token):
         print(f"Error sending email: {str(e)}")
         return False
 
-@auth_bp.route('/api/auth/forgot-password', methods=['POST'])
+@auth_bp.route('/auth/forgot-password', methods=['POST'])
 def forgot_password():
     try:
         data = request.get_json()
@@ -282,7 +282,7 @@ def forgot_password():
         print(f"Error in forgot_password: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@auth_bp.route('/api/auth/reset-password', methods=['POST'])
+@auth_bp.route('/auth/reset-password', methods=['POST'])
 def reset_password():
     try:
         data = request.get_json()
