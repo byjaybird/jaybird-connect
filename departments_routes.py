@@ -4,7 +4,7 @@ from utils.db import get_db_cursor
 
 departments_bp = Blueprint('departments', __name__)
 
-@departments_bp.route('/api/departments', methods=['GET'])
+@departments_bp.route('/departments', methods=['GET'])
 def get_departments():
     """Get all departments."""
     cursor = get_db_cursor()

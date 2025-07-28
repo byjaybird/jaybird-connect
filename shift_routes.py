@@ -327,43 +327,61 @@ def assign_shift(shift_id):
 @shift_routes.route('/api/shifts/weekly', methods=['GET'])
 def get_weekly_shifts():
     """Get all shifts for the current week."""
-    start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
-    department_id = request.args.get('department_id')
-    employee_id = request.args.get('employee_id')
-    
-    cursor = get_db_cursor()
-    
-    query = """
-        SELECT s.*, array_agg(json_build_object(
-            'employee_id', sa.employee_id,
-            'assigned_at', sa.assigned_at
-        )) as assignments
-        FROM shifts s
-        LEFT JOIN shift_assignments sa ON s.shift_id = sa.shift_id
-        WHERE s.date >= %s AND s.date < %s
-    """
-    params = [start_date, start_date + timedelta(days=7)]
-    
-    if department_id:
-        query += " AND s.department_id = %s"
-        params.append(department_id)
+    try:
+        start_date_str = request.args.get('start_date')
+        if not start_date_str:
+            return jsonify({'error': 'start_date parameter is required'}), 400
+            
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
+            
+        department_id = request.args.get('department_id')
+        employee_id = request.args.get('employee_id')
         
-    if employee_id:
-        query += " AND sa.employee_id = %s"
-        params.append(employee_id)
-    
-    query += " GROUP BY s.shift_id"
-    cursor.execute(query, tuple(params))
-    shifts = cursor.fetchall()
-    
-    return jsonify({
-        'shifts': [{
-            'shift_id': s['shift_id'],
-            'date': s['date'].isoformat(),
-            'start_time': s['start_time'].strftime('%H:%M'),
-            'end_time': s['end_time'].strftime('%H:%M'),
-            'label': s['label'],
-            'department_id': s['department_id'],
-            'assignments': [a for a in s['assignments'] if a is not None]
-        } for s in shifts]
-    })
+        cursor = get_db_cursor()
+        
+        try:
+            query = """
+                SELECT s.*, array_agg(json_build_object(
+                    'employee_id', sa.employee_id,
+                    'assigned_at', sa.assigned_at
+                )) as assignments
+                FROM shifts s
+                LEFT JOIN shift_assignments sa ON s.shift_id = sa.shift_id
+                WHERE s.date >= %s AND s.date < %s
+            """
+            params = [start_date, start_date + timedelta(days=7)]
+            
+            if department_id:
+                query += " AND s.department_id = %s"
+                params.append(department_id)
+                
+            if employee_id:
+                query += " AND sa.employee_id = %s"
+                params.append(employee_id)
+            
+            query += " GROUP BY s.shift_id ORDER BY s.date, s.start_time"
+            cursor.execute(query, tuple(params))
+            shifts = cursor.fetchall()
+            
+            return jsonify({
+                'shifts': [{
+                    'shift_id': s['shift_id'],
+                    'date': s['date'].isoformat(),
+                    'start_time': s['start_time'].strftime('%H:%M'),
+                    'end_time': s['end_time'].strftime('%H:%M'),
+                    'label': s['label'],
+                    'department_id': s['department_id'],
+                    'assignments': [a for a in s['assignments'] if a is not None]
+                } for s in shifts]
+            })
+        except Exception as db_error:
+            print(f"Database error in get_weekly_shifts: {str(db_error)}")
+            return jsonify({'error': 'Database error', 'details': str(db_error)}), 500
+        finally:
+            cursor.close()
+    except Exception as e:
+        print(f"Error in get_weekly_shifts: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500

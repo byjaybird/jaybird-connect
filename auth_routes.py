@@ -53,14 +53,13 @@ def login():
                 return jsonify({'message': 'User not active'}), 403
 
             if not bcrypt.checkpw(password.encode('utf-8'), employee['password_hash'].encode('utf-8')):
-                return jsonify({'message': 'Incorrect password'}), 401
-
-
-            # Generate JWT token
+                return jsonify({'message': 'Incorrect password'}), 401# Generate JWT token with ample expiration and issued at time
+            now = datetime.utcnow()
             token = jwt.encode({
                 'employee_id': employee['employee_id'],
                 'email': employee['email'],
-                'exp': datetime.utcnow() + timedelta(days=1)  # Token expires in 1 day
+                'exp': now + timedelta(days=7),  # Token expires in 7 days
+                'iat': now  # Issued at time
             }, JWT_SECRET, algorithm='HS256')# Update last login
             cursor.execute("""
                 UPDATE employees

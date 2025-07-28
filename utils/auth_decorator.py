@@ -19,15 +19,18 @@ def token_required(f):
             return jsonify({'error': 'Authentication token is missing'}), 401
 
         try:
-            print(f"Processing token: {token[:20]}...")
             # Remove 'Bearer ' if present
             if token.startswith('Bearer '):
                 token = token[7:]
-                print("Removed Bearer prefix")
             
-            print(f"Using JWT_SECRET: {JWT_SECRET[:10]}...")
-            data = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-            print(f"Decoded token data: {data}")
+            # Decode with explicit leeway to handle minor clock skew
+            data = jwt.decode(
+                token, 
+                JWT_SECRET, 
+                algorithms=['HS256'],
+                options={"verify_exp": True},
+                leeway=10  # 10 seconds of leeway for clock skew
+            )
             
             cursor = get_db_cursor()
             cursor.execute("""
