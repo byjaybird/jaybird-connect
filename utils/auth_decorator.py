@@ -4,8 +4,8 @@ import jwt
 import os
 from utils.db import get_db_cursor
 
-# Secret key for JWT - in production, use a secure environment variable
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-here')
+# Secret key for JWT
+JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')
 
 def token_required(f):
     @wraps(f)
@@ -19,11 +19,15 @@ def token_required(f):
             return jsonify({'error': 'Authentication token is missing'}), 401
 
         try:
+            print(f"Processing token: {token[:20]}...")
             # Remove 'Bearer ' if present
             if token.startswith('Bearer '):
                 token = token[7:]
+                print("Removed Bearer prefix")
             
+            print(f"Using JWT_SECRET: {JWT_SECRET[:10]}...")
             data = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            print(f"Decoded token data: {data}")
             
             cursor = get_db_cursor()
             cursor.execute("""

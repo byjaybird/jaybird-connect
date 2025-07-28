@@ -190,20 +190,27 @@ def change_password():
 
     except Exception as e:
         print(f"Error in change_password: {str(e)}")
-        return jsonify({'error': 'Internal server error during password change'}), 500@auth_bp.route('/auth/check', methods=['GET', 'OPTIONS'])
+        return jsonify({'error': 'Internal server error during password change'}), 500@auth_bp.route('/auth/check', methods=['GET'])
+
+@auth_bp.route('/auth/check', methods=['POST'])
 @token_required
 def check_auth():
-    return jsonify({
-        'status': 'valid',
-        'user': {
-            'name': request.user['name'],
-            'email': request.user['email'],
-            'role': request.user['role'],
-            'department': request.user.get('department_name'),
-            'department_id': request.user.get('department_id'),
-            'isActive': request.user['active']
-        }
-    })
+    try:
+        return jsonify({
+            'status': 'valid',
+            'user': {
+                'employee_id': request.user['employee_id'],
+                'name': request.user['name'],
+                'email': request.user['email'],
+                'role': request.user['role'],
+                'department': request.user.get('department_name'),
+                'department_id': request.user.get('department_id'),
+                'isActive': request.user['active']
+            }
+        })
+    except Exception as e:
+        print(f"Error in check_auth: {str(e)}")
+        return jsonify({'error': 'Internal server error during auth check'}), 500
 
 def send_reset_email(email, reset_token):
     try:
