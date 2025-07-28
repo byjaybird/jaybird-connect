@@ -6,7 +6,7 @@ from utils.auth_decorator import token_required
 
 shift_routes = Blueprint('shifts', __name__)
 
-@shift_routes.route('/api/shifts/patterns', methods=['GET'])
+@shift_routes.route('/shifts/patterns', methods=['GET'])
 @token_required
 def get_shift_patterns():
     """Get all shift patterns."""
@@ -31,7 +31,7 @@ def get_shift_patterns():
     finally:
         cursor.close()
 
-@shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['PUT'])
+@shift_routes.route('/shifts/patterns/<int:pattern_id>', methods=['PUT'])
 @token_required
 def update_shift_pattern(pattern_id):
     """Update an existing shift pattern."""
@@ -94,7 +94,7 @@ def update_shift_pattern(pattern_id):
     finally:
         cursor.close()
 
-@shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['DELETE'])
+@shift_routes.route('/shifts/patterns/<int:pattern_id>', methods=['DELETE'])
 @token_required
 def delete_shift_pattern(pattern_id):
     """Delete a shift pattern."""
@@ -118,7 +118,7 @@ def delete_shift_pattern(pattern_id):
     finally:
         cursor.close()
 
-@shift_routes.route('/api/shifts/patterns', methods=['POST'])
+@shift_routes.route('/shifts/patterns', methods=['POST'])
 @token_required
 def create_shift_pattern():
     """Create a new shift pattern."""
@@ -172,7 +172,7 @@ def create_shift_pattern():
     finally:
         cursor.close()
 
-@shift_routes.route('/api/shifts/generate', methods=['POST'])
+@shift_routes.route('/shifts/generate', methods=['POST'])
 @token_required
 def generate_shifts():
     """Generate shifts for the next N days."""
@@ -265,7 +265,7 @@ def generate_shifts():
         print("Error in generate_shifts:", str(e))
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
-@shift_routes.route('/api/shifts/manual', methods=['POST'])
+@shift_routes.route('/shifts/manual', methods=['POST'])
 @token_required
 def create_manual_shift():
     """Create a one-off shift manually."""
@@ -296,7 +296,7 @@ def create_manual_shift():
         'message': 'Shift created successfully'
     })
 
-@shift_routes.route('/api/shifts/<int:shift_id>/assign', methods=['POST'])
+@shift_routes.route('/shifts/<int:shift_id>/assign', methods=['POST'])
 @token_required
 def assign_shift(shift_id):
     """Assign an employee to a shift."""
@@ -332,7 +332,7 @@ def assign_shift(shift_id):
         'message': 'Employee assigned successfully'
     })
 
-@shift_routes.route('/api/shifts/weekly', methods=['GET'])
+@shift_routes.route('/shifts/weekly', methods=['GET'])
 @token_required
 def get_weekly_shifts():
     """Get all shifts for the current week."""

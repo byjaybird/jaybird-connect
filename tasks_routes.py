@@ -62,56 +62,34 @@ def create_task():
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()
-
-# Get all unassigned tasks
+        cursor.close()# Get all unassigned tasks
 @tasks_bp.route('/tasks/unassigned', methods=['GET'])
 @token_required
 def get_unassigned_tasks():
     cursor = get_db_cursor()
     try:
+        # Get unassigned tasks for the current department
         cursor.execute("""
             SELECT 
-                tp.*,
-                d.name as department_name
-            FROM task_patterns tp
-            LEFT JOIN departments d ON tp.department_id = d.department_id
-            WHERE tp.archived = false
-            ORDER BY tp.week_number, tp.due_time
-                tp.title,
-                tp.description,
-                tp.priority,
-                tp.department_id,
-                ds.date + tp.due_time AS due_date,
-                'pending' AS status
-            FROM task_patterns tp
-            CROSS JOIN date_series ds
-            WHERE 
-                -- For weekly tasks or matching bi-weekly week
-                (
-                    (tp.frequency = 'weekly') OR
-                    (
-                        tp.frequency = 'bi-weekly' AND
-                        tp.week_number = CASE 
-                            WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
-                            ELSE 2 
-                        END
-                    )
-                )
-                -- Match any of the days of week
-                AND EXTRACT(DOW FROM ds.date) = ANY(tp.days_of_week)
-                AND tp.archived = false
                 t.*,
                 e.name as assigned_by_name,
-                d.name as department_name
+                d.name as department_name,
+                CASE 
+                    WHEN t.due_date < CURRENT_DATE THEN 'overdue'
+                    WHEN t.due_date = CURRENT_DATE THEN 'due-today'
+                    ELSE 'upcoming'
+                END as due_status
             FROM tasks t
             LEFT JOIN employees e ON t.assigned_by = e.employee_id
             LEFT JOIN departments d ON t.department_id = d.department_id
-            WHERE t.shift_id IS NULL
+            WHERE t.shift_id IS NULL 
             AND t.status = 'pending'
             AND t.archived = false
-            ORDER BY t.due_date ASC NULLS LAST, t.priority DESC
-        """)
+            AND t.department_id = %s
+            ORDER BY 
+                t.due_date ASC NULLS LAST,
+                t.priority DESC
+        """, (request.user['department_id'],))
         tasks = cursor.fetchall()
         return jsonify(tasks)
     finally:
@@ -324,6 +302,31 @@ def get_task_patterns():
     logger.info('Fetching task patterns for user %s', request.user['employee_id'])
     cursor = get_db_cursor()
     try:
+        cursor.execute("""
+            SELECT 
+                tp.*,
+                d.name as department_name
+            FROM task_patterns tp
+            LEFT JOIN departments d ON tp.department_id = d.department_id
+            WHERE tp.archived = false
+            AND tp.department_id = %s
+            ORDER BY 
+                tp.week_number, 
+                tp.days_of_week[1], 
+                tp.due_time
+        """, (request.user['department_id'],))
+        patterns = cursor.fetchall()
+        logger.info('Found %d task patterns', len(patterns))
+        return jsonify(patterns)
+    finally:
+        cursor.close()
+
+@tasks_bp.route('/tasks/patterns', methods=['POST'])
+@token_required
+def get_task_patterns():
+    logger.info('Fetching task patterns for user %s', request.user['employee_id'])
+    cursor = get_db_cursor()
+    try:
         cursor.execute("""SELECT 
                 tp.*,
                 d.name as department_name
@@ -338,7 +341,7 @@ def get_task_patterns():
     finally:
         cursor.close()
 
-# Create a task pattern@tasks_bp.route('/tasks/patterns', methods=['POST'])
+@tasks_bp.route('/tasks/patterns', methods=['POST'])
 @token_required
 def create_task_pattern():
     data = request.get_json()
