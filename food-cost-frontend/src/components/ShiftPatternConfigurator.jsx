@@ -75,19 +75,19 @@ const ShiftPatternConfigurator = () => {
         }
         
         // Fetch all available tasks
-        const tasksResponse = await api.get('/api/tasks/unassigned');
+        const tasksResponse = await api.get('/tasks/unassigned');
         setTasks(tasksResponse.data);
         
         // Fetch departments
-        const deptResponse = await api.get('/api/departments');
+        const deptResponse = await api.get('/departments');
         setDepartments(deptResponse.data);
 
         // Fetch patterns
-        const patternsResponse = await api.get('/api/shifts/patterns');
+        const patternsResponse = await api.get('/shifts/patterns');
         setPatterns(patternsResponse.data);
 
         // Fetch employees
-        const employeesResponse = await api.get('/api/users');
+        const employeesResponse = await api.get('/users');
         setEmployees(employeesResponse.data.filter(emp => emp.active)); // Only get active employees
 
         setError(null);
@@ -106,10 +106,10 @@ const ShiftPatternConfigurator = () => {
     try {
       console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
       setScheduleLoading(true);
-await api.put(`/api/shifts/patterns/${editingPattern}`, formattedPattern);
+await api.put(`/shifts/patterns/${editingPattern}`, formattedPattern);
       
       // Refresh patterns
-      const response = await api.get('/api/shifts/patterns');
+      const response = await api.get('/shifts/patterns');
       
       // Assign employee to shift
       await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
@@ -146,10 +146,10 @@ await api.put(`/api/shifts/patterns/${editingPattern}`, formattedPattern);
   const handleRemoveAssignment = async (shiftId, employeeId) => {
     try {
       setScheduleLoading(true);
-await api.post('/api/shifts/patterns', formattedPattern);
+await api.post('/shifts/patterns', formattedPattern);
       
       // Refresh patterns after creating new one
-      const response = await api.get('/api/shifts/patterns');
+      const response = await api.get('/shifts/patterns');
       await axios.delete(`${API_URL}/shifts/${shiftId}/assign/${employeeId}`, { // The endpoint might need to be adjusted if it expects user_id
         headers: {
           'Authorization': `Bearer ${token}`
@@ -169,7 +169,7 @@ await api.post('/api/shifts/patterns', formattedPattern);
   const fetchPatterns = async () => {
     try {
       setIsLoading(true);
-await api.post(`/api/shifts/${selectedShift.shift_id}/assign`, 
+await api.post(`/shifts/${selectedShift.shift_id}/assign`, 
         { employee_id: employeeId }
       );
       const response = await axios.get(`${API_URL}/shifts/patterns`, {
@@ -190,7 +190,7 @@ await api.post(`/api/shifts/${selectedShift.shift_id}/assign`,
   const handleUpdatePattern = async (updatedPattern) => {
     try {
       setIsCreating(true);
-await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
+await api.delete(`/shifts/${shiftId}/assign/${employeeId}`);
 
       // Format the data for the API - send only the time portion
       const formattedPattern = {
@@ -303,7 +303,7 @@ await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
     }
 
     try {
-      await api.delete(`/api/shifts/patterns/${patternId}`);
+      await api.delete(`/shifts/patterns/${patternId}`);
       
       // Remove the pattern from the list
       setPatterns(patterns.filter(p => p.pattern_id !== patternId));
@@ -352,7 +352,7 @@ await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
     try {
       setScheduleLoading(true);
       setScheduleError(null);
-      const response = await api.get('/api/shifts/weekly', {
+      const response = await api.get('/shifts/weekly', {
         params: {
           start_date: format(startDate, 'yyyy-MM-dd')
         }
@@ -384,7 +384,7 @@ await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
     try {
       setScheduleLoading(true);
       setScheduleError(null);
-      await api.post('/api/shifts/manual', shiftData);
+      await api.post('/shifts/manual', shiftData);
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error creating shift:', err);
