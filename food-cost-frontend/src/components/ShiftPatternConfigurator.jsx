@@ -65,38 +65,29 @@ const ShiftPatternConfigurator = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        // Check auth status first
+        try {
+          await checkAuthStatus();
+        } catch (authError) {
+          console.error('ShiftPatternConfigurator: Authentication check failed');
+          window.location.href = '/login';
+          return;
+        }
         
         // Fetch all available tasks
-        const tasksResponse = await axios.get(`${API_URL}/tasks/unassigned`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const tasksResponse = await api.get('/tasks/unassigned');
         setTasks(tasksResponse.data);
         
         // Fetch departments
-        const deptResponse = await axios.get(`${API_URL}/departments`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const deptResponse = await api.get('/departments');
         setDepartments(deptResponse.data);
 
         // Fetch patterns
-        const patternsResponse = await axios.get(`${API_URL}/shifts/patterns`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const patternsResponse = await api.get('/shifts/patterns');
         setPatterns(patternsResponse.data);
 
         // Fetch employees
-        const employeesResponse = await axios.get(`${API_URL}/users`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const employeesResponse = await api.get('/users');
         setEmployees(employeesResponse.data.filter(emp => emp.active)); // Only get active employees
 
         setError(null);
@@ -115,7 +106,10 @@ const ShiftPatternConfigurator = () => {
     try {
       console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
       setScheduleLoading(true);
-      const token = localStorage.getItem('token');
+await api.put(`/shifts/patterns/${editingPattern}`, formattedPattern);
+      
+      // Refresh patterns
+      const response = await api.get('/shifts/patterns');
       
       // Assign employee to shift
       await axios.post(`${API_URL}/shifts/${selectedShift.shift_id}/assign`, 
@@ -152,7 +146,10 @@ const ShiftPatternConfigurator = () => {
   const handleRemoveAssignment = async (shiftId, employeeId) => {
     try {
       setScheduleLoading(true);
-      const token = localStorage.getItem('token');
+await api.post('/shifts/patterns', formattedPattern);
+      
+      // Refresh patterns after creating new one
+      const response = await api.get('/shifts/patterns');
       await axios.delete(`${API_URL}/shifts/${shiftId}/assign/${employeeId}`, { // The endpoint might need to be adjusted if it expects user_id
         headers: {
           'Authorization': `Bearer ${token}`
@@ -172,7 +169,9 @@ const ShiftPatternConfigurator = () => {
   const fetchPatterns = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+await api.post(`/shifts/${selectedShift.shift_id}/assign`, 
+        { employee_id: employeeId }
+      );
       const response = await axios.get(`${API_URL}/shifts/patterns`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -191,7 +190,7 @@ const ShiftPatternConfigurator = () => {
   const handleUpdatePattern = async (updatedPattern) => {
     try {
       setIsCreating(true);
-      const token = localStorage.getItem('token');
+await api.delete(`/shifts/${shiftId}/assign/${employeeId}`);
 
       // Format the data for the API - send only the time portion
       const formattedPattern = {
@@ -304,12 +303,7 @@ const ShiftPatternConfigurator = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API_URL}/shifts/patterns/${patternId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      await api.delete(`/shifts/patterns/${patternId}`);
       
       // Remove the pattern from the list
       setPatterns(patterns.filter(p => p.pattern_id !== patternId));
@@ -358,11 +352,7 @@ const ShiftPatternConfigurator = () => {
     try {
       setScheduleLoading(true);
       setScheduleError(null);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/shifts/weekly`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+      const response = await api.get('/shifts/weekly', {
         params: {
           start_date: format(startDate, 'yyyy-MM-dd')
         }
@@ -394,12 +384,7 @@ const ShiftPatternConfigurator = () => {
     try {
       setScheduleLoading(true);
       setScheduleError(null);
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/shifts/manual`, shiftData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      await api.post('/shifts/manual', shiftData);
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error creating shift:', err);

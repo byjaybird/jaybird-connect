@@ -6,8 +6,7 @@ export const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
-  },
-  withCredentials: true // This enables sending cookies with requests
+  }
 });
 
 // Add token to requests
@@ -16,6 +15,10 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      // If no token is found, redirect to login
+      window.location.href = '/login';
+      return Promise.reject('No auth token found');
     }
     return config;
   },
@@ -27,10 +30,12 @@ api.interceptors.request.use(
 // Handle 401 responses
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
+      console.log('Auth error detected, clearing token and redirecting to login');
       localStorage.removeItem('token');
       window.location.href = '/login';
+      return Promise.reject('Authentication failed');
     }
     return Promise.reject(error);
   }
