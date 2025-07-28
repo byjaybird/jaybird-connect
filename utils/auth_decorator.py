@@ -10,6 +10,10 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-here')
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Allow OPTIONS requests to pass through
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
+            
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'error': 'Authentication token is missing'}), 401
