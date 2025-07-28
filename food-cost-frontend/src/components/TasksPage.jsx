@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL } from '../config';
 import { format } from 'date-fns';
+import { checkAuthStatus } from '../utils/auth';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -42,10 +43,19 @@ function TasksPage({ user }) {
     const fetchInitialData = async () => {
       console.log('TasksPage: Initializing with user:', user);
       try {
+        // Check auth status first
+        try {
+          await checkAuthStatus();
+        } catch (authError) {
+          console.error('TasksPage: Authentication check failed');
+          window.location.href = '/login';
+          return;
+        }
+
         const token = localStorage.getItem('token');
         if (!token) {
           console.error('TasksPage: No auth token found');
-          window.location.href = '/login'; // Redirect to login
+          window.location.href = '/login';
           return;
         }
         
@@ -81,6 +91,14 @@ function TasksPage({ user }) {
           status: err.response?.status,
           message: err.message
         });
+        
+        if (err.response?.status === 401) {
+          console.error('TasksPage: Authentication failed, redirecting to login');
+          localStorage.removeItem('token'); // Clear invalid token
+          window.location.href = '/login';
+          return;
+        }
+        
         setError(err.response?.data?.message || err.message || 'Failed to load initial data');
       }
     };
