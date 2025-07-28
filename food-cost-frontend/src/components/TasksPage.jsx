@@ -65,13 +65,13 @@ function TasksPage({ user }) {
 
         // Fetch departments
         console.log('TasksPage: Fetching departments...');
-        const deptsResponse = await api.get('/departments');
+        const deptsResponse = await api.get('/api/departments');
         console.log('TasksPage: Received departments:', deptsResponse.data);
         setDepartments(deptsResponse.data);
 
         // Fetch department tasks
         console.log('TasksPage: Fetching department tasks...');
-        const tasksResponse = await api.get('/tasks/department');
+        const tasksResponse = await api.get('/api/tasks/department');
         console.log('TasksPage: Received tasks:', tasksResponse.data);
         setTasks(tasksResponse.data);
 
@@ -166,11 +166,11 @@ function TasksPage({ user }) {
         return;
       }
 
-      const generateResponse = await api.post('/tasks/generate', { days_ahead: 14 });
+      const generateResponse = await api.post('/api/tasks/generate', { days_ahead: 14 });
       console.log('TasksPage: Generated tasks response:', generateResponse.data);
 
       // Refresh tasks list
-      const tasksResponse = await api.get('/tasks/department');
+      const tasksResponse = await api.get('/api/tasks/department');
       console.log('TasksPage: Updated tasks list:', tasksResponse.data);
       setTasks(tasksResponse.data);
     } catch (err) {
