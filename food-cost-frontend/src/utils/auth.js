@@ -13,24 +13,6 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-  if (!token) {
-    console.error('No auth token found during status check');
-    throw new Error('No token found');
-  }
-
-  try {
-    console.log('Checking auth status with token:', token);
-    const response = await api.get('/auth/check');
-    console.log('Auth check successful:', response.data);
-    return true;
-  } catch (error) {
-    console.error('Auth check failed with error:', error.response || error);
-    if (error.response?.status === 401) {
-      console.log('Received 401 from auth check, clearing token');
-      localStorage.removeItem('token');
-    }
-    throw error;
-  }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     } else {
@@ -60,20 +42,6 @@ api.interceptors.response.use(
 );
 
 export const checkAuthStatus = async () => {
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      console.log('Auth error detected, clearing token and redirecting to login');
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      return Promise.reject('Authentication failed');
-    }
-    return Promise.reject(error);
-  }
-);
-
-export const checkAuthStatus = async () => {
   const token = localStorage.getItem('token');
   if (!token) {
     console.error('No auth token found during status check');
@@ -81,13 +49,16 @@ export const checkAuthStatus = async () => {
   }
 
   try {
-    console.log('Checking auth status...');
-    await api.get('/auth/check'); // Keep this as is since baseURL now includes /api
-    console.log('Auth check successful');
+    console.log('Checking auth status with token:', token);
+    const response = await api.get('/auth/check');
+    console.log('Auth check successful:', response.data);
     return true;
   } catch (error) {
-    console.error('Auth check failed:', error);
-    localStorage.removeItem('token');
+    console.error('Auth check failed with error:', error.response || error);
+    if (error.response?.status === 401) {
+      console.log('Received 401 from auth check, clearing token');
+      localStorage.removeItem('token');
+    }
     throw error;
   }
 };
