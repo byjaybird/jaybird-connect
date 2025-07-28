@@ -45,6 +45,7 @@ function TasksPage({ user }) {
         const token = localStorage.getItem('token');
         if (!token) {
           console.error('TasksPage: No auth token found');
+          window.location.href = '/login'; // Redirect to login
           return;
         }
         
@@ -89,7 +90,19 @@ function TasksPage({ user }) {
 
   const handleCreatePattern = async (e) => {
     e.preventDefault();
-    console.log('TasksPage: Creating new task pattern:', currentPattern);
+    // Validate days of week
+    if (currentPattern.days_of_week.length === 0) {
+      alert('Please select at least one day of the week');
+      return;
+    }
+
+    // Ensure department_id is a number
+    const formData = {
+      ...currentPattern,
+      department_id: Number(currentPattern.department_id)
+    };
+    
+    console.log('TasksPage: Creating new task pattern:', formData);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -99,7 +112,7 @@ function TasksPage({ user }) {
 
       const response = await axios.post(
         `${API_URL}/tasks/patterns`,
-        currentPattern,
+        formData,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       console.log('TasksPage: Pattern creation response:', response.data);
@@ -131,7 +144,16 @@ function TasksPage({ user }) {
         status: err.response?.status,
         message: err.message
       });
-      alert(`Failed to create pattern: ${err.response?.data?.error || err.message}`);
+      const errorMessage = err.response?.data?.error || err.message;
+      console.error('Server error:', err.response?.data);
+      
+      if (err.response?.status === 401) {
+        alert('Your session has expired. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+      
+      alert(`Failed to create pattern: ${errorMessage}`);
     }
   };
 
