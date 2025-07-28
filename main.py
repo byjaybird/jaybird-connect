@@ -19,9 +19,10 @@ from services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
+
 app = Flask(__name__)  # Create Flask app
 CORS(app, resources={
-    r"/api/*": {
+    r"/*": {
         "origins": [
             "http://localhost:5173",
             "https://jaybird-connect.web.app",
@@ -34,6 +35,16 @@ CORS(app, resources={
         "max_age": 600
     }
 })
+
+# Ensure CORS headers are set for all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', 'https://jaybird-connect.web.app')
+    response.headers.add('Access-Control-Allow-Headers', '*')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '600')
+    return response
 
 # Additional CORS headers for preflight requests
 @app.after_request
