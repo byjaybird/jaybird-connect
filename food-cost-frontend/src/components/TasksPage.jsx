@@ -59,19 +59,19 @@ function TasksPage({ user }) {
         
         // Fetch task patterns
         console.log('TasksPage: Fetching task patterns...');
-        const patternsResponse = await api.get('/tasks/patterns');
+        const patternsResponse = await api.get('/api/tasks/patterns');
         console.log('TasksPage: Received patterns:', patternsResponse.data);
         setPatterns(patternsResponse.data);
 
         // Fetch departments
         console.log('TasksPage: Fetching departments...');
-        const deptsResponse = await api.get('/departments');
+        const deptsResponse = await api.get('/api/departments');
         console.log('TasksPage: Received departments:', deptsResponse.data);
         setDepartments(deptsResponse.data);
 
         // Fetch department tasks
         console.log('TasksPage: Fetching department tasks...');
-        const tasksResponse = await api.get('/tasks/department');
+        const tasksResponse = await api.get('/api/tasks/department');
         console.log('TasksPage: Received tasks:', tasksResponse.data);
         setTasks(tasksResponse.data);
 
@@ -120,11 +120,11 @@ function TasksPage({ user }) {
         return;
       }
 
-      const response = await api.post('/tasks/patterns', formData);
+      const response = await api.post('/api/tasks/patterns', formData);
       console.log('TasksPage: Pattern creation response:', response.data);
 
       // Refresh patterns
-      const patternsResponse = await api.get('/tasks/patterns');
+      const patternsResponse = await api.get('/api/tasks/patterns');
       console.log('TasksPage: Updated patterns list:', patternsResponse.data);
       setPatterns(patternsResponse.data);
 
@@ -169,11 +169,11 @@ function TasksPage({ user }) {
         return;
       }
 
-      const generateResponse = await api.post('/tasks/generate', { days_ahead: 14 });
+      const generateResponse = await api.post('/api/tasks/generate', { days_ahead: 14 });
       console.log('TasksPage: Generated tasks response:', generateResponse.data);
 
       // Refresh tasks list
-      const tasksResponse = await api.get('/tasks/department');
+      const tasksResponse = await api.get('/api/tasks/department');
       console.log('TasksPage: Updated tasks list:', tasksResponse.data);
       setTasks(tasksResponse.data);
     } catch (err) {

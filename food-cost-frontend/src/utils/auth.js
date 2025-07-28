@@ -3,7 +3,7 @@ import { API_URL } from '../config';
 
 // Create an axios instance with default config
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL.replace('/api', ''), // Remove /api since we include it in the routes
   headers: {
     'Content-Type': 'application/json'
   }
@@ -44,14 +44,17 @@ api.interceptors.response.use(
 export const checkAuthStatus = async () => {
   const token = localStorage.getItem('token');
   if (!token) {
+    console.error('No auth token found during status check');
     throw new Error('No token found');
   }
 
   try {
+    console.log('Checking auth status...');
     await api.get('/api/auth/check');
+    console.log('Auth check successful');
     return true;
   } catch (error) {
-    console.error('Auth check error:', error);
+    console.error('Auth check failed:', error);
     localStorage.removeItem('token');
     throw error;
   }
