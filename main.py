@@ -19,34 +19,32 @@ from services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
-
 app = Flask(__name__)  # Create Flask app
-CORS(app, resources={r"/*": {
+CORS(app, resources={
+    r"/api/*": {
         "origins": [
             "http://localhost:5173",
             "https://jaybird-connect.web.app",
             "https://jaybird-connect.ue.r.appspot.com"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        "allow_headers": [
-            "Content-Type",
-            "Authorization",
-            "User-Agent",
-            "Accept",
-            "Origin",
-            "Referer",
-            "Sec-Fetch-Mode",
-            "Sec-Fetch-Site",
-            "Sec-Fetch-Dest",
-            "sec-ch-ua",
-            "sec-ch-ua-mobile",
-            "sec-ch-ua-platform"
-        ],
+        "allow_headers": ["*"],
         "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
         "max_age": 600
     }
 })
+
+# Additional CORS headers for preflight requests
+@app.after_request
+def after_request(response):
+    if request.method == 'OPTIONS':
+        response.headers["Access-Control-Allow-Origin"] = "https://jaybird-connect.web.app"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # Global auth middleware
 def require_auth(f):
@@ -115,7 +113,7 @@ def auth_before_request():
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
 app.register_blueprint(tasks_bp)
-app.register_blueprint(auth_bp)
+app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(user_bp)
 app.register_blueprint(shift_bp)
 app.register_blueprint(departments_bp)
