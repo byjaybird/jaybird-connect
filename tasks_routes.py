@@ -293,9 +293,7 @@ def update_task_status(task_id):
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()
-
-# Get all task patterns
+        cursor.close()# Get all task patterns
 @tasks_bp.route('/tasks/patterns', methods=['GET'])
 @token_required
 def get_task_patterns():
@@ -315,26 +313,6 @@ def get_task_patterns():
                 tp.days_of_week[1], 
                 tp.due_time
         """, (request.user['department_id'],))
-        patterns = cursor.fetchall()
-        logger.info('Found %d task patterns', len(patterns))
-        return jsonify(patterns)
-    finally:
-        cursor.close()
-
-@tasks_bp.route('/tasks/patterns', methods=['POST'])
-@token_required
-def get_task_patterns():
-    logger.info('Fetching task patterns for user %s', request.user['employee_id'])
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("""SELECT 
-                tp.*,
-                d.name as department_name
-            FROM task_patterns tp
-            LEFT JOIN departments d ON tp.department_id = d.department_id
-            WHERE tp.archived = false
-            ORDER BY tp.week_number, tp.days_of_week[1], tp.due_time
-        """)
         patterns = cursor.fetchall()
         logger.info('Found %d task patterns', len(patterns))
         return jsonify(patterns)
