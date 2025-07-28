@@ -57,13 +57,11 @@ function TasksPage({ user }) {
           console.error('TasksPage: No auth token found');
           window.location.href = '/login';
           return;
-        }
-        
-        // Fetch task patterns
-        console.log('TasksPage: Fetching task patterns...');
-        const patternsResponse = await api.get('/tasks/patterns');
-        console.log('TasksPage: Received patterns:', patternsResponse.data);
-        setPatterns(patternsResponse.data);
+        }// Fetch task patterns
+          console.log('TasksPage: Fetching task patterns...');
+          const patternsResponse = await api.get('/api/tasks/patterns');
+          console.log('TasksPage: Received patterns:', patternsResponse.data);
+          setPatterns(patternsResponse.data);
 
         // Fetch departments
         console.log('TasksPage: Fetching departments...');
@@ -120,13 +118,10 @@ function TasksPage({ user }) {
       if (!token) {
         console.error('TasksPage: No auth token found during pattern creation');
         return;
-      }
-
-      const response = await api.post('/tasks/patterns', formData);
-      console.log('TasksPage: Pattern creation response:', response.data);
-
-      // Refresh patterns
-      const patternsResponse = await api.get('/tasks/patterns');
+      }const response = await api.post('/api/tasks/patterns', formData);
+  console.log('TasksPage: Pattern creation response:', response.data);
+  // Refresh patterns
+  const patternsResponse = await api.get('/api/tasks/patterns');
       console.log('TasksPage: Updated patterns list:', patternsResponse.data);
       setPatterns(patternsResponse.data);
 
