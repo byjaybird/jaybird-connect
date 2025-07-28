@@ -6,11 +6,12 @@ automatic_scaling:
   target_cpu_utilization: 0.65
   min_instances: 1
   max_instances: 2
+
 handlers:
-- url: /.*
-  secure: always
-  redirect_http_response_code: 301
-  script: auto
+  - url: /.*
+    secure: always
+    redirect_http_response_code: 301
+    script: auto
 
 env_variables:
   PORT: 8080
@@ -20,5 +21,6 @@ env_variables:
   DB_PASSWORD: bagels4life
   FLASK_ENV: "production"
   JWT_SECRET: "49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd"
+
 beta_settings:
   cloud_sql_instances: jaybird-connect:us-east1:jaybird-db

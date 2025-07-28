@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import os
 import psycopg2
@@ -20,12 +20,26 @@ from functools import wraps
 from dotenv import load_dotenv
 
 load_dotenv()
-app = Flask(__name__)  # Create Flask app# Configure CORS
-CORS(app, 
-     resources={r"/*": {"origins": ["https://jaybird-connect.web.app", "http://localhost:5173"]}},
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+app = Flask(__name__)  # Create Flask app# Basic CORS setup
+CORS(app)
+
+# Handle CORS preflight requests@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "https://jaybird-connect.web.app")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        response.headers.add("Access-Control-Max-Age", "3600")
+        return response
+
+@app.after_request
+def after_request(response):
+    if not response.headers.get('Access-Control-Allow-Origin'):
+        response.headers.add('Access-Control-Allow-Origin', 'https://jaybird-connect.web.app')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # Global auth middleware
 def require_auth(f):
