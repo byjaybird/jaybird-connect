@@ -3,7 +3,7 @@ import { API_URL } from '../config';
 
 // Create an axios instance with default config
 export const api = axios.create({
-  baseURL: `${API_URL}/api`, // Add /api here since we removed it from API_URL
+  baseURL: API_URL, // Use API_URL directly since routes include /api
   headers: {
     'Content-Type': 'application/json'
   }

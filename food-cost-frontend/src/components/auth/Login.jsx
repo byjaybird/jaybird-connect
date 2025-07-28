@@ -5,13 +5,14 @@ import { api } from '../../utils/auth';
 const Login = ({ setUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
+  const [error, setError] = useState('');const navigate = useNavigate();
   
-  try {
-    const response = await api.post('/auth/login', { email, password });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    try {
+      const response = await api.post('/api/auth/login', { email, password });
     const data = response.data;
     
     if (data.token && data.employee) {
@@ -78,9 +79,9 @@ const Login = ({ setUser }) => {
               <label htmlFor="password" className="sr-only">Password</label>
               <input
                 id="password"
-                name="password"
-                type="password"
+                name="password"type="password"
                 required
+                autoComplete="current-password"
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
