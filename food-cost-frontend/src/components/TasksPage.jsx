@@ -17,6 +17,7 @@ function TasksPage({ user }) {
   if (!user) {
     return <div className="p-6">Loading user data...</div>;
   }
+
   // State for managing task patterns
   const [patterns, setPatterns] = useState([]);
   const [isCreatingPattern, setIsCreatingPattern] = useState(false);
@@ -24,11 +25,13 @@ function TasksPage({ user }) {
     title: '',
     description: '',
     priority: 'medium',
-    department_id: user?.department_id || '',  // Use optional chaining
+    department_id: user?.department_id || '',
     week_number: 1,
-    day_of_week: 0,
-    due_time: ''
+    days_of_week: [],
+    due_time: '',
+    frequency: 'weekly'
   });
+
   // State for managing actual tasks
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,8 +81,6 @@ function TasksPage({ user }) {
           message: err.message
         });
         setError(err.response?.data?.message || err.message || 'Failed to load initial data');
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -118,8 +119,9 @@ function TasksPage({ user }) {
         priority: 'medium',
         department_id: user.department_id || '',
         week_number: 1,
-        day_of_week: 0,
-        due_time: ''
+        days_of_week: [],
+        due_time: '',
+        frequency: 'weekly'
       });
       setIsCreatingPattern(false);
     } catch (err) {
@@ -221,7 +223,19 @@ function TasksPage({ user }) {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+              <select
+                value={currentPattern.frequency}
+                onChange={(e) => setCurrentPattern(prev => ({ ...prev, frequency: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-md"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="bi-weekly">Bi-weekly</option>
+              </select>
+            </div>
+
+            {currentPattern.frequency === 'bi-weekly' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Week Number</label>
                 <select
@@ -233,20 +247,33 @@ function TasksPage({ user }) {
                   <option value={2}>Week 2</option>
                 </select>
               </div>
+            )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Day of Week</label>
-                <select
-                  value={currentPattern.day_of_week}
-                  onChange={(e) => setCurrentPattern(prev => ({ ...prev, day_of_week: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  {DAYS_OF_WEEK.map((day, index) => (
-                    <option key={day} value={index}>{day}</option>
-                  ))}
-                </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Days of Week</label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {DAYS_OF_WEEK.map((day, index) => (
+                  <label key={day} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={currentPattern.days_of_week.includes(index)}
+                      onChange={(e) => {
+                        setCurrentPattern(prev => ({
+                          ...prev,
+                          days_of_week: e.target.checked
+                            ? [...prev.days_of_week, index]
+                            : prev.days_of_week.filter(d => d !== index)
+                        }))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span>{day}</span>
+                  </label>
+                ))}
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Due Time</label>
                 <input
@@ -315,7 +342,10 @@ function TasksPage({ user }) {
               </div>
               <p className="text-gray-600">{pattern.description}</p>
               <div className="mt-2 text-sm">
-                <p>Week {pattern.week_number}, {DAYS_OF_WEEK[pattern.day_of_week]}</p>
+                <p>
+                  {pattern.frequency === 'bi-weekly' ? `Week ${pattern.week_number}, ` : ''}
+                  {pattern.days_of_week.map(day => DAYS_OF_WEEK[day]).join(', ')}
+                </p>
                 <p>Due: {pattern.due_time}</p>
                 <p>Priority: {pattern.priority}</p>
                 <p>Department: {departments.find(d => d.department_id === pattern.department_id)?.name}</p>
@@ -345,6 +375,7 @@ function TasksPage({ user }) {
               <div className="mt-2 text-sm">
                 <p>Due: {format(new Date(task.due_date), 'MMM d, yyyy h:mm a')}</p>
                 <p>Priority: {task.priority}</p>
+                <p>Department: {departments.find(d => d.department_id === task.department_id)?.name}</p>
               </div>
             </div>
           ))}

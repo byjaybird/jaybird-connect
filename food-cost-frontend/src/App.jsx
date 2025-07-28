@@ -46,6 +46,7 @@ function Header({ user, onLogout }) {
             {user?.role === 'Admin' && (
               <>
                 <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
+                <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
                 <Link to="/shifts/patterns" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Patterns</Link>
               </>
             )}

@@ -72,6 +72,29 @@ def get_unassigned_tasks():
     try:
         cursor.execute("""
             SELECT 
+                tp.title,
+                tp.description,
+                tp.priority,
+                tp.department_id,
+                ds.date + tp.due_time AS due_date,
+                'pending' AS status
+            FROM task_patterns tp
+            CROSS JOIN date_series ds
+            WHERE 
+                -- For weekly tasks or matching bi-weekly week
+                (
+                    (tp.frequency = 'weekly') OR
+                    (
+                        tp.frequency = 'bi-weekly' AND
+                        tp.week_number = CASE 
+                            WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                            ELSE 2 
+                        END
+                    )
+                )
+                -- Match any of the days of week
+                AND EXTRACT(DOW FROM ds.date) = ANY(tp.days_of_week)
+                AND tp.archived = false
                 t.*,
                 e.name as assigned_by_name,
                 d.name as department_name
@@ -310,13 +333,12 @@ def get_task_patterns():
     finally:
         cursor.close()
 
-# Create a task pattern
-@tasks_bp.route('/api/tasks/patterns', methods=['POST'])
+# Create a task pattern@tasks_bp.route('/api/tasks/patterns', methods=['POST'])
 @token_required
 def create_task_pattern():
     data = request.get_json()
     logger.info('Creating new task pattern: %s', data)
-    required_fields = ['title', 'week_number', 'day_of_week', 'department_id']
+    required_fields = ['title', 'days_of_week', 'department_id']
     
     for field in required_fields:
         if not data.get(field):
@@ -331,19 +353,21 @@ def create_task_pattern():
                 priority,
                 department_id,
                 week_number,
-                day_of_week,
-                due_time
+                days_of_week,
+                due_time,
+                frequency
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING *
         """, (
             data['title'],
             data.get('description'),
             data.get('priority', 'medium'),
             data['department_id'],
-            data['week_number'],
-            data['day_of_week'],
-            data.get('due_time')
+            data.get('week_number', 1),
+            data['days_of_week'],
+            data.get('due_time'),
+            data.get('frequency', 'weekly')
         ))
         new_pattern = cursor.fetchone()
         cursor.connection.commit()
@@ -381,8 +405,7 @@ def generate_tasks():
                 department_id,
                 due_date,
                 status
-            )
-            SELECT 
+            )SELECT 
                 tp.title,
                 tp.description,
                 tp.priority,
@@ -392,13 +415,19 @@ def generate_tasks():
             FROM task_patterns tp
             CROSS JOIN date_series ds
             WHERE 
-                -- Match week number (1 or 2 based on alternating weeks)
-                tp.week_number = CASE 
-                    WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
-                    ELSE 2 
-                END
-                -- Match day of week (0-6)
-                AND EXTRACT(DOW FROM ds.date) = tp.day_of_week
+                -- For weekly tasks or matching bi-weekly week
+                (
+                    (tp.frequency = 'weekly') OR
+                    (
+                        tp.frequency = 'bi-weekly' AND
+                        tp.week_number = CASE 
+                            WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                            ELSE 2 
+                        END
+                    )
+                )
+                -- Match any of the days of week
+                AND EXTRACT(DOW FROM ds.date) = ANY(tp.days_of_week)
                 AND tp.archived = false
             RETURNING *
         """, (days_ahead,))
