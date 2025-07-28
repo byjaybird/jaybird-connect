@@ -3,7 +3,7 @@ import { API_URL } from '../config';
 
 // Create an axios instance with default config
 export const api = axios.create({
-  baseURL: API_URL, // API_URL already includes '/api'
+  baseURL: `${API_URL}/api`, // Add /api here since we removed it from API_URL
   headers: {
     'Content-Type': 'application/json'
   }
@@ -13,6 +13,24 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('No auth token found during status check');
+    throw new Error('No token found');
+  }
+
+  try {
+    console.log('Checking auth status with token:', token);
+    const response = await api.get('/auth/check');
+    console.log('Auth check successful:', response.data);
+    return true;
+  } catch (error) {
+    console.error('Auth check failed with error:', error.response || error);
+    if (error.response?.status === 401) {
+      console.log('Received 401 from auth check, clearing token');
+      localStorage.removeItem('token');
+    }
+    throw error;
+  }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     } else {
@@ -50,7 +68,7 @@ export const checkAuthStatus = async () => {
 
   try {
     console.log('Checking auth status...');
-    await api.get('/auth/check');
+    await api.get('/auth/check'); // Keep this as is since baseURL now includes /api
     console.log('Auth check successful');
     return true;
   } catch (error) {

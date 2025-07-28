@@ -42,10 +42,12 @@ function TasksPage({ user }) {
       console.log('TasksPage: Initializing with user:', user);
       try {
         // Check auth status first
+        console.log('TasksPage: Starting initialization, checking token:', localStorage.getItem('token'));
         try {
           await checkAuthStatus();
+          console.log('TasksPage: Auth check passed');
         } catch (authError) {
-          console.error('TasksPage: Authentication check failed');
+          console.error('TasksPage: Authentication check failed:', authError);
           window.location.href = '/login';
           return;
         }
