@@ -12,17 +12,36 @@ export const api = axios.create({
 // Add token to requests
 api.interceptors.request.use(
   (config) => {
+    console.log('Request interceptor - URL:', config.url);
+    
+    // Skip token check for login and other public endpoints
+    if (config.url.includes('/auth/login')) {
+      console.log('Skipping token check for login request');
+      return config;
+    }
+    
     const token = localStorage.getItem('token');
+    console.log('Request interceptor - Token:', token ? 'Present' : 'Missing');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      // If no token is found, redirect to login
-      window.location.href = '/login';
+      console.log('Request interceptor - Headers set');
+      return config;
+    }
+    
+    // Don't redirect on auth check requests
+    if (config.url.includes('/auth/check')) {
+      console.log('Skipping redirect for auth check');
       return Promise.reject('No auth token found');
     }
-    return config;
+    
+    // If no token is found, redirect to login
+    console.log('No token found, redirecting to login');
+    window.location.href = '/login';
+    return Promise.reject('No auth token found');
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );

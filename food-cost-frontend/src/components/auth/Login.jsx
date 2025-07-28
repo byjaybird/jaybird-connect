@@ -1,28 +1,21 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_URL } from '../../config';
+import { api } from '../../utils/auth';
 
 const Login = ({ setUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate();
-
-const handleSubmit = async (e) => {
+  const navigate = useNavigate();const handleSubmit = async (e) => {
   e.preventDefault();
   setError('');
-
-  try {const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-      mode: 'cors',
-      credentials: 'include'
-    });
-
-    const data = await response.json();if (response.ok) {console.log('✅ Login successful:', data);
+  
+  try {
+    const response = await api.post('/auth/login', { email, password });
+    const data = response.data;
+    
+    if (data.token && data.employee) {
+      console.log('✅ Login successful:', data);
       localStorage.setItem('token', data.token);
       // Set the user state with the employee data
       setUser(data.employee);
