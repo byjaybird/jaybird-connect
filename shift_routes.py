@@ -2,10 +2,12 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
+from utils.auth_decorator import token_required
 
 shift_routes = Blueprint('shifts', __name__)
 
 @shift_routes.route('/api/shifts/patterns', methods=['GET'])
+@token_required
 def get_shift_patterns():
     """Get all shift patterns."""
     cursor = get_db_cursor()
@@ -30,6 +32,7 @@ def get_shift_patterns():
         cursor.close()
 
 @shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['PUT'])
+@token_required
 def update_shift_pattern(pattern_id):
     """Update an existing shift pattern."""
     data = request.json
@@ -92,6 +95,7 @@ def update_shift_pattern(pattern_id):
         cursor.close()
 
 @shift_routes.route('/api/shifts/patterns/<int:pattern_id>', methods=['DELETE'])
+@token_required
 def delete_shift_pattern(pattern_id):
     """Delete a shift pattern."""
     cursor = get_db_cursor()
@@ -115,6 +119,7 @@ def delete_shift_pattern(pattern_id):
         cursor.close()
 
 @shift_routes.route('/api/shifts/patterns', methods=['POST'])
+@token_required
 def create_shift_pattern():
     """Create a new shift pattern."""
     data = request.json
@@ -168,6 +173,7 @@ def create_shift_pattern():
         cursor.close()
 
 @shift_routes.route('/api/shifts/generate', methods=['POST'])
+@token_required
 def generate_shifts():
     """Generate shifts for the next N days."""
     try:
@@ -260,6 +266,7 @@ def generate_shifts():
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @shift_routes.route('/api/shifts/manual', methods=['POST'])
+@token_required
 def create_manual_shift():
     """Create a one-off shift manually."""
     data = request.json
@@ -290,6 +297,7 @@ def create_manual_shift():
     })
 
 @shift_routes.route('/api/shifts/<int:shift_id>/assign', methods=['POST'])
+@token_required
 def assign_shift(shift_id):
     """Assign an employee to a shift."""
     employee_id = request.json['employee_id']
@@ -325,6 +333,7 @@ def assign_shift(shift_id):
     })
 
 @shift_routes.route('/api/shifts/weekly', methods=['GET'])
+@token_required
 def get_weekly_shifts():
     """Get all shifts for the current week."""
     try:
