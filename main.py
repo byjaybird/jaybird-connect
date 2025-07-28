@@ -18,29 +18,14 @@ from departments_routes import departments_bp
 from services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
-load_dotenv()
-app = Flask(__name__)  # Create Flask app
-CORS(app, resources={
-    r"/*": {
-        "origins": "https://jaybird-connect.web.app",  # Single origin instead of list
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        "allow_headers": ["*"],
-        "expose_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True,
-        "max_age": 600
-    }
-})
 
-# Additional CORS headers for preflight requests
-@app.after_request
-def after_request(response):
-    if request.method == 'OPTIONS':
-        response.headers["Access-Control-Allow-Origin"] = "https://jaybird-connect.web.app"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Max-Age"] = "600"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
+load_dotenv()
+app = Flask(__name__)  # Create Flask app# Configure CORS
+CORS(app, 
+     resources={r"/*": {"origins": ["https://jaybird-connect.web.app", "http://localhost:5173"]}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 
 # Global auth middleware
 def require_auth(f):
