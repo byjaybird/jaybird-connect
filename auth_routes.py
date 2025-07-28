@@ -190,9 +190,9 @@ def change_password():
 
     except Exception as e:
         print(f"Error in change_password: {str(e)}")
-        return jsonify({'error': 'Internal server error during password change'}), 500@auth_bp.route('/auth/check', methods=['GET'])
-
-@auth_bp.route('/auth/check', methods=['POST'])
+        return jsonify({'error': 'Internal server error during password change'}), 500
+    
+@auth_bp.route('/auth/check', methods=['GET', 'POST'])
 @token_required
 def check_auth():
     try:

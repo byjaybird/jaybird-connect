@@ -30,7 +30,7 @@ api.interceptors.request.use(
     }
     
     // Don't redirect on auth check requests
-    if (config.url.includes('/auth/check')) {
+    if (config.url.includes('/api/auth/check')) {
       console.log('Skipping redirect for auth check');
       return Promise.reject('No auth token found');
     }
@@ -69,7 +69,7 @@ export const checkAuthStatus = async () => {
 
   try {
     console.log('Checking auth status with token:', token);
-    const response = await api.get('/auth/check');
+    const response = await api.get('/api/auth/check');
     console.log('Auth check successful:', response.data);
     return true;
   } catch (error) {
