@@ -8,10 +8,14 @@ automatic_scaling:
   max_instances: 2
 
 handlers:
+  # Handle CORS preflight requests
   - url: /.*
+    script: auto
     secure: always
     redirect_http_response_code: 301
-    script: auto
+
+# Since App Engine's yaml doesn't support CORS headers directly for script handlers,
+# we'll need to handle CORS in the Flask application
 
 env_variables:
   PORT: 8080
