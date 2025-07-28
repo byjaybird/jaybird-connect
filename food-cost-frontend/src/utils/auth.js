@@ -60,6 +60,20 @@ api.interceptors.response.use(
 );
 
 export const checkAuthStatus = async () => {
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      console.log('Auth error detected, clearing token and redirecting to login');
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      return Promise.reject('Authentication failed');
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const checkAuthStatus = async () => {
   const token = localStorage.getItem('token');
   if (!token) {
     console.error('No auth token found during status check');
