@@ -132,7 +132,7 @@ def auth_before_request():
 
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
-app.register_blueprint(tasks_bp)
+app.register_blueprint(tasks_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(user_bp)
 app.register_blueprint(shift_bp)

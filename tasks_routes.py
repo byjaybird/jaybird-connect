@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 tasks_bp = Blueprint('tasks', __name__)
 
 # Create a new task
-@tasks_bp.route('/api/tasks', methods=['POST'])
+@tasks_bp.route('/tasks', methods=['POST'])
 @token_required
 def create_task():
     data = request.get_json()
@@ -65,7 +65,7 @@ def create_task():
         cursor.close()
 
 # Get all unassigned tasks
-@tasks_bp.route('/api/tasks/unassigned', methods=['GET'])
+@tasks_bp.route('/tasks/unassigned', methods=['GET'])
 @token_required
 def get_unassigned_tasks():
     cursor = get_db_cursor()
@@ -112,7 +112,7 @@ def get_unassigned_tasks():
         cursor.close()
 
 # Get all tasks for a specific shift
-@tasks_bp.route('/api/shifts/<int:shift_id>/tasks', methods=['GET'])
+@tasks_bp.route('/shifts/<int:shift_id>/tasks', methods=['GET'])
 @token_required
 def get_shift_tasks(shift_id):
     cursor = get_db_cursor()
@@ -134,7 +134,7 @@ def get_shift_tasks(shift_id):
         cursor.close()
 
 # Assign tasks to a shift
-@tasks_bp.route('/api/shifts/<int:shift_id>/tasks', methods=['POST'])
+@tasks_bp.route('/shifts/<int:shift_id>/tasks', methods=['POST'])
 @token_required
 def assign_tasks_to_shift(shift_id):
     data = request.get_json()
@@ -177,7 +177,7 @@ def assign_tasks_to_shift(shift_id):
         cursor.close()
 
 # Remove task from shift
-@tasks_bp.route('/api/shifts/<int:shift_id>/tasks/<int:task_id>', methods=['DELETE'])
+@tasks_bp.route('/shifts/<int:shift_id>/tasks/<int:task_id>', methods=['DELETE'])
 @token_required
 def remove_task_from_shift(shift_id, task_id):
     cursor = get_db_cursor()
@@ -203,7 +203,7 @@ def remove_task_from_shift(shift_id, task_id):
         cursor.close()
 
 # Get all tasks for current user's department
-@tasks_bp.route('/api/tasks/department', methods=['GET'])
+@tasks_bp.route('/tasks/department', methods=['GET'])
 @token_required
 def get_department_tasks():
     cursor = get_db_cursor()
@@ -225,7 +225,7 @@ def get_department_tasks():
     finally:
         cursor.close()
 
-@tasks_bp.route('/api/auth/verify', methods=['POST'])
+@tasks_bp.route('/auth/verify', methods=['POST'])
 @token_required
 def verify_auth():
     try:
@@ -249,7 +249,7 @@ def verify_auth():
     finally:
         cursor.close()
 
-@tasks_bp.route('/api/tasks/assigned/<int:user_id>', methods=['GET'])
+@tasks_bp.route('/tasks/assigned/<int:user_id>', methods=['GET'])
 @token_required
 def get_assigned_tasks(user_id):
     cursor = get_db_cursor()
@@ -271,7 +271,7 @@ def get_assigned_tasks(user_id):
     finally:
         cursor.close()
 
-@tasks_bp.route('/api/tasks/<int:task_id>', methods=['PUT'])
+@tasks_bp.route('/tasks/<int:task_id>', methods=['PUT'])
 @token_required
 def update_task_status(task_id):
     data = request.get_json()
@@ -312,7 +312,7 @@ def update_task_status(task_id):
         cursor.close()
 
 # Get all task patterns
-@tasks_bp.route('/api/tasks/patterns', methods=['GET'])
+@tasks_bp.route('/tasks/patterns', methods=['GET'])
 @token_required
 def get_task_patterns():
     logger.info('Fetching task patterns for user %s', request.user['employee_id'])
@@ -333,7 +333,7 @@ def get_task_patterns():
     finally:
         cursor.close()
 
-# Create a task pattern@tasks_bp.route('/api/tasks/patterns', methods=['POST'])
+# Create a task pattern@tasks_bp.route('/tasks/patterns', methods=['POST'])
 @token_required
 def create_task_pattern():
     data = request.get_json()
@@ -380,7 +380,7 @@ def create_task_pattern():
         cursor.close()
 
 # Generate tasks from patterns
-@tasks_bp.route('/api/tasks/generate', methods=['POST'])
+@tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
     data = request.get_json()
