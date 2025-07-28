@@ -72,6 +72,12 @@ def get_unassigned_tasks():
     try:
         cursor.execute("""
             SELECT 
+                tp.*,
+                d.name as department_name
+            FROM task_patterns tp
+            LEFT JOIN departments d ON tp.department_id = d.department_id
+            WHERE tp.archived = false
+            ORDER BY tp.week_number, tp.due_time
                 tp.title,
                 tp.description,
                 tp.priority,
@@ -318,14 +324,13 @@ def get_task_patterns():
     logger.info('Fetching task patterns for user %s', request.user['employee_id'])
     cursor = get_db_cursor()
     try:
-        cursor.execute("""
-            SELECT 
+        cursor.execute("""SELECT 
                 tp.*,
                 d.name as department_name
             FROM task_patterns tp
             LEFT JOIN departments d ON tp.department_id = d.department_id
             WHERE tp.archived = false
-            ORDER BY tp.week_number, tp.day_of_week, tp.due_time
+            ORDER BY tp.week_number, tp.days_of_week[1], tp.due_time
         """)
         patterns = cursor.fetchall()
         logger.info('Found %d task patterns', len(patterns))
