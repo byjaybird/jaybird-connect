@@ -366,17 +366,30 @@ const ShiftPatternConfigurator = () => {
     fetchWeeklyShifts(selectedWeekStart);
   }, [selectedWeekStart]);
 
+  // Add debug logging for state
+  console.log('Component State:', {
+    departments,
+    patterns,
+    isLoading,
+    error,
+    employees,
+    shifts
+  });
+
   // Render component
   if (isLoading) {
-    return <div>Loading...</div>;
+    console.log('Rendering loading state');
+    return <div style={{padding: '20px'}}>Loading...</div>;
   }
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    console.log('Rendering error state:', error);
+    return <div style={{padding: '20px', color: 'red'}} className="error-message">{error}</div>;
   }
 
+  console.log('Rendering main component UI');
   return (
-    <div className="shift-pattern-configurator">
+    <div className="shift-pattern-configurator" style={{padding: '20px'}}>
       <h2>Shift Pattern Configuration</h2>
       
       {/* Existing Patterns */}
