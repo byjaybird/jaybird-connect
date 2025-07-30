@@ -130,7 +130,7 @@ const ShiftPatternConfigurator = () => {
     return () => {
       mounted = false;
     };
-  }, [selectedWeekStart]); // Only re-run if week changes
+  }, [selectedWeekStart]);
 
   // Pattern management functions
   const fetchPatterns = async () => {
@@ -273,153 +273,35 @@ const ShiftPatternConfigurator = () => {
     }));
   };
 
-  // Schedule management functions
-  const handleAssignEmployee = async (employeeId) => {
-    try {
-      console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
-      setScheduleLoading(true);
-
-      await api.post(`/api/shifts/${selectedShift.shift_id}/assign`, { employee_id: employeeId });
-
-      if (selectedTaskIds.length > 0) {
-        await api.post(`/api/shifts/${selectedShift.shift_id}/tasks`, { task_ids: selectedTaskIds });
-      }
-
-      await fetchWeeklyShifts(selectedWeekStart);
-      setAssignmentModalOpen(false);
-      setSelectedShift(null);
-    } catch (err) {
-      console.error('Error assigning employee:', err);
-      setScheduleError('Failed to assign employee to shift');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const handleRemoveAssignment = async (shiftId, employeeId) => {
-    try {
-      setScheduleLoading(true);
-      await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
-      await fetchWeeklyShifts(selectedWeekStart);
-    } catch (err) {
-      console.error('Error removing assignment:', err);
-      setScheduleError('Failed to remove employee from shift');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const fetchWeeklyShifts = async (startDate) => {
-    try {
-      setScheduleLoading(true);
-      setScheduleError(null);
-      const response = await api.get('/api/shifts/weekly', {
-        params: {
-          start_date: format(startDate, 'yyyy-MM-dd')
-        }
-      });
-      
-      const shiftsData = response.data.shifts || [];
-      setShifts(shiftsData);
-    } catch (err) {
-      console.error('Error fetching shifts:', err);
-      setScheduleError('Failed to fetch shifts');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const addManualShift = async (shiftData) => {
-    try {
-      setScheduleLoading(true);
-      setScheduleError(null);
-      await api.post('/api/shifts/manual', shiftData);
-      await fetchWeeklyShifts(selectedWeekStart);
-    } catch (err) {
-      console.error('Error creating shift:', err);
-      setScheduleError('Failed to create shift');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const generateShifts = async (daysAhead = 14) => {
-    try {
-      setScheduleLoading(true);
-      setScheduleError(null);
-      
-      await api.post('/api/shifts/generate', { days_ahead: daysAhead });
-      await fetchWeeklyShifts(selectedWeekStart);
-    } catch (err) {
-      console.error('Error generating shifts:', err);
-      setScheduleError(err.response?.data?.message || 'Failed to generate shifts: ' + err.message);
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  // Debug logging only in development
-  if (process.env.NODE_ENV === 'development') {
-    useEffect(() => {
-      console.log('Component State:', {
-        departments,
-        patterns,
-        isLoading,
-        error,
-        employees,
-        shifts
-      });
-    }, [departments, patterns, isLoading, error, employees, shifts]);
-  }
-
-  // Render loading state
-// Render loading state
-        if (isLoading) {
-          return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-              <div className="bg-white p-8 rounded-lg shadow-md">
-                <div className="animate-pulse flex flex-col items-center">
-                  <div className="h-8 w-64 bg-gray-200 rounded mb-4"></div>
-                  <div className="text-gray-600">Loading shift patterns...</div>
-                </div>
-              </div>
-            </div>
-          );
-        }
-      
-        // Render error state
-        if (error) {
-          return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-              <div className="bg-white p-8 rounded-lg shadow-md">
-                <div className="text-red-500 text-center">
-                  <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold mb-2">Error</h3>
-                  <p>{error}</p>
-                </div>
-              </div>
-            </div>
-          );
-        }
+  if (isLoading) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        Loading shift patterns...
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-md">
+          <div className="animate-pulse flex flex-col items-center">
+            <div className="h-8 w-64 bg-gray-200 rounded mb-4"></div>
+            <div className="text-gray-600">Loading shift patterns...</div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Render error state
   if (error) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center', color: 'red' }}>
-        Error: {error}
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-md">
+          <div className="text-red-500 text-center">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-lg font-semibold mb-2">Error</h3>
+            <p>{error}</p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Main render
   return (
     <div className="p-5 max-w-7xl mx-auto bg-gray-50">
       <h2 className="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-5">
@@ -505,10 +387,11 @@ const ShiftPatternConfigurator = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {DAYS_OF_WEEK.map((day) => (
               <label key={day} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors duration-200">
-                <input type="checkbox"
-              checked={pattern.days_of_week.includes(day)}
-              onChange={() => handleDayToggle(day)}
-              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                <input
+                  type="checkbox"
+                  checked={pattern.days_of_week.includes(day)}
+                  onChange={() => handleDayToggle(day)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
                 />
                 {day}
               </label>
@@ -555,7 +438,7 @@ const ShiftPatternConfigurator = () => {
                   department_id: ''
                 });
               }}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md"
+              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition duration-200 ease-in-out"
             >
               Cancel Edit
             </button>
@@ -564,7 +447,7 @@ const ShiftPatternConfigurator = () => {
           <button 
             type="submit" 
             disabled={isCreating}
-            className={`px-4 py-2 text-white rounded-md ${
+            className={`px-4 py-2 text-white rounded-md transition duration-200 ease-in-out ${
               editingPattern 
                 ? 'bg-green-500 hover:bg-green-600' 
                 : 'bg-blue-500 hover:bg-blue-600'
@@ -576,5 +459,6 @@ const ShiftPatternConfigurator = () => {
       </form>
     </div>
   );
+};
 
 export default ShiftPatternConfigurator;
