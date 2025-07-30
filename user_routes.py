@@ -29,19 +29,19 @@ CORS_CONFIG = {
 }
 
 # Add OPTIONS request handling
-@user_bp.route('/api/users', methods=['OPTIONS'])
+@user_bp.route('/users', methods=['OPTIONS'])
 @cross_origin(**CORS_CONFIG, methods=["GET", "POST", "PATCH", "OPTIONS"])
 def handle_users_options():
     response = make_response()
     return response
 
-@user_bp.route('/api/users/<int:user_id>', methods=['OPTIONS'])
+@user_bp.route('/users/<int:user_id>', methods=['OPTIONS'])
 @cross_origin(**CORS_CONFIG, methods=["GET", "PATCH", "OPTIONS"])
 def handle_user_options(user_id):
     response = make_response()
     return response
 
-@user_bp.route('/api/users', methods=['GET'])
+@user_bp.route('/users', methods=['GET'])
 @cross_origin(**CORS_CONFIG)
 @token_required
 def get_users():
@@ -72,7 +72,7 @@ def get_users():
     finally:
         cursor.close()
 
-@user_bp.route('/api/users', methods=['POST'])
+@user_bp.route('/users', methods=['POST'])
 @cross_origin(**CORS_CONFIG)
 @token_required
 def create_user():
@@ -112,7 +112,7 @@ def create_user():
     finally:
         cursor.close()
 
-@user_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@user_bp.route('/users/<int:user_id>', methods=['PATCH'])
 @cross_origin(**CORS_CONFIG)
 @token_required
 def update_user(user_id):

@@ -85,8 +85,8 @@ const ShiftPatternConfigurator = () => {
         const patternsResponse = await api.get('/api/shifts/patterns');
         setPatterns(patternsResponse.data);
 
-        // Fetch employees
-        const employeesResponse = await api.get('/api/employees');
+        // Fetch employees from users endpoint
+        const employeesResponse = await api.get('/api/users');
         setEmployees(employeesResponse.data.filter(emp => emp.active)); // Only get active employees
 
         setError(null);
