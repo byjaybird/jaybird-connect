@@ -392,44 +392,141 @@ const ShiftPatternConfigurator = () => {
 
   // Main render
   return (
-    <div className="shift-pattern-configurator" style={{padding: '20px'}}>
-      <h2>Shift Pattern Configuration</h2>
+    <div className="shift-pattern-configurator" style={{
+      padding: '20px',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      <h2 style={{
+        color: '#2c3e50',
+        borderBottom: '2px solid #eee',
+        paddingBottom: '10px',
+        marginBottom: '20px'
+      }}>Shift Pattern Configuration</h2>
       
       {/* Existing Patterns */}
-      <div className="patterns-list">
-        <h3>Existing Patterns</h3>
-        {patterns.map((p) => (
-          <div key={p.pattern_id} className="pattern-item">
-            <h4>{p.label}</h4>
-            <p>Department: {departments.find(d => d.id === p.department_id)?.name}</p>
-            <p>Days: {Array.isArray(p.days_of_week) ? p.days_of_week.join(', ') : p.days_of_week}</p>
-            <p>Time: {formatTime(p.start_time)} - {formatTime(p.end_time)}</p>
-            <button onClick={() => handleEdit(p)}>Edit</button>
-            <button onClick={() => handleDelete(p.pattern_id)}>Delete</button>
-          </div>
-        ))}
+      <div className="patterns-list" style={{
+        marginBottom: '40px',
+        background: '#fff',
+        borderRadius: '8px',
+        padding: '20px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{
+          color: '#34495e',
+          marginBottom: '20px'
+        }}>Existing Patterns</h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: '20px'
+        }}>
+          {patterns.map((p) => (
+            <div key={p.pattern_id} style={{
+              background: '#f8f9fa',
+              borderRadius: '6px',
+              padding: '15px',
+              border: '1px solid #dee2e6'
+            }}>
+              <h4 style={{
+                margin: '0 0 10px 0',
+                color: '#2c3e50'
+              }}>{p.label}</h4>
+              <p style={{margin: '5px 0'}}>
+                <strong>Department:</strong> {departments.find(d => d.id === p.department_id)?.name}
+              </p>
+              <p style={{margin: '5px 0'}}>
+                <strong>Days:</strong> {Array.isArray(p.days_of_week) ? p.days_of_week.join(', ') : p.days_of_week}
+              </p>
+              <p style={{margin: '5px 0'}}>
+                <strong>Time:</strong> {formatTime(p.start_time)} - {formatTime(p.end_time)}
+              </p>
+              <div style={{
+                marginTop: '15px',
+                display: 'flex',
+                gap: '10px'
+              }}>
+                <button
+                  onClick={() => handleEdit(p)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(p.pattern_id)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Pattern Form */}
-      <form onSubmit={handleSubmit} className="pattern-form">
-        <h3>{editingPattern ? 'Edit Pattern' : 'Create New Pattern'}</h3>
+      <form onSubmit={handleSubmit} style={{
+        background: '#fff',
+        padding: '25px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{
+          color: '#2c3e50',
+          marginBottom: '20px'
+        }}>{editingPattern ? 'Edit Pattern' : 'Create New Pattern'}</h3>
         
-        <div>
-          <label>Label:</label>
+        <div style={{marginBottom: '15px'}}>
+          <label style={{
+            display: 'block',
+            marginBottom: '5px',
+            color: '#34495e'
+          }}>Label:</label>
           <input
             type="text"
             value={pattern.label}
             onChange={(e) => setPattern({...pattern, label: e.target.value})}
             required
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '4px',
+              border: '1px solid #ddd'
+            }}
           />
         </div>
 
-        <div>
-          <label>Department:</label>
+        <div style={{marginBottom: '15px'}}>
+          <label style={{
+            display: 'block',
+            marginBottom: '5px',
+            color: '#34495e'
+          }}>Department:</label>
           <select
             value={pattern.department_id}
             onChange={(e) => setPattern({...pattern, department_id: e.target.value})}
             required
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '4px',
+              border: '1px solid #ddd'
+            }}
           >
             <option value="">Select Department</option>
             {departments.map((dept) => (
@@ -440,15 +537,29 @@ const ShiftPatternConfigurator = () => {
           </select>
         </div>
 
-        <div>
-          <label>Days of Week:</label>
-          <div className="days-selector">
+        <div style={{marginBottom: '15px'}}>
+          <label style={{
+            display: 'block',
+            marginBottom: '10px',
+            color: '#34495e'
+          }}>Days of Week:</label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '10px'
+          }}>
             {DAYS_OF_WEEK.map((day) => (
-              <label key={day}>
+              <label key={day} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer'
+              }}>
                 <input
                   type="checkbox"
                   checked={pattern.days_of_week.includes(day)}
                   onChange={() => handleDayToggle(day)}
+                  style={{cursor: 'pointer'}}
                 />
                 {day}
               </label>
@@ -456,48 +567,101 @@ const ShiftPatternConfigurator = () => {
           </div>
         </div>
 
-        <div>
-          <label>Start Time:</label>
-          <input
-            type="time"
-            value={pattern.start_time}
-            onChange={(e) => setPattern({...pattern, start_time: e.target.value})}
-            required
-          />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '20px',
+          marginBottom: '20px'
+        }}>
+          <div>
+            <label style={{
+              display: 'block',
+              marginBottom: '5px',
+              color: '#34495e'
+            }}>Start Time:</label>
+            <input
+              type="time"
+              value={pattern.start_time}
+              onChange={(e) => setPattern({...pattern, start_time: e.target.value})}
+              required
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ddd'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block',
+              marginBottom: '5px',
+              color: '#34495e'
+            }}>End Time:</label>
+            <input
+              type="time"
+              value={pattern.end_time}
+              onChange={(e) => setPattern({...pattern, end_time: e.target.value})}
+              required
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ddd'
+              }}
+            />
+          </div>
         </div>
 
-        <div>
-          <label>End Time:</label>
-          <input
-            type="time"
-            value={pattern.end_time}
-            onChange={(e) => setPattern({...pattern, end_time: e.target.value})}
-            required
-          />
-        </div>
-
-        <button type="submit" disabled={isCreating}>
-          {isCreating ? 'Saving...' : (editingPattern ? 'Update Pattern' : 'Create Pattern')}
-        </button>
-
-        {editingPattern && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingPattern(null);
-              setPattern({
-                days_of_week: [],
-                number_of_shifts: 1,
-                label: '',
-                start_time: '',
-                end_time: '',
-                department_id: ''
-              });
+        <div style={{
+          display: 'flex',
+          gap: '10px',
+          justifyContent: 'flex-end'
+        }}>
+          {editingPattern && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingPattern(null);
+                setPattern({
+                  days_of_week: [],
+                  number_of_shifts: 1,
+                  label: '',
+                  start_time: '',
+                  end_time: '',
+                  department_id: ''
+                });
+              }}
+              style={{
+                padding: '10px 20px',
+                background: '#95a5a6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel Edit
+            </button>
+          )}
+          
+          <button 
+            type="submit" 
+            disabled={isCreating}
+            style={{
+              padding: '10px 20px',
+              background: editingPattern ? '#2ecc71' : '#3498db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: isCreating ? 'not-allowed' : 'pointer',
+              opacity: isCreating ? 0.7 : 1
             }}
           >
-            Cancel Edit
+            {isCreating ? 'Saving...' : (editingPattern ? 'Update Pattern' : 'Create Pattern')}
           </button>
-        )}
+        </div>
       </form>
     </div>
   );
