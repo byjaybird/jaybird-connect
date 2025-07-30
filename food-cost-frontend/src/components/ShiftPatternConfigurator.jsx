@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { format, startOfWeek, addDays } from 'date-fns';
 import { checkAuthStatus, api } from '../utils/auth';
+import { format, startOfWeek } from 'date-fns';
 
 const DAYS_OF_WEEK = [
   'Monday',
@@ -13,29 +13,11 @@ const DAYS_OF_WEEK = [
 ];
 
 const ShiftPatternConfigurator = () => {
-  console.log('ShiftPatternConfigurator rendering');
-
-  // Utility function to safely format time strings
-  const formatTime = (timeStr) => {
-    if (!timeStr) return '';
-    try {
-      // Handle different possible formats
-      if (timeStr.includes('T')) {
-        // ISO format like "0000-01-01T11:00:00Z"
-        const time = timeStr.split('T')[1];
-        return time.slice(0, 5); // Get "HH:mm"
-      } else if (timeStr.includes(':')) {
-        // Already in HH:mm:ss format
-        return timeStr.slice(0, 5); // Get "HH:mm"
-      }
-      return '';
-    } catch (e) {
-      console.error('Error parsing time:', e, timeStr);
-      return '';
-    }
-  };
-  
+  // Core state
   const [departments, setDepartments] = useState([]);
+  const [patterns, setPatterns] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [pattern, setPattern] = useState({
     days_of_week: [],
     number_of_shifts: 1,
@@ -44,9 +26,6 @@ const ShiftPatternConfigurator = () => {
     end_time: '',
     department_id: ''
   });
-  const [patterns, setPatterns] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [editingPattern, setEditingPattern] = useState(null);
   
@@ -61,6 +40,38 @@ const ShiftPatternConfigurator = () => {
   const [tasks, setTasks] = useState([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState([]);
 
+  // Debug state values
+  const debugState = () => {
+    console.log('Current state values:', {
+      departmentsLength: departments?.length,
+      patternsLength: patterns?.length,
+      isLoading,
+      hasError: !!error,
+      employeesLength: employees?.length,
+      shiftsLength: shifts?.length
+    });
+  };
+
+  // Utility function to safely format time strings
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    try {
+      if (timeStr.includes('T')) {
+        // ISO format like "0000-01-01T11:00:00Z"
+        const time = timeStr.split('T')[1];
+        return time.slice(0, 5); // Get "HH:mm"
+      } else if (timeStr.includes(':')) {
+        // Already in HH:mm:ss format
+        return timeStr.slice(0, 5); // Get "HH:mm"
+      }
+      return '';
+    } catch (e) {
+      console.error('Error parsing time:', e, timeStr);
+      return '';
+    }
+  };
+
+  // Initial data fetch
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -101,44 +112,7 @@ const ShiftPatternConfigurator = () => {
     fetchInitialData();
   }, []);
 
-  const handleAssignEmployee = async (employeeId) => {
-    try {
-      console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
-      setScheduleLoading(true);
-
-      // Assign employee to shift
-      await api.post(`/api/shifts/${selectedShift.shift_id}/assign`, { employee_id: employeeId });
-
-      // If there are selected tasks, assign them to the shift as well
-      if (selectedTaskIds.length > 0) {
-        await api.post(`/api/shifts/${selectedShift.shift_id}/tasks`, { task_ids: selectedTaskIds });
-      }
-
-      await fetchWeeklyShifts(selectedWeekStart);
-      setAssignmentModalOpen(false);
-      setSelectedShift(null);
-    } catch (err) {
-      console.error('Error assigning employee:', err);
-      setScheduleError('Failed to assign employee to shift');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const handleRemoveAssignment = async (shiftId, employeeId) => {
-    try {
-      setScheduleLoading(true);
-      await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
-      await fetchWeeklyShifts(selectedWeekStart);
-    } catch (err) {
-      console.error('Error removing assignment:', err);
-      setScheduleError('Failed to remove employee from shift');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  // Fetch patterns function
+  // Pattern management functions
   const fetchPatterns = async () => {
     try {
       setIsLoading(true);
@@ -156,8 +130,6 @@ const ShiftPatternConfigurator = () => {
   const handleUpdatePattern = async (updatedPattern) => {
     try {
       setIsCreating(true);
-
-      // Format the data for the API - send only the time portion
       const formattedPattern = {
         ...updatedPattern,
         start_time: `${updatedPattern.start_time}:00`,
@@ -165,11 +137,8 @@ const ShiftPatternConfigurator = () => {
       };
 
       await api.put(`/api/shifts/patterns/${editingPattern}`, formattedPattern);
-      
-      // Refresh patterns
       await fetchPatterns();
       
-      // Reset form
       setPattern({
         days_of_week: [],
         number_of_shifts: 1,
@@ -191,8 +160,6 @@ const ShiftPatternConfigurator = () => {
   const handleCreatePattern = async (newPattern) => {
     try {
       setIsCreating(true);
-      
-      // Format the data for the API - send only the time portion
       const formattedPattern = {
         ...newPattern,
         start_time: `${newPattern.start_time}:00`,
@@ -200,11 +167,8 @@ const ShiftPatternConfigurator = () => {
       };
 
       await api.post('/api/shifts/patterns', formattedPattern);
-      
-      // Refresh patterns after creating new one
       await fetchPatterns();
       
-      // Reset form
       setPattern({
         days_of_week: [],
         number_of_shifts: 1,
@@ -223,7 +187,6 @@ const ShiftPatternConfigurator = () => {
   };
 
   const handleEdit = (patternToEdit) => {
-    // Handle days_of_week regardless if it's an array or string
     const daysArray = Array.isArray(patternToEdit.days_of_week) 
       ? patternToEdit.days_of_week 
       : typeof patternToEdit.days_of_week === 'string'
@@ -250,8 +213,6 @@ const ShiftPatternConfigurator = () => {
 
     try {
       await api.delete(`/api/shifts/patterns/${patternId}`);
-      
-      // Remove the pattern from the list
       setPatterns(patterns.filter(p => p.pattern_id !== patternId));
       setError(null);
     } catch (err) {
@@ -264,7 +225,6 @@ const ShiftPatternConfigurator = () => {
     e.preventDefault();
     try {
       if (pattern.label && pattern.start_time && pattern.end_time && pattern.department_id && pattern.days_of_week.length > 0) {
-        // Prepare data for API - ensure days_of_week is in correct format
         const patternData = {
           ...pattern,
           days_of_week: Array.isArray(pattern.days_of_week) ? pattern.days_of_week : [pattern.days_of_week]
@@ -294,6 +254,41 @@ const ShiftPatternConfigurator = () => {
   };
 
   // Schedule management functions
+  const handleAssignEmployee = async (employeeId) => {
+    try {
+      console.log('Assigning employee:', employeeId, 'to shift:', selectedShift);
+      setScheduleLoading(true);
+
+      await api.post(`/api/shifts/${selectedShift.shift_id}/assign`, { employee_id: employeeId });
+
+      if (selectedTaskIds.length > 0) {
+        await api.post(`/api/shifts/${selectedShift.shift_id}/tasks`, { task_ids: selectedTaskIds });
+      }
+
+      await fetchWeeklyShifts(selectedWeekStart);
+      setAssignmentModalOpen(false);
+      setSelectedShift(null);
+    } catch (err) {
+      console.error('Error assigning employee:', err);
+      setScheduleError('Failed to assign employee to shift');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleRemoveAssignment = async (shiftId, employeeId) => {
+    try {
+      setScheduleLoading(true);
+      await api.delete(`/api/shifts/${shiftId}/assign/${employeeId}`);
+      await fetchWeeklyShifts(selectedWeekStart);
+    } catch (err) {
+      console.error('Error removing assignment:', err);
+      setScheduleError('Failed to remove employee from shift');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   const fetchWeeklyShifts = async (startDate) => {
     try {
       setScheduleLoading(true);
@@ -305,18 +300,6 @@ const ShiftPatternConfigurator = () => {
       });
       
       const shiftsData = response.data.shifts || [];
-      console.log('Fetched shifts:', shiftsData);
-      
-      // Verify shift data structure
-      shiftsData.forEach(shift => {
-        console.log(`Shift ${shift.shift_id}:`, {
-          department_id: shift.department_id,
-          assignments: shift.assignments,
-          date: shift.date,
-          times: `${shift.start_time} - ${shift.end_time}`
-        });
-      });
-      
       setShifts(shiftsData);
     } catch (err) {
       console.error('Error fetching shifts:', err);
@@ -346,16 +329,10 @@ const ShiftPatternConfigurator = () => {
       setScheduleError(null);
       
       await api.post('/api/shifts/generate', { days_ahead: daysAhead });
-
-      // Refresh the displayed shifts
       await fetchWeeklyShifts(selectedWeekStart);
     } catch (err) {
       console.error('Error generating shifts:', err);
-      if (err.response?.data?.message) {
-        setScheduleError(err.response.data.message);
-      } else {
-        setScheduleError('Failed to generate shifts: ' + err.message);
-      }
+      setScheduleError(err.response?.data?.message || 'Failed to generate shifts: ' + err.message);
     } finally {
       setScheduleLoading(false);
     }
@@ -366,7 +343,7 @@ const ShiftPatternConfigurator = () => {
     fetchWeeklyShifts(selectedWeekStart);
   }, [selectedWeekStart]);
 
-  // Add debug logging for state
+  // Debug logging
   console.log('Component State:', {
     departments,
     patterns,
@@ -376,18 +353,25 @@ const ShiftPatternConfigurator = () => {
     shifts
   });
 
-  // Render component
+  // Render loading state
   if (isLoading) {
-    console.log('Rendering loading state');
-    return <div style={{padding: '20px'}}>Loading...</div>;
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        Loading shift patterns...
+      </div>
+    );
   }
 
+  // Render error state
   if (error) {
-    console.log('Rendering error state:', error);
-    return <div style={{padding: '20px', color: 'red'}} className="error-message">{error}</div>;
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', color: 'red' }}>
+        Error: {error}
+      </div>
+    );
   }
 
-  console.log('Rendering main component UI');
+  // Main render
   return (
     <div className="shift-pattern-configurator" style={{padding: '20px'}}>
       <h2>Shift Pattern Configuration</h2>
