@@ -80,8 +80,7 @@ const ResetPassword = () => {
 
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="password" className="sr-only">New Password</label>
-              <input
+              <label htmlFor="password" className="sr-only">New Password</label><input
                 id="password"
                 name="password"
                 type="password"
@@ -89,6 +88,7 @@ const ResetPassword = () => {
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="New Password"
                 value={password}
+                autoComplete="new-password"
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={8}
               />
@@ -96,13 +96,14 @@ const ResetPassword = () => {
             <div>
               <label htmlFor="confirm-password" className="sr-only">Confirm Password</label>
               <input
-                id="confirm-password"
+                id ="confirm-password"
                 name="confirm-password"
                 type="password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Confirm Password"
                 value={confirmPassword}
+                autoComplete="new-password"
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 minLength={8}
               />
