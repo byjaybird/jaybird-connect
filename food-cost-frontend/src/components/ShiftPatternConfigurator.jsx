@@ -373,7 +373,36 @@ const ShiftPatternConfigurator = () => {
   }
 
   // Render loading state
-  if (isLoading) {
+// Render loading state
+        if (isLoading) {
+          return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+              <div className="bg-white p-8 rounded-lg shadow-md">
+                <div className="animate-pulse flex flex-col items-center">
+                  <div className="h-8 w-64 bg-gray-200 rounded mb-4"></div>
+                  <div className="text-gray-600">Loading shift patterns...</div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+      
+        // Render error state
+        if (error) {
+          return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+              <div className="bg-white p-8 rounded-lg shadow-md">
+                <div className="text-red-500 text-center">
+                  <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold mb-2">Error</h3>
+                  <p>{error}</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         Loading shift patterns...
@@ -392,37 +421,42 @@ const ShiftPatternConfigurator = () => {
 
   // Main render
   return (
-    <div className="p-5 max-w-7xl mx-auto">
+    <div className="p-5 max-w-7xl mx-auto bg-gray-50">
       <h2 className="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-5">
         Shift Pattern Configuration
       </h2>
       
       {/* Existing Patterns */}
-      <div className="mb-10 bg-white rounded-lg p-5 shadow-md">
+      <div className="mb-10 bg-white rounded-lg p-6 shadow-lg">
         <h3 className="text-xl font-semibold text-gray-700 mb-5">Existing Patterns</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {patterns.map((p) => (
-            <div key={p.pattern_id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div key={p.pattern_id} className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
               <h4 className="text-lg font-medium text-gray-800 mb-3">{p.label}</h4>
-              <p className="my-2">
-                <strong>Department:</strong> {departments.find(d => d.id === p.department_id)?.name}
-              </p>
-              <p style={{margin: '5px 0'}}>
-                <strong>Days:</strong> {Array.isArray(p.days_of_week) ? p.days_of_week.join(', ') : p.days_of_week}
-              </p>
-              <p style={{margin: '5px 0'}}>
-                <strong>Time:</strong> {formatTime(p.start_time)} - {formatTime(p.end_time)}
-              </p>
+              <div className="space-y-2 text-gray-600">
+                <p className="flex items-center">
+                  <span className="font-medium mr-2">Department:</span>
+                  <span>{departments.find(d => d.id === p.department_id)?.name}</span>
+                </p>
+                <p className="flex items-center">
+                  <span className="font-medium mr-2">Days:</span>
+                  <span>{Array.isArray(p.days_of_week) ? p.days_of_week.join(', ') : p.days_of_week}</span>
+                </p>
+                <p className="flex items-center">
+                  <span className="font-medium mr-2">Time:</span>
+                  <span>{formatTime(p.start_time)} - {formatTime(p.end_time)}</span>
+                </p>
+              </div>
               <div className="mt-4 flex gap-3">
                 <button
                   onClick={() => handleEdit(p)}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
+                  className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition duration-200 ease-in-out"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(p.pattern_id)}
-                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
+                  className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition duration-200 ease-in-out"
                 >
                   Delete
                 </button>
@@ -433,7 +467,7 @@ const ShiftPatternConfigurator = () => {
       </div>
 
       {/* Pattern Form */}
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
+      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg">
         <h3 className="text-xl font-semibold text-gray-800 mb-5">
           {editingPattern ? 'Edit Pattern' : 'Create New Pattern'}
         </h3>
@@ -470,12 +504,11 @@ const ShiftPatternConfigurator = () => {
           <label className="block mb-2 text-gray-700 font-medium">Days of Week:</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {DAYS_OF_WEEK.map((day) => (
-              <label key={day} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={pattern.days_of_week.includes(day)}
-                  onChange={() => handleDayToggle(day)}
-                  style={{cursor: 'pointer'}}
+              <label key={day} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors duration-200">
+                <input type="checkbox"
+              checked={pattern.days_of_week.includes(day)}
+              onChange={() => handleDayToggle(day)}
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
                 />
                 {day}
               </label>
@@ -484,25 +517,25 @@ const ShiftPatternConfigurator = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-          <div>
+          <div className="bg-gray-50 p-4 rounded-lg">
             <label className="block mb-2 text-gray-700 font-medium">Start Time:</label>
             <input
               type="time"
               value={pattern.start_time}
               onChange={(e) => setPattern({...pattern, start_time: e.target.value})}
               required
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             />
           </div>
 
-          <div>
+          <div className="bg-gray-50 p-4 rounded-lg">
             <label className="block mb-2 text-gray-700 font-medium">End Time:</label>
             <input
               type="time"
               value={pattern.end_time}
               onChange={(e) => setPattern({...pattern, end_time: e.target.value})}
               required
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             />
           </div>
         </div>
@@ -543,6 +576,5 @@ const ShiftPatternConfigurator = () => {
       </form>
     </div>
   );
-};
 
 export default ShiftPatternConfigurator;
