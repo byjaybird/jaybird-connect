@@ -366,7 +366,125 @@ const ShiftPatternConfigurator = () => {
     fetchWeeklyShifts(selectedWeekStart);
   }, [selectedWeekStart]);
 
-  // ... Rest of the component render code remains the same ...
+  // Render component
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="error-message">{error}</div>;
+  }
+
+  return (
+    <div className="shift-pattern-configurator">
+      <h2>Shift Pattern Configuration</h2>
+      
+      {/* Existing Patterns */}
+      <div className="patterns-list">
+        <h3>Existing Patterns</h3>
+        {patterns.map((p) => (
+          <div key={p.pattern_id} className="pattern-item">
+            <h4>{p.label}</h4>
+            <p>Department: {departments.find(d => d.id === p.department_id)?.name}</p>
+            <p>Days: {Array.isArray(p.days_of_week) ? p.days_of_week.join(', ') : p.days_of_week}</p>
+            <p>Time: {formatTime(p.start_time)} - {formatTime(p.end_time)}</p>
+            <button onClick={() => handleEdit(p)}>Edit</button>
+            <button onClick={() => handleDelete(p.pattern_id)}>Delete</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Pattern Form */}
+      <form onSubmit={handleSubmit} className="pattern-form">
+        <h3>{editingPattern ? 'Edit Pattern' : 'Create New Pattern'}</h3>
+        
+        <div>
+          <label>Label:</label>
+          <input
+            type="text"
+            value={pattern.label}
+            onChange={(e) => setPattern({...pattern, label: e.target.value})}
+            required
+          />
+        </div>
+
+        <div>
+          <label>Department:</label>
+          <select
+            value={pattern.department_id}
+            onChange={(e) => setPattern({...pattern, department_id: e.target.value})}
+            required
+          >
+            <option value="">Select Department</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label>Days of Week:</label>
+          <div className="days-selector">
+            {DAYS_OF_WEEK.map((day) => (
+              <label key={day}>
+                <input
+                  type="checkbox"
+                  checked={pattern.days_of_week.includes(day)}
+                  onChange={() => handleDayToggle(day)}
+                />
+                {day}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label>Start Time:</label>
+          <input
+            type="time"
+            value={pattern.start_time}
+            onChange={(e) => setPattern({...pattern, start_time: e.target.value})}
+            required
+          />
+        </div>
+
+        <div>
+          <label>End Time:</label>
+          <input
+            type="time"
+            value={pattern.end_time}
+            onChange={(e) => setPattern({...pattern, end_time: e.target.value})}
+            required
+          />
+        </div>
+
+        <button type="submit" disabled={isCreating}>
+          {isCreating ? 'Saving...' : (editingPattern ? 'Update Pattern' : 'Create Pattern')}
+        </button>
+
+        {editingPattern && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingPattern(null);
+              setPattern({
+                days_of_week: [],
+                number_of_shifts: 1,
+                label: '',
+                start_time: '',
+                end_time: '',
+                department_id: ''
+              });
+            }}
+          >
+            Cancel Edit
+          </button>
+        )}
+      </form>
+    </div>
+  );
 };
 
 export default ShiftPatternConfigurator;
