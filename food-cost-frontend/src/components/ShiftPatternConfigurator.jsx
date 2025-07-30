@@ -71,9 +71,11 @@ const ShiftPatternConfigurator = () => {
     }
   };
 
-  // Initial data fetch
+  // Initial data fetch and weekly shifts
   useEffect(() => {
-    const fetchInitialData = async () => {
+    let mounted = true;
+    
+    const fetchAllData = async () => {
       try {
         // Check auth status first
         try {
@@ -83,34 +85,52 @@ const ShiftPatternConfigurator = () => {
           window.location.href = '/login';
           return;
         }
-        
-        // Fetch all available tasks
-        const tasksResponse = await api.get('/api/tasks/unassigned');
+
+        // Fetch all data in parallel
+        const [
+          tasksResponse,
+          deptResponse,
+          patternsResponse,
+          employeesResponse,
+          shiftsResponse
+        ] = await Promise.all([
+          api.get('/api/tasks/unassigned'),
+          api.get('/api/departments'),
+          api.get('/api/shifts/patterns'),
+          api.get('/api/users'),
+          api.get('/api/shifts/weekly', {
+            params: {
+              start_date: format(selectedWeekStart, 'yyyy-MM-dd')
+            }
+          })
+        ]);
+
+        if (!mounted) return;
+
+        // Update all state at once to reduce renders
         setTasks(tasksResponse.data);
-        
-        // Fetch departments
-        const deptResponse = await api.get('/api/departments');
         setDepartments(deptResponse.data);
-
-        // Fetch patterns
-        const patternsResponse = await api.get('/api/shifts/patterns');
         setPatterns(patternsResponse.data);
-
-        // Fetch employees from users endpoint
-        const employeesResponse = await api.get('/api/users');
-        setEmployees(employeesResponse.data.filter(emp => emp.active)); // Only get active employees
-
+        setEmployees(employeesResponse.data.filter(emp => emp.active));
+        setShifts(shiftsResponse.data.shifts || []);
         setError(null);
       } catch (err) {
-        console.error('Error fetching initial data:', err);
-        setError(err.response?.data?.message || err.message || 'Failed to load initial data');
+        if (!mounted) return;
+        console.error('Error fetching data:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load data');
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchInitialData();
-  }, []);
+    fetchAllData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedWeekStart]); // Only re-run if week changes
 
   // Pattern management functions
   const fetchPatterns = async () => {
@@ -338,20 +358,19 @@ const ShiftPatternConfigurator = () => {
     }
   };
 
-  // Fetch shifts when week changes
-  useEffect(() => {
-    fetchWeeklyShifts(selectedWeekStart);
-  }, [selectedWeekStart]);
-
-  // Debug logging
-  console.log('Component State:', {
-    departments,
-    patterns,
-    isLoading,
-    error,
-    employees,
-    shifts
-  });
+  // Debug logging only in development
+  if (process.env.NODE_ENV === 'development') {
+    useEffect(() => {
+      console.log('Component State:', {
+        departments,
+        patterns,
+        isLoading,
+        error,
+        employees,
+        shifts
+      });
+    }, [departments, patterns, isLoading, error, employees, shifts]);
+  }
 
   // Render loading state
   if (isLoading) {
