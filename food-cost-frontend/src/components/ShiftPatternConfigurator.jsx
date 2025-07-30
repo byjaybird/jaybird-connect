@@ -392,48 +392,19 @@ const ShiftPatternConfigurator = () => {
 
   // Main render
   return (
-    <div className="shift-pattern-configurator" style={{
-      padding: '20px',
-      maxWidth: '1200px',
-      margin: '0 auto',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-      <h2 style={{
-        color: '#2c3e50',
-        borderBottom: '2px solid #eee',
-        paddingBottom: '10px',
-        marginBottom: '20px'
-      }}>Shift Pattern Configuration</h2>
+    <div className="p-5 max-w-7xl mx-auto">
+      <h2 className="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-5">
+        Shift Pattern Configuration
+      </h2>
       
       {/* Existing Patterns */}
-      <div className="patterns-list" style={{
-        marginBottom: '40px',
-        background: '#fff',
-        borderRadius: '8px',
-        padding: '20px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <h3 style={{
-          color: '#34495e',
-          marginBottom: '20px'
-        }}>Existing Patterns</h3>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '20px'
-        }}>
+      <div className="mb-10 bg-white rounded-lg p-5 shadow-md">
+        <h3 className="text-xl font-semibold text-gray-700 mb-5">Existing Patterns</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {patterns.map((p) => (
-            <div key={p.pattern_id} style={{
-              background: '#f8f9fa',
-              borderRadius: '6px',
-              padding: '15px',
-              border: '1px solid #dee2e6'
-            }}>
-              <h4 style={{
-                margin: '0 0 10px 0',
-                color: '#2c3e50'
-              }}>{p.label}</h4>
-              <p style={{margin: '5px 0'}}>
+            <div key={p.pattern_id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h4 className="text-lg font-medium text-gray-800 mb-3">{p.label}</h4>
+              <p className="my-2">
                 <strong>Department:</strong> {departments.find(d => d.id === p.department_id)?.name}
               </p>
               <p style={{margin: '5px 0'}}>
@@ -442,34 +413,16 @@ const ShiftPatternConfigurator = () => {
               <p style={{margin: '5px 0'}}>
                 <strong>Time:</strong> {formatTime(p.start_time)} - {formatTime(p.end_time)}
               </p>
-              <div style={{
-                marginTop: '15px',
-                display: 'flex',
-                gap: '10px'
-              }}>
+              <div className="mt-4 flex gap-3">
                 <button
                   onClick={() => handleEdit(p)}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#3498db',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(p.pattern_id)}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#e74c3c',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
                 >
                   Delete
                 </button>
@@ -480,53 +433,29 @@ const ShiftPatternConfigurator = () => {
       </div>
 
       {/* Pattern Form */}
-      <form onSubmit={handleSubmit} style={{
-        background: '#fff',
-        padding: '25px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <h3 style={{
-          color: '#2c3e50',
-          marginBottom: '20px'
-        }}>{editingPattern ? 'Edit Pattern' : 'Create New Pattern'}</h3>
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-xl font-semibold text-gray-800 mb-5">
+          {editingPattern ? 'Edit Pattern' : 'Create New Pattern'}
+        </h3>
         
-        <div style={{marginBottom: '15px'}}>
-          <label style={{
-            display: 'block',
-            marginBottom: '5px',
-            color: '#34495e'
-          }}>Label:</label>
+        <div className="mb-4">
+          <label className="block mb-2 text-gray-700 font-medium">Label:</label>
           <input
             type="text"
             value={pattern.label}
             onChange={(e) => setPattern({...pattern, label: e.target.value})}
             required
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ddd'
-            }}
+            className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
-        <div style={{marginBottom: '15px'}}>
-          <label style={{
-            display: 'block',
-            marginBottom: '5px',
-            color: '#34495e'
-          }}>Department:</label>
+        <div className="mb-4">
+          <label className="block mb-2 text-gray-700 font-medium">Department:</label>
           <select
             value={pattern.department_id}
             onChange={(e) => setPattern({...pattern, department_id: e.target.value})}
             required
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ddd'
-            }}
+            className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select Department</option>
             {departments.map((dept) => (
@@ -537,24 +466,11 @@ const ShiftPatternConfigurator = () => {
           </select>
         </div>
 
-        <div style={{marginBottom: '15px'}}>
-          <label style={{
-            display: 'block',
-            marginBottom: '10px',
-            color: '#34495e'
-          }}>Days of Week:</label>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: '10px'
-          }}>
+        <div className="mb-4">
+          <label className="block mb-2 text-gray-700 font-medium">Days of Week:</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {DAYS_OF_WEEK.map((day) => (
-              <label key={day} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer'
-              }}>
+              <label key={day} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={pattern.days_of_week.includes(day)}
@@ -567,58 +483,31 @@ const ShiftPatternConfigurator = () => {
           </div>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
           <div>
-            <label style={{
-              display: 'block',
-              marginBottom: '5px',
-              color: '#34495e'
-            }}>Start Time:</label>
+            <label className="block mb-2 text-gray-700 font-medium">Start Time:</label>
             <input
               type="time"
               value={pattern.start_time}
               onChange={(e) => setPattern({...pattern, start_time: e.target.value})}
               required
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #ddd'
-              }}
+              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label style={{
-              display: 'block',
-              marginBottom: '5px',
-              color: '#34495e'
-            }}>End Time:</label>
+            <label className="block mb-2 text-gray-700 font-medium">End Time:</label>
             <input
               type="time"
               value={pattern.end_time}
               onChange={(e) => setPattern({...pattern, end_time: e.target.value})}
               required
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #ddd'
-              }}
+              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
 
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          justifyContent: 'flex-end'
-        }}>
+        <div className="flex justify-end gap-3">
           {editingPattern && (
             <button
               type="button"
@@ -633,14 +522,7 @@ const ShiftPatternConfigurator = () => {
                   department_id: ''
                 });
               }}
-              style={{
-                padding: '10px 20px',
-                background: '#95a5a6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
+              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md"
             >
               Cancel Edit
             </button>
@@ -649,15 +531,11 @@ const ShiftPatternConfigurator = () => {
           <button 
             type="submit" 
             disabled={isCreating}
-            style={{
-              padding: '10px 20px',
-              background: editingPattern ? '#2ecc71' : '#3498db',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isCreating ? 'not-allowed' : 'pointer',
-              opacity: isCreating ? 0.7 : 1
-            }}
+            className={`px-4 py-2 text-white rounded-md ${
+              editingPattern 
+                ? 'bg-green-500 hover:bg-green-600' 
+                : 'bg-blue-500 hover:bg-blue-600'
+            } ${isCreating ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isCreating ? 'Saving...' : (editingPattern ? 'Update Pattern' : 'Create Pattern')}
           </button>
