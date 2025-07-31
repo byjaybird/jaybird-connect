@@ -644,7 +644,7 @@ def generate_tasks():
                         AND t.department_id = tp.department_id
                     )RETURNING *
             """# Debug information
-            params = (days_ahead, employee_id, dept_id)
+            params = (days_ahead)
             logger.info('SQL Parameters: %s', params)# Execute the query to generate tasks
             cursor.execute("""
                 WITH RECURSIVE date_series AS (
