@@ -600,19 +600,69 @@ def generate_tasks():
                     )RETURNING *
             """# Debug information
             params = (days_ahead, employee_id, dept_id)
-            placeholder_count = query.count('%s')
-            logger.info('SQL Query: %s', query.replace('%s', '{}').format(*['?']*placeholder_count))
-            logger.info('Parameters: %s', str(params))
-            logger.info('Number of SQL placeholders: %d, Number of parameters: %d', 
-                       placeholder_count, len(params))
-            
-            if placeholder_count != len(params):
-                logger.error('Mismatch between placeholders (%d) and parameters (%d)', 
-                           placeholder_count, len(params))
-                return jsonify({'error': 'Internal server error - parameter mismatch'}), 500
+            logger.info('SQL Parameters: %s', params)
             
             # Execute the query with parameters
-            cursor.execute(query, params)
+            try:
+                cursor.execute("""
+                    WITH RECURSIVE date_series AS (
+                        SELECT generate_series(
+                            CURRENT_DATE,
+                            CURRENT_DATE + %s::integer,
+                            '1 day'::interval
+                        )::date AS date
+                    )
+                    INSERT INTO tasks (
+                        title,
+                        description,
+                        status,
+                        priority,
+                        assigned_by,
+                        department_id,
+                        due_date,
+                        notes,
+                        archived,
+                        shift_id
+                    )
+                    SELECT 
+                        tp.title,
+                        tp.description,
+                        'pending'::text AS status,
+                        COALESCE(tp.priority, 'medium'::text) AS priority,
+                        %s::integer AS assigned_by,
+                        tp.department_id,
+                        ds.date AS due_date,
+                        NULL AS notes,
+                        false AS archived,
+                        NULL AS shift_id
+                    FROM task_patterns tp
+                    CROSS JOIN date_series ds
+                    WHERE 
+                        tp.department_id = %s::integer
+                        AND tp.archived = false
+                        AND (
+                            (tp.frequency = 'weekly') OR
+                            (
+                                tp.frequency = 'bi-weekly' AND
+                                tp.week_number = CASE 
+                                    WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                                    ELSE 2 
+                                END
+                            )
+                        )
+                        AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+                        -- Prevent duplicate tasks
+                        AND NOT EXISTS (
+                            SELECT 1 FROM tasks t 
+                            WHERE t.title = tp.title 
+                            AND DATE(t.due_date) = ds.date
+                            AND t.department_id = tp.department_id
+                        )
+                    RETURNING *
+                """, params)
+            except Exception as e:
+                logger.error('SQL execution error: %s', str(e))
+                raise
             
             # Log the exact query and parameters for debugging
             logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
