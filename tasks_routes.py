@@ -58,11 +58,13 @@ def create_task():
         cursor.connection.commit()
         return jsonify(new_task), 201
     except Exception as e:
-        logger.error('Error fetching task patterns: %s', str(e), exc_info=True)
+        logger.error('Error creating task: %s', str(e), exc_info=True)
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()# Get all unassigned tasks
+        cursor.close()
+
+# Get all unassigned tasks
 @tasks_bp.route('/tasks/unassigned', methods=['GET'])
 @token_required
 def get_unassigned_tasks():
@@ -293,7 +295,9 @@ def update_task_status(task_id):
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()# Get all task patterns
+        cursor.close()
+
+# Get all task patterns
 @tasks_bp.route('/tasks/patterns', methods=['GET'])
 @token_required
 def get_task_patterns():
@@ -332,6 +336,21 @@ def create_task_pattern():
             
     cursor = get_db_cursor()
     try:
+        # Handle due_time - convert empty string to None or format time string
+        due_time = data.get('due_time')
+        if due_time == "":
+            due_time = None
+        elif due_time:
+            try:
+                # Ensure time is in proper format HH:MM:SS
+                if ':' not in due_time:
+                    due_time = f"{due_time}:00"
+                if due_time.count(':') == 1:
+                    due_time = f"{due_time}:00"
+            except Exception as e:
+                logger.error('Error formatting due_time: %s', str(e))
+                due_time = None
+
         cursor.execute("""
             INSERT INTO task_patterns (
                 title,
@@ -352,7 +371,7 @@ def create_task_pattern():
             data['department_id'],
             data.get('week_number', 1),
             data['days_of_week'],
-            data.get('due_time'),
+            due_time,  # Use our processed due_time value
             data.get('frequency', 'weekly')
         ))
         new_pattern = cursor.fetchone()
@@ -361,6 +380,7 @@ def create_task_pattern():
         return jsonify(new_pattern), 201
     except Exception as e:
         cursor.connection.rollback()
+        logger.error('Error creating task pattern: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
