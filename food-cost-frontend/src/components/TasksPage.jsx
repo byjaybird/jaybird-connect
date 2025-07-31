@@ -20,13 +20,14 @@ function TasksPage({ user }) {
   // State for managing task patterns
   const [patterns, setPatterns] = useState([]);
   const [isCreatingPattern, setIsCreatingPattern] = useState(false);
+  const [isEditingPattern, setIsEditingPattern] = useState(false);
   const [currentPattern, setCurrentPattern] = useState({
     title: '',
     description: '',
     priority: 'medium',
     department_id: user?.department_id || '',
     week_number: 1,
-    days_of_week: [],
+    days_of_week: [], // PostgreSQL array of integers (0=Sunday, 6=Saturday)
     frequency: 'weekly'
   });
 
@@ -93,6 +94,90 @@ function TasksPage({ user }) {
 
     fetchInitialData();
   }, [user]);
+
+  const handleEditPattern = async (pattern) => {
+    setCurrentPattern({
+      ...pattern,
+      department_id: pattern.department_id || user?.department_id
+    });
+    setIsEditingPattern(true);
+    setIsCreatingPattern(true);
+  };
+
+  const handleDeletePattern = async (patternId) => {
+    if (!window.confirm('Are you sure you want to delete this pattern?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/api/tasks/patterns/${patternId}`);
+      
+      // Remove the deleted pattern from state
+      setPatterns(prev => prev.filter(p => p.pattern_id !== patternId));
+    } catch (err) {
+      console.error('Error deleting pattern:', err);
+      alert(`Failed to delete pattern: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
+  const handleSubmitPattern = async (e) => {
+    e.preventDefault();
+    // Validate days of week
+    if (currentPattern.days_of_week.length === 0) {
+      alert('Please select at least one day of the week');
+      return;
+    }
+
+    // Format the data for submission
+    const formData = {
+      ...currentPattern,
+      department_id: Number(currentPattern.department_id),
+      // Ensure days_of_week is an array of integers
+      days_of_week: currentPattern.days_of_week.map(Number).sort((a, b) => a - b)
+    };
+    
+    try {
+      let response;
+      
+      if (isEditingPattern) {
+        // Update existing pattern
+        response = await api.put(`/api/tasks/patterns/${currentPattern.pattern_id}`, formData);
+        
+        // Update the pattern in the list
+        setPatterns(prev => prev.map(p => 
+          p.pattern_id === currentPattern.pattern_id ? response.data : p
+        ));
+      } else {
+        // Create new pattern
+        response = await api.post('/api/tasks/patterns', formData);
+        setPatterns(prev => [...prev, response.data]);
+      }
+
+      // Reset form and state
+      setCurrentPattern({
+        title: '',
+        description: '',
+        priority: 'medium',
+        department_id: user.department_id || '',
+        week_number: 1,
+        days_of_week: [],
+        frequency: 'weekly'
+      });
+      setIsCreatingPattern(false);
+      setIsEditingPattern(false);
+    } catch (err) {
+      console.error('Error saving pattern:', err);
+      const errorMessage = err.response?.data?.error || err.message;
+      
+      if (err.response?.status === 401) {
+        alert('Your session has expired. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+      
+      alert(`Failed to save pattern: ${errorMessage}`);
+    }
+  };
 
   const handleCreatePattern = async (e) => {
     e.preventDefault();
@@ -205,12 +290,14 @@ function TasksPage({ user }) {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Patterns</h1>
         <div className="space-x-4">
-          <button
-            onClick={() => setIsCreatingPattern(!isCreatingPattern)}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            {isCreatingPattern ? 'Cancel' : 'Create Pattern'}
-          </button>
+          {!isEditingPattern && (
+            <button
+              onClick={() => setIsCreatingPattern(!isCreatingPattern)}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              {isCreatingPattern ? 'Cancel' : 'Create Pattern'}
+            </button>
+          )}
           <button
             onClick={handleGenerateTasks}
             className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
@@ -224,7 +311,7 @@ function TasksPage({ user }) {
       {isCreatingPattern && (
         <div className="mb-8 bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">Create Task Pattern</h2>
-          <form onSubmit={handleCreatePattern} className="space-y-4">
+          <form onSubmit={handleSubmitPattern} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
               <input
@@ -349,8 +436,18 @@ function TasksPage({ user }) {
               <div className="flex justify-between items-start">
                 <h3 className="font-semibold">{pattern.title}</h3>
                 <div className="flex gap-2">
-                  <button className="text-blue-600 hover:text-blue-800">Edit</button>
-                  <button className="text-red-600 hover:text-red-800">Delete</button>
+                  <button 
+                    onClick={() => handleEditPattern(pattern)} 
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDeletePattern(pattern.pattern_id)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
               <p className="text-gray-600">{pattern.description}</p>

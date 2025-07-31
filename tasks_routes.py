@@ -401,6 +401,109 @@ def create_task_pattern():
         logger.error('Error creating task pattern: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
+        cursor.close()# Delete task pattern
+@tasks_bp.route('/tasks/patterns/<int:pattern_id>', methods=['DELETE'])
+@token_required
+def delete_task_pattern(pattern_id):
+    cursor = get_db_cursor()
+    try:
+        # First verify the pattern exists and belongs to user's department
+        cursor.execute("""
+            SELECT * FROM task_patterns
+            WHERE pattern_id = %s AND department_id = %s
+        """, (pattern_id, request.user['department_id']))
+        
+        pattern = cursor.fetchone()
+        if not pattern:
+            return jsonify({'error': 'Pattern not found or access denied'}), 404
+
+        # Soft delete by setting archived flag
+        cursor.execute("""
+            UPDATE task_patterns
+            SET archived = true,
+                updated_at = NOW()
+            WHERE pattern_id = %s
+            RETURNING *
+        """, (pattern_id,))
+        
+        deleted_pattern = cursor.fetchone()
+        cursor.connection.commit()
+        return jsonify(deleted_pattern)
+    except Exception as e:
+        cursor.connection.rollback()
+        logger.error('Error deleting task pattern: %s', str(e), exc_info=True)
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+
+# Update task pattern
+@tasks_bp.route('/tasks/patterns/<int:pattern_id>', methods=['PUT'])
+@token_required
+def update_task_pattern(pattern_id):
+    data = request.get_json()
+    logger.info('Updating task pattern %s with data: %s', pattern_id, data)
+    
+    cursor = get_db_cursor()
+    try:
+        # First verify the pattern exists and belongs to user's department
+        cursor.execute("""
+            SELECT * FROM task_patterns
+            WHERE pattern_id = %s AND department_id = %s
+        """, (pattern_id, request.user['department_id']))
+        
+        pattern = cursor.fetchone()
+        if not pattern:
+            return jsonify({'error': 'Pattern not found or access denied'}), 404
+
+        # Handle due_time - convert empty string to None or format time string
+        due_time = data.get('due_time')
+        if due_time == "":
+            due_time = None
+        elif due_time:
+            try:
+                # Ensure time is in proper format HH:MM:SS
+                if ':' not in due_time:
+                    due_time = f"{due_time}:00"
+                if due_time.count(':') == 1:
+                    due_time = f"{due_time}:00"
+            except Exception as e:
+                logger.error('Error formatting due_time: %s', str(e))
+                due_time = None
+
+        cursor.execute("""
+            UPDATE task_patterns
+            SET title = COALESCE(%s, title),
+                description = COALESCE(%s, description),
+                priority = COALESCE(%s, priority),
+                department_id = COALESCE(%s, department_id),
+                week_number = COALESCE(%s, week_number),
+                days_of_week = COALESCE(%s, days_of_week),
+                due_time = %s,
+                frequency = COALESCE(%s, frequency),
+                updated_at = NOW()
+            WHERE pattern_id = %s
+            RETURNING *
+        """, (
+            data.get('title'),
+            data.get('description'),
+            data.get('priority'),
+            data.get('department_id'),
+            data.get('week_number'),
+            data.get('days_of_week'),
+            due_time,
+            data.get('frequency'),
+            pattern_id
+        ))
+        
+        updated_pattern = cursor.fetchone()
+        cursor.connection.commit()
+        logger.info('Successfully updated task pattern: %s', updated_pattern)
+        return jsonify(updated_pattern)
+    except Exception as e:
+        cursor.connection.rollback()
+        logger.error('Error updating task pattern: %s', str(e), exc_info=True)
+        return jsonify({'error': str(e)}), 500
+    finally:
         cursor.close()
 
 # Generate tasks from patterns
@@ -480,8 +583,7 @@ def generate_tasks():
                                 ELSE 2 
                             END
                         )
-                    )
-                    AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week::integer[])
+                    )AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
                     -- Prevent duplicate tasks
                     AND NOT EXISTS (
                         SELECT 1 FROM tasks t 
