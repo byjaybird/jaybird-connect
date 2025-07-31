@@ -21,31 +21,29 @@ api.interceptors.request.use(
       data: config.data
     });
     
-    // Skip token check for login and other public endpoints
+    // Skip token for public endpoints
     if (config.url.includes('/auth/login')) {
-      console.log('Skipping token check for login request');
+      console.log('Request interceptor - Skipping token for login request');
       return config;
     }
     
     const token = localStorage.getItem('token');
+    console.log('Request interceptor - URL:', config.url);
     console.log('Request interceptor - Token:', token ? 'Present' : 'Missing');
     
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('Request interceptor - Headers after token:', config.headers);
-      return config;
-    }
-    
-    // Don't redirect on auth check requests
-    if (config.url.includes('/api/auth/check')) {
-      console.log('Skipping redirect for auth check');
+    if (!token) {
+      // Only redirect for non-auth-check requests
+      if (!config.url.includes('/api/auth/check')) {
+        console.log('Request interceptor - No token found, redirecting to login');
+        window.location.href = '/login';
+      }
       return Promise.reject('No auth token found');
     }
     
-    // If no token is found, redirect to login
-    console.log('No token found, redirecting to login');
-    window.location.href = '/login';
-    return Promise.reject('No auth token found');
+    // Add token to headers
+    config.headers.Authorization = `Bearer ${token}`;
+    console.log('Request interceptor - Headers set');
+    return config;
   },
   (error) => {
     console.error('Request interceptor error:', error);

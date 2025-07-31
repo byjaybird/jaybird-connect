@@ -145,7 +145,6 @@ function TasksPage({ user }) {
         department_id: user.department_id || '',
         week_number: 1,
         days_of_week: [],
-        due_time: '',
         frequency: 'weekly'
       });
       setIsCreatingPattern(false);
@@ -363,7 +362,6 @@ function TasksPage({ user }) {
                   {pattern.frequency === 'bi-weekly' ? `Week ${pattern.week_number}, ` : ''}
                   {pattern.days_of_week.map(day => DAYS_OF_WEEK[day]).join(', ')}
                 </p>
-                <p>Due: {pattern.due_time}</p>
                 <p>Priority: {pattern.priority}</p>
                 <p>Department: {departments.find(d => d.department_id === pattern.department_id)?.name}</p>
               </div>
