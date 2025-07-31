@@ -40,23 +40,7 @@ function TasksPage({ user }) {
     const fetchInitialData = async () => {
       console.log('TasksPage: Initializing with user:', user);
       try {
-        // Check auth status first
-        console.log('TasksPage: Starting initialization, checking token:', localStorage.getItem('token'));
-        try {
-          await checkAuthStatus();
-          console.log('TasksPage: Auth check passed');
-        } catch (authError) {
-          console.error('TasksPage: Authentication check failed:', authError);
-          window.location.href = '/login';
-          return;
-        }
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-          console.error('TasksPage: No auth token found');
-          window.location.href = '/login';
-          return;
-        }// Fetch task patterns
+        // Fetch task patterns
           console.log('TasksPage: Fetching task patterns...');
           const patternsResponse = await api.get('/api/tasks/patterns');
           console.log('TasksPage: Received patterns:', patternsResponse.data);
