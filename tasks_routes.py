@@ -542,8 +542,7 @@ def generate_tasks():
                         CURRENT_DATE + %s,
                         '1 day'::interval
                     )::date AS date
-                )
-                INSERT INTO tasks (
+                )INSERT INTO tasks (
                     title,
                     description,
                     status,
@@ -563,8 +562,8 @@ def generate_tasks():
                     %s AS assigned_by,
                     tp.department_id,
                     CASE 
-                        WHEN tp.due_time IS NOT NULL THEN (ds.date + tp.due_time)::timestamp without time zone
-                        ELSE ds.date::timestamp without time zone
+                        WHEN tp.due_time IS NOT NULL THEN ds.date + tp.due_time
+                        ELSE ds.date
                     END AS due_date,
                     NULL AS notes,
                     false AS archived,
@@ -583,16 +582,20 @@ def generate_tasks():
                                 ELSE 2 
                             END
                         )
-                    )AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+                    )
+                    AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
                     -- Prevent duplicate tasks
                     AND NOT EXISTS (
                         SELECT 1 FROM tasks t 
                         WHERE t.title = tp.title 
                         AND DATE(t.due_date) = ds.date
                         AND t.department_id = tp.department_id
-                    )
-                RETURNING *
+                    )RETURNING *
             """, (days_ahead, employee_id, dept_id))
+            
+            # Log the exact query and parameters for debugging
+            logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
+                       days_ahead, employee_id, dept_id)
             
             new_tasks = cursor.fetchall()
             cursor.connection.commit()
