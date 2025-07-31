@@ -510,16 +510,20 @@ def update_task_pattern(pattern_id):
 @tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
-    try:
-        data = request.get_json() or {}
-        days_ahead = int(data.get('days_ahead', 14))  # Default to 2 weeks, ensure integer
-        dept_id = int(request.user['department_id'])
-        employee_id = int(request.user['employee_id'])
-        
-        # Validate inputs
-        if not all([days_ahead, dept_id, employee_id]):
-            return jsonify({'error': 'Invalid input parameters'}), 400
-            
+        # Get and validate input data
+        try:
+            data = request.get_json() or {}
+            days_ahead = int(data.get('days_ahead', 14))  # Default to 2 weeks
+            dept_id = int(request.user['department_id'])
+            employee_id = int(request.user['employee_id'])
+        except (ValueError, TypeError, KeyError) as e:
+            logger.error('Input validation error: %s', str(e))
+            return jsonify({'error': 'Invalid input parameters', 'details': str(e)}), 400
+
+        # Additional validation
+        if not all([days_ahead > 0, dept_id > 0, employee_id > 0]):
+            return jsonify({'error': 'Invalid input values - all parameters must be positive integers'}), 400
+
         logger.info('Generating tasks with parameters: days_ahead=%d, dept_id=%d, employee_id=%d', 
                    days_ahead, dept_id, employee_id)
         
@@ -567,16 +571,13 @@ def generate_tasks():
                     'pending'::text AS status,
                     COALESCE(tp.priority, 'medium'::text) AS priority,
                     %s::integer AS assigned_by,
-                    %s::integer AS department_id,
-                    CASE 
-                        WHEN tp.due_time IS NOT NULL THEN ds.date + tp.due_time
-                        ELSE ds.date
-                    END AS due_date,
+                    tp.department_id,ds.date AS due_date,
                     NULL AS notes,
                     false AS archived,
                     NULL AS shift_id
                 FROM task_patterns tp
-                CROSS JOIN date_series dsWHERE 
+                CROSS JOIN date_series ds
+                WHERE 
                     tp.department_id = %s::integer
                     AND tp.archived = false
                     AND (
@@ -597,15 +598,21 @@ def generate_tasks():
                         AND DATE(t.due_date) = ds.date
                         AND t.department_id = tp.department_id
                     )RETURNING *
-            """
-            
-            # Count %s in query and log it
+            """# Debug information
+            params = (days_ahead, employee_id, dept_id)
             placeholder_count = query.count('%s')
-            logger.info('Number of SQL placeholders in query: %d', placeholder_count)
-            logger.info('Number of parameters provided: %d', len((days_ahead, employee_id, dept_id)))
+            logger.info('SQL Query: %s', query.replace('%s', '{}').format(*['?']*placeholder_count))
+            logger.info('Parameters: %s', str(params))
+            logger.info('Number of SQL placeholders: %d, Number of parameters: %d', 
+                       placeholder_count, len(params))
+            
+            if placeholder_count != len(params):
+                logger.error('Mismatch between placeholders (%d) and parameters (%d)', 
+                           placeholder_count, len(params))
+                return jsonify({'error': 'Internal server error - parameter mismatch'}), 500
             
             # Execute the query with parameters
-            cursor.execute(query, (days_ahead, employee_id, dept_id))
+            cursor.execute(query, params)
             
             # Log the exact query and parameters for debugging
             logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
@@ -637,7 +644,3 @@ def generate_tasks():
             return jsonify({'error': 'Failed to generate tasks', 'details': str(e)}), 500
         finally:
             cursor.close()
-            
-    except Exception as e:
-        logger.error('Error in generate_tasks outer block: %s', str(e), exc_info=True)
-        return jsonify({'error': 'Failed to process request', 'details': str(e)}), 500
