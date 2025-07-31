@@ -418,13 +418,14 @@ def generate_tasks():
         try:
             # First check if we have any active patterns for this department
             cursor.execute("""
-                SELECT COUNT(*) 
+                SELECT COUNT(*) as count
                 FROM task_patterns 
                 WHERE archived = false 
                 AND department_id = %s
             """, (dept_id,))
             
-            pattern_count = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            pattern_count = result['count'] if result else 0
             logger.info('Found %d active task patterns', pattern_count)
 
             if pattern_count == 0:
