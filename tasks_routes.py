@@ -28,7 +28,59 @@ def create_task():
             return jsonify({'error': f'{field} is required'}), 400
     
     cursor = get_db_cursor()
+# Task Management Routes
+######################## Create a new task
+@tasks_bp.route('/tasks', methods=['POST'])
+@token_required
+def create_task():
+    data = request.get_json()
+    required_fields = ['title']
+    
+    # Validate required fields
+    for field in required_fields:
+        if not data.get(field):
+            logger.warning('Missing required field: %s', field)
+            return jsonify({'error': f'{field} is required'}), 400
+    
+        cursor = get_db_cursor()# Get and validate input data
+        data = request.get_json() or {}
+        days_ahead = int(data.get('days_ahead', 14))  # Default to 2 weeks
+
+        if days_ahead <= 0:
+            return jsonify({'error': 'days_ahead must be a positive integer'}), 400
+
+        logger.info('Generating tasks for next %d days', days_ahead)
+        cursor = get_db_cursor()
     try:
+        cursor.execute("""
+            INSERT INTO tasks (
+                title,
+                description,
+                status,
+                priority,
+                assigned_by,
+                department_id,
+                due_date,
+                notes,
+                shift_id
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ) RETURNING *
+        """, (
+            data['title'],
+            data.get('description'),
+            'pending',  # default status
+            data.get('priority', 'medium'),
+            request.user['employee_id'],  # current user as assigned_by
+            data.get('department_id'),
+            data.get('due_date'),
+            data.get('notes'),
+            data.get('shift_id')
+        ))
+        
+        new_task = cursor.fetchone()
+        cursor.connection.commit()
+        return jsonify(new_task), 201
         cursor.execute("""
             INSERT INTO tasks (
                 title,
@@ -515,9 +567,7 @@ def update_task_pattern(pattern_id):
         logger.error('Error updating task pattern: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()
-
-# Generate tasks from patterns
+        cursor.close()# Generate tasks from patterns
 @tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
@@ -613,61 +663,60 @@ def generate_tasks():
             params = (days_ahead, employee_id, dept_id)
             logger.info('SQL Parameters: %s', params)# Execute the query to generate tasks
             cursor.execute("""
-                    WITH RECURSIVE date_series AS (
-                        SELECT generate_series(
-                            CURRENT_DATE,
-                            CURRENT_DATE + %s::integer,
-                            '1 day'::interval
-                        )::date AS date
-                    )
-                    INSERT INTO tasks (
-                        title,
-                        description,
-                        status,
-                        priority,
-                        assigned_by,
-                        department_id,
-                        due_date,
-                        notes,
-                        archived,
-                        shift_id
-                    )
-                    SELECT 
-                        tp.title,
-                        tp.description,
-                        'pending'::text AS status,
-                        COALESCE(tp.priority, 'medium'::text) AS priority,
-                        %s::integer AS assigned_by,
-                        tp.department_id,
-                        ds.date AS due_date,
-                        NULL AS notes,
-                        false AS archived,
-                        NULL AS shift_id
-                    FROM task_patterns tp
-                    CROSS JOIN date_series ds
-                    WHERE 
-                        tp.department_id = %s::integer
-                        AND tp.archived = false
-                        AND (
-                            (tp.frequency = 'weekly') OR
-                            (
-                                tp.frequency = 'bi-weekly' AND
-                                tp.week_number = CASE 
-                                    WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
-                                    ELSE 2 
-                                END
-                            )
+                WITH RECURSIVE date_series AS (
+                    SELECT generate_series(
+                        CURRENT_DATE,
+                        CURRENT_DATE + %s::integer,
+                        '1 day'::interval
+                    )::date AS date
+                )
+                INSERT INTO tasks (
+                    title,
+                    description,
+                    status,
+                    priority,
+                    assigned_by,
+                    department_id,
+                    due_date,
+                    notes,
+                    archived,
+                    shift_id
+                )
+                SELECT 
+                    tp.title,
+                    tp.description,
+                    'pending'::text AS status,
+                    COALESCE(tp.priority, 'medium'::text) AS priority,
+                    tp.department_id AS assigned_by,
+                    tp.department_id,
+                    ds.date AS due_date,
+                    NULL AS notes,
+                    false AS archived,
+                    NULL AS shift_id
+                FROM task_patterns tp
+                CROSS JOIN date_series ds
+                WHERE 
+                    tp.archived = false
+                    AND (
+                        (tp.frequency = 'weekly') OR
+                        (
+                            tp.frequency = 'bi-weekly' AND
+                            tp.week_number = CASE 
+                                WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                                ELSE 2 
+                            END
                         )
-                        AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
-                        -- Prevent duplicate tasks
-                        AND NOT EXISTS (
-                            SELECT 1 FROM tasks t 
-                            WHERE t.title = tp.title 
-                            AND DATE(t.due_date) = ds.date
-                            AND t.department_id = tp.department_id
-                        )
-                    RETURNING *
-                """, params)
+                    )
+                    AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+                    -- Prevent duplicate tasks
+                    AND NOT EXISTS (
+                        SELECT 1 FROM tasks t 
+                        WHERE t.title = tp.title 
+                        AND DATE(t.due_date) = ds.date
+                        AND t.department_id = tp.department_id
+                    )
+                RETURNING *
+            """, (days_ahead,))
             
             # Log the exact query and parameters for debugging
             logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
