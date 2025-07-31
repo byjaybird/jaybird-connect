@@ -33,21 +33,22 @@ def token_required(f):
             )
             
             cursor = get_db_cursor()
-            cursor.execute("""
-                SELECT e.*, d.name as department_name 
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.employee_id = %s AND e.active IS TRUE
-            """, (data['employee_id'],))
-            employee = cursor.fetchone()
-            cursor.close()
+            try:
+                cursor.execute("""
+                    SELECT e.*, d.name as department_name 
+                    FROM employees e
+                    LEFT JOIN departments d ON e.department_id = d.department_id
+                    WHERE e.employee_id = %s AND e.active IS TRUE
+                """, (data['employee_id'],))
+                employee = cursor.fetchone()
+                
+                if not employee:
+                    return jsonify({'error': 'Employee not found or inactive'}), 401
 
-            if not employee:
-                return jsonify({'error': 'Employee not found or inactive'}), 401
+                request.user = employee
+            finally:
+                cursor.close()
 
-            request.user = employee
-            return f(*args, **kwargs)
-        
         except jwt.ExpiredSignatureError:
             return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
@@ -55,5 +56,12 @@ def token_required(f):
         except Exception as e:
             print(f"Auth error: {str(e)}")
             return jsonify({'error': 'Invalid authentication'}), 401
+
+        # Call the actual route function outside the auth try-catch block
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            print(f"Route error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
     return decorated

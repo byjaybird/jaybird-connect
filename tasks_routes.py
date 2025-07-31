@@ -306,7 +306,22 @@ def get_task_patterns():
     try:
         cursor.execute("""
             SELECT 
-                tp.*,
+                tp.pattern_id,
+                tp.title,
+                tp.description,
+                tp.priority,
+                tp.department_id,
+                tp.week_number,
+                tp.days_of_week,
+                tp.frequency,
+                tp.archived,
+                tp.created_at,
+                tp.updated_at,
+                CASE 
+                    WHEN tp.due_time IS NOT NULL 
+                    THEN to_char(tp.due_time, 'HH24:MI:SS')
+                    ELSE NULL 
+                END as due_time,
                 d.name as department_name
             FROM task_patterns tp
             LEFT JOIN departments d ON tp.department_id = d.department_id
@@ -320,6 +335,9 @@ def get_task_patterns():
         patterns = cursor.fetchall()
         logger.info('Found %d task patterns', len(patterns))
         return jsonify(patterns)
+    except Exception as e:
+        logger.error('Error fetching task patterns: %s', str(e), exc_info=True)
+        return jsonify({'error': 'Failed to fetch task patterns'}), 500
     finally:
         cursor.close()
 
