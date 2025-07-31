@@ -27,7 +27,6 @@ function TasksPage({ user }) {
     department_id: user?.department_id || '',
     week_number: 1,
     days_of_week: [],
-    due_time: '',
     frequency: 'weekly'
   });
 
@@ -301,17 +300,7 @@ function TasksPage({ user }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Time</label>
-                <input
-                  type="time"
-                  value={currentPattern.due_time}
-                  onChange={(e) => setCurrentPattern(prev => ({ ...prev, due_time: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-md"
-                />
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                 <select
