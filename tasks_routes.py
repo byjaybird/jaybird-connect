@@ -12,22 +12,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 tasks_bp = Blueprint('tasks', __name__)
 
-#######################
-# Task Management Routes
-######################## Create a new task
-@tasks_bp.route('/tasks', methods=['POST'])
-@token_required
-def create_task():
-    data = request.get_json()
-    required_fields = ['title']
-    
-    # Validate required fields
-    for field in required_fields:
-        if not data.get(field):
-            logger.warning('Missing required field: %s', field)
-            return jsonify({'error': f'{field} is required'}), 400
-    
-    cursor = get_db_cursor()
 # Task Management Routes
 ######################## Create a new task
 @tasks_bp.route('/tasks', methods=['POST'])
