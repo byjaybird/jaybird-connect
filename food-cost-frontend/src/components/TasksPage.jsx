@@ -255,16 +255,28 @@ function TasksPage({ user }) {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        console.error('TasksPage: No auth token found during task generation');
+        alert('Your session has expired. Please log in again.');
+        window.location.href = '/login';
         return;
       }
 
-      const generateResponse = await api.post('/api/tasks/generate', { days_ahead: 14 });
+      // Show loading state
+      setLoading(true);
+
+      // Only send days_ahead parameter
+      const generateResponse = await api.post('/api/tasks/generate', {});
       console.log('TasksPage: Generated tasks response:', generateResponse.data);
 
-      // Refresh tasks list
+      // Show appropriate message based on response
+      if (generateResponse.data.message) {
+        alert(generateResponse.data.message);
+      } else {
+        const taskCount = generateResponse.data.length;
+        alert(`Successfully generated ${taskCount} tasks across all departments`);
+      }
+
+      // Refresh tasks list for current department
       const tasksResponse = await api.get('/api/tasks/department');
-      console.log('TasksPage: Updated tasks list:', tasksResponse.data);
       setTasks(tasksResponse.data);
     } catch (err) {
       console.error('TasksPage: Error in handleGenerateTasks:', err);

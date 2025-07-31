@@ -10,10 +10,11 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 tasks_bp = Blueprint('tasks', __name__)
 
-# Create a new task
+#######################
+# Task Management Routes
+######################## Create a new task
 @tasks_bp.route('/tasks', methods=['POST'])
 @token_required
 def create_task():
@@ -58,8 +59,8 @@ def create_task():
         cursor.connection.commit()
         return jsonify(new_task), 201
     except Exception as e:
-        logger.error('Error creating task: %s', str(e), exc_info=True)
         cursor.connection.rollback()
+        logger.error('Error creating task: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
@@ -211,6 +212,10 @@ def get_department_tasks():
     finally:
         cursor.close()
 
+#######################
+# Authentication Routes
+#######################
+
 @tasks_bp.route('/auth/verify', methods=['POST'])
 @token_required
 def verify_auth():
@@ -296,6 +301,10 @@ def update_task_status(task_id):
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
+
+#######################
+# Task Pattern Routes
+#######################
 
 # Get all task patterns
 @tasks_bp.route('/tasks/patterns', methods=['GET'])
@@ -401,7 +410,9 @@ def create_task_pattern():
         logger.error('Error creating task pattern: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()# Delete task pattern
+        cursor.close()
+
+# Delete task pattern
 @tasks_bp.route('/tasks/patterns/<int:pattern_id>', methods=['DELETE'])
 @token_required
 def delete_task_pattern(pattern_id):
@@ -600,11 +611,8 @@ def generate_tasks():
                     )RETURNING *
             """# Debug information
             params = (days_ahead, employee_id, dept_id)
-            logger.info('SQL Parameters: %s', params)
-            
-            # Execute the query with parameters
-            try:
-                cursor.execute("""
+            logger.info('SQL Parameters: %s', params)# Execute the query to generate tasks
+            cursor.execute("""
                     WITH RECURSIVE date_series AS (
                         SELECT generate_series(
                             CURRENT_DATE,
@@ -660,9 +668,6 @@ def generate_tasks():
                         )
                     RETURNING *
                 """, params)
-            except Exception as e:
-                logger.error('SQL execution error: %s', str(e))
-                raise
             
             # Log the exact query and parameters for debugging
             logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
