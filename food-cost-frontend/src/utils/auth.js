@@ -6,13 +6,20 @@ export const api = axios.create({
   baseURL: API_URL, // Use API_URL directly since routes include /api
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 10000, // 10 second timeout
+  withCredentials: true // Include credentials like cookies
 });
 
 // Add token to requests
 api.interceptors.request.use(
   (config) => {
-    console.log('Request interceptor - URL:', config.url);
+    console.log('Request interceptor - Full config:', {
+      url: config.url,
+      method: config.method,
+      headers: config.headers,
+      data: config.data
+    });
     
     // Skip token check for login and other public endpoints
     if (config.url.includes('/auth/login')) {
@@ -25,7 +32,7 @@ api.interceptors.request.use(
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Request interceptor - Headers set');
+      console.log('Request interceptor - Headers after token:', config.headers);
       return config;
     }
     
@@ -46,10 +53,24 @@ api.interceptors.request.use(
   }
 );
 
-// Handle 401 responses
+// Handle responses
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('Response interceptor - Success:', {
+      status: response.status,
+      headers: response.headers,
+      data: response.data
+    });
+    return response;
+  },
   async (error) => {
+    console.log('Response interceptor - Error:', {
+      message: error.message,
+      code: error.code,
+      config: error.config,
+      response: error.response,
+    });
+    
     if (error.response?.status === 401) {
       console.log('Auth error detected, clearing token and redirecting to login');
       localStorage.removeItem('token');

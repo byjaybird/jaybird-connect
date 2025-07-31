@@ -118,7 +118,20 @@ function TasksPage({ user }) {
       if (!token) {
         console.error('TasksPage: No auth token found during pattern creation');
         return;
-      }const response = await api.post('/api/tasks/patterns', formData);
+      }
+      
+      // Log the request configuration
+      console.log('TasksPage: Request Configuration:', {
+        url: '/api/tasks/patterns',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        data: formData
+      });
+
+      const response = await api.post('/api/tasks/patterns', formData);
   console.log('TasksPage: Pattern creation response:', response.data);
   // Refresh patterns
   const patternsResponse = await api.get('/api/tasks/patterns');
