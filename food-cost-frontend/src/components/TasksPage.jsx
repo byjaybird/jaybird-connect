@@ -40,24 +40,37 @@ function TasksPage({ user }) {
     const fetchInitialData = async () => {
       console.log('TasksPage: Initializing with user:', user);
       try {
-        // Fetch task patterns
-          console.log('TasksPage: Fetching task patterns...');
-          const patternsResponse = await api.get('/api/tasks/patterns');
-          console.log('TasksPage: Received patterns:', patternsResponse.data);
-          setPatterns(patternsResponse.data);
+        // Verify auth token is still valid
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('TasksPage: No auth token found');
+          window.location.href = '/login';
+          return;
+        }
 
-        // Fetch departments
-        console.log('TasksPage: Fetching departments...');
-        const deptsResponse = await api.get('/api/departments');
-        console.log('TasksPage: Received departments:', deptsResponse.data);
+        console.log('TasksPage: Starting parallel data fetch...');
+        // Fetch all data in parallel to reduce chance of token expiration
+        const [patternsResponse, deptsResponse, tasksResponse] = await Promise.all([
+          api.get('/api/tasks/patterns').catch(err => {
+            console.error('TasksPage: Error fetching patterns:', err.response?.status, err.message);
+            throw err;
+          }),
+          api.get('/api/departments').catch(err => {
+            console.error('TasksPage: Error fetching departments:', err.response?.status, err.message);
+            throw err;
+          }),
+          api.get('/api/tasks/department').catch(err => {
+            console.error('TasksPage: Error fetching tasks:', err.response?.status, err.message);
+            throw err;
+          })
+        ]);
+
+        console.log('TasksPage: All data fetched successfully');
+        
+        // Update all state at once
+        setPatterns(patternsResponse.data);
         setDepartments(deptsResponse.data);
-
-        // Fetch department tasks
-        console.log('TasksPage: Fetching department tasks...');
-        const tasksResponse = await api.get('/api/tasks/department');
-        console.log('TasksPage: Received tasks:', tasksResponse.data);
         setTasks(tasksResponse.data);
-
         setLoading(false);
       } catch (err) {
         console.error('TasksPage: Error in fetchInitialData:', err);
