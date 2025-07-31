@@ -3,12 +3,12 @@ import { API_URL } from '../config';
 
 // Create an axios instance with default config
 export const api = axios.create({
-  baseURL: API_URL, // Use API_URL directly since routes include /api
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000, // 10 second timeout
-  withCredentials: true // Include credentials like cookies
+  timeout: 10000,
+  withCredentials: true
 });
 
 // Add token to requests
@@ -20,30 +20,32 @@ api.interceptors.request.use(
       headers: config.headers,
       data: config.data
     });
-    
-    // Skip token for public endpoints
+
+    // Skip token check for login and other public endpoints
     if (config.url.includes('/auth/login')) {
-      console.log('Request interceptor - Skipping token for login request');
+      console.log('Skipping token check for login request');
       return config;
     }
-    
+
     const token = localStorage.getItem('token');
-    console.log('Request interceptor - URL:', config.url);
     console.log('Request interceptor - Token:', token ? 'Present' : 'Missing');
-    
-    if (!token) {
-      // Only redirect for non-auth-check requests
-      if (!config.url.includes('/api/auth/check')) {
-        console.log('Request interceptor - No token found, redirecting to login');
-        window.location.href = '/login';
-      }
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('Request interceptor - Headers after token:', config.headers);
+      return config;
+    }
+
+    // Don't redirect on auth check requests
+    if (config.url.includes('/api/auth/check')) {
+      console.log('Skipping redirect for auth check');
       return Promise.reject('No auth token found');
     }
-    
-    // Add token to headers
-    config.headers.Authorization = `Bearer ${token}`;
-    console.log('Request interceptor - Headers set');
-    return config;
+
+    // If no token is found, redirect to login
+    console.log('No token found, redirecting to login');
+    window.location.href = '/login';
+    return Promise.reject('No auth token found');
   },
   (error) => {
     console.error('Request interceptor error:', error);
@@ -66,9 +68,9 @@ api.interceptors.response.use(
       message: error.message,
       code: error.code,
       config: error.config,
-      response: error.response,
+      response: error.response
     });
-    
+
     if (error.response?.status === 401) {
       console.log('Auth error detected, clearing token and redirecting to login');
       localStorage.removeItem('token');
