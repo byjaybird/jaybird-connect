@@ -511,11 +511,17 @@ def update_task_pattern(pattern_id):
 @token_required
 def generate_tasks():
     try:
-        data = request.get_json()
-        days_ahead = data.get('days_ahead', 14)  # Default to 2 weeks
-        dept_id = request.user['department_id']
-        employee_id = request.user['employee_id']
-        logger.info('Generating tasks for department_id: %s, employee_id: %s', dept_id, employee_id)
+        data = request.get_json() or {}
+        days_ahead = int(data.get('days_ahead', 14))  # Default to 2 weeks, ensure integer
+        dept_id = int(request.user['department_id'])
+        employee_id = int(request.user['employee_id'])
+        
+        # Validate inputs
+        if not all([days_ahead, dept_id, employee_id]):
+            return jsonify({'error': 'Invalid input parameters'}), 400
+            
+        logger.info('Generating tasks with parameters: days_ahead=%d, dept_id=%d, employee_id=%d', 
+                   days_ahead, dept_id, employee_id)
         
         cursor = get_db_cursor()
         try:
@@ -532,17 +538,19 @@ def generate_tasks():
             logger.info('Found %d active task patterns', pattern_count)
 
             if pattern_count == 0:
-                return jsonify({'message': 'No active task patterns found'}), 200
-
-            # Generate tasks for valid patterns
-            cursor.execute("""
-                WITH date_series AS (
+                return jsonify({'message': 'No active task patterns found'}), 200# Debug log the parameters
+            logger.info('Generate tasks parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
+                       days_ahead, employee_id, dept_id)
+            
+            # Count the number of %s placeholders in the query for validation
+            query = """WITH RECURSIVE date_series AS (
                     SELECT generate_series(
                         CURRENT_DATE,
-                        CURRENT_DATE + %s,
+                        CURRENT_DATE + %s::integer,
                         '1 day'::interval
                     )::date AS date
-                )INSERT INTO tasks (
+                )
+                INSERT INTO tasks (
                     title,
                     description,
                     status,
@@ -553,14 +561,13 @@ def generate_tasks():
                     notes,
                     archived,
                     shift_id
-                )
-                SELECT 
+                )SELECT 
                     tp.title,
                     tp.description,
                     'pending'::text AS status,
                     COALESCE(tp.priority, 'medium'::text) AS priority,
-                    %s AS assigned_by,
-                    tp.department_id,
+                    %s::integer AS assigned_by,
+                    %s::integer AS department_id,
                     CASE 
                         WHEN tp.due_time IS NOT NULL THEN ds.date + tp.due_time
                         ELSE ds.date
@@ -569,9 +576,8 @@ def generate_tasks():
                     false AS archived,
                     NULL AS shift_id
                 FROM task_patterns tp
-                CROSS JOIN date_series ds
-                WHERE 
-                    tp.department_id = %s
+                CROSS JOIN date_series dsWHERE 
+                    tp.department_id = %s::integer
                     AND tp.archived = false
                     AND (
                         (tp.frequency = 'weekly') OR
@@ -591,7 +597,15 @@ def generate_tasks():
                         AND DATE(t.due_date) = ds.date
                         AND t.department_id = tp.department_id
                     )RETURNING *
-            """, (days_ahead, employee_id, dept_id))
+            """
+            
+            # Count %s in query and log it
+            placeholder_count = query.count('%s')
+            logger.info('Number of SQL placeholders in query: %d', placeholder_count)
+            logger.info('Number of parameters provided: %d', len((days_ahead, employee_id, dept_id)))
+            
+            # Execute the query with parameters
+            cursor.execute(query, (days_ahead, employee_id, dept_id))
             
             # Log the exact query and parameters for debugging
             logger.info('Generate tasks query parameters: days_ahead=%s, employee_id=%s, dept_id=%s', 
