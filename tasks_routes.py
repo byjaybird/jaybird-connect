@@ -672,7 +672,6 @@ def generate_tasks():
                     'pending'::text AS status,
                     COALESCE(tp.priority, 'medium'::text) AS priority,
                     tp.department_id AS assigned_by,
-                    tp.department_id,
                     ds.date AS due_date,
                     NULL AS notes,
                     false AS archived,
