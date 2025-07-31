@@ -414,8 +414,7 @@ def generate_tasks():
     cursor = get_db_cursor()
     try:
         # Get current week number (1 or 2) based on the current date
-        cursor.execute("""
-            WITH date_series AS (
+        cursor.execute("""WITH date_series AS (
                 SELECT generate_series(
                     CURRENT_DATE,
                     CURRENT_DATE + %s,
@@ -429,12 +428,16 @@ def generate_tasks():
                 department_id,
                 due_date,
                 status
-            )SELECT 
+            )
+            SELECT 
                 tp.title,
                 tp.description,
                 tp.priority,
                 tp.department_id,
-                ds.date + tp.due_time AS due_date,
+                CASE 
+                    WHEN tp.due_time IS NOT NULL THEN ds.date + tp.due_time
+                    ELSE ds.date
+                END AS due_date,
                 'pending' AS status
             FROM task_patterns tp
             CROSS JOIN date_series ds
@@ -450,8 +453,8 @@ def generate_tasks():
                         END
                     )
                 )
-                -- Match any of the days of week
-                AND EXTRACT(DOW FROM ds.date) = ANY(tp.days_of_week)
+                -- Match any of the days of week using explicit cast
+                AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week::integer[])
                 AND tp.archived = false
             RETURNING *
         """, (days_ahead,))
