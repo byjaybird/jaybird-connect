@@ -552,21 +552,18 @@ def update_task_pattern(pattern_id):
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()# Generate tasks from patterns
-
+        
 @tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
-    try:
-        # Parse and validate input
+    try:# Parse and validate input
         data = request.get_json() or {}
         days_ahead = int(data.get('days_ahead', 14))
-        employee_id = int(request.user['employee_id'])
 
-        if not all([days_ahead > 0, employee_id > 0]):
-            return jsonify({'error': 'Invalid input values - parameters must be positive integers'}), 400
+        if days_ahead <= 0:
+            return jsonify({'error': 'days_ahead must be a positive integer'}), 400
 
-        logger.info('Generating tasks: days_ahead=%d, employee_id=%d',
-                    days_ahead, employee_id)
+        logger.info('Generating tasks for next %d days', days_ahead)
 
         cursor = get_db_cursor()
 
@@ -588,13 +585,11 @@ def generate_tasks():
                     CURRENT_DATE + %s::integer,
                     '1 day'::interval
                 )::date AS date
-            )
-            INSERT INTO tasks (
+            )INSERT INTO tasks (
                 title,
                 description,
                 status,
                 priority,
-                assigned_by,
                 department_id,
                 due_date,
                 notes,
@@ -606,7 +601,6 @@ def generate_tasks():
                 tp.description,
                 'pending'::text AS status,
                 COALESCE(tp.priority, 'medium'::text) AS priority,
-                %s::integer AS assigned_by,
                 tp.department_id,
                 ds.date AS due_date,
                 NULL AS notes,
@@ -630,7 +624,7 @@ def generate_tasks():
             RETURNING *
         """
 
-        cursor.execute(query, (days_ahead, employee_id))
+        cursor.execute(query, (days_ahead,))
         new_tasks = cursor.fetchall()
         cursor.connection.commit()
 
