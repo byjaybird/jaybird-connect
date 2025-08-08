@@ -20,14 +20,13 @@ from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)
-
-# Configure CORS
+app = Flask(__name__)# Configure CORS
 CORS(app, resources={
     r"/*": {
-        "origins": "https://jaybird-connect.web.app",
+        "origins": ["https://jaybird-connect.web.app"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+        "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
         "max_age": 3600
     }
@@ -38,7 +37,9 @@ CORS(app, resources={
 def after_request(response):
     if not response.headers.get('Access-Control-Allow-Origin'):
         response.headers.add('Access-Control-Allow-Origin', 'https://jaybird-connect.web.app')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH')
     return response
 
 # Global auth middleware
