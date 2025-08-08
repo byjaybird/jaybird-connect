@@ -586,17 +586,20 @@ def generate_tasks():
             result = cursor.fetchone()
             
             if not result or result['count'] == 0:
-                return jsonify({'message': 'No active task patterns found'}), 200
-
-            # Generate tasks
+                return jsonify({'message': 'No active task patterns found'}), 200# Generate tasks# First create the date series
             cursor.execute("""
-                WITH date_series AS (
-                    SELECT generate_series(
-                        CURRENT_DATE,
-                        CURRENT_DATE + %s::integer,
-                        '1 day'::interval
-                    )::date AS date
-                )
+                SELECT generate_series(
+                    CURRENT_DATE,
+                    CURRENT_DATE + %s::integer,
+                    '1 day'::interval
+                )::date AS date
+            """, (days_ahead,))
+            
+            dates = cursor.fetchall()
+            logger.info('Generated dates: %s', [d['date'] for d in dates])
+            
+            # Then insert tasks
+            task_query = """
                 INSERT INTO tasks (
                     title,
                     description,
@@ -611,32 +614,42 @@ def generate_tasks():
                 SELECT 
                     tp.title,
                     tp.description,
-                    'pending' AS status,
-                    COALESCE(tp.priority, 'medium') AS priority,
+                    'pending',
+                    COALESCE(tp.priority, 'medium'),
                     tp.department_id,
-                    ds.date AS due_date,
-                    NULL AS notes,
-                    false AS archived,
-                    NULL AS shift_id
+                    %s AS due_date,
+                    NULL,
+                    false,
+                    NULL
                 FROM task_patterns tp
-                CROSS JOIN date_series ds
-                WHERE 
-                    tp.archived = false
-                    AND (
-                        tp.frequency = 'weekly'
-                        OR (
-                            tp.frequency = 'bi-weekly' AND
-                            tp.week_number = CASE 
-                                WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
-                                ELSE 2 
-                            END
-                        )
+                WHERE tp.archived = false
+                AND (
+                    tp.frequency = 'weekly'
+                    OR (
+                        tp.frequency = 'bi-weekly' 
+                        AND tp.week_number = CASE 
+                            WHEN EXTRACT(WEEK FROM %s) % 2 = 1 THEN 1 
+                            ELSE 2 
+                        END
                     )
-                    AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+                )
+                AND EXTRACT(DOW FROM %s)::integer = ANY(tp.days_of_week)
                 RETURNING *
-            """, (days_ahead,))
-
-            new_tasks = cursor.fetchall()
+            """
+            
+            logger.info('Executing query with days_ahead=%s', days_ahead)
+            logger.info('Query: %s', task_query)
+            new_tasks = []
+            
+            # Generate tasks for each date
+            for date_row in dates:
+                date = date_row['date']
+                logger.info('Generating tasks for date: %s', date)
+                
+                cursor.execute(task_query, (date, date, date))
+                tasks = cursor.fetchall()
+                new_tasks.extend(tasks)
+            
             cursor.connection.commit()
 
             task_count = len(new_tasks)
