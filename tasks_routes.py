@@ -560,30 +560,27 @@ def generate_tasks():
         # Parse and validate input
         data = request.get_json() or {}
         days_ahead = int(data.get('days_ahead', 14))
-        dept_id = int(request.user['department_id'])
         employee_id = int(request.user['employee_id'])
 
-        if not all([days_ahead > 0, dept_id > 0, employee_id > 0]):
-            return jsonify({'error': 'Invalid input values - all parameters must be positive integers'}), 400
+        if not all([days_ahead > 0, employee_id > 0]):
+            return jsonify({'error': 'Invalid input values - parameters must be positive integers'}), 400
 
-        logger.info('Generating tasks: days_ahead=%d, dept_id=%d, employee_id=%d',
-                    days_ahead, dept_id, employee_id)
+        logger.info('Generating tasks: days_ahead=%d, employee_id=%d',
+                    days_ahead, employee_id)
 
         cursor = get_db_cursor()
 
-        # Check for active patterns
+        # Check for active patterns across all departments
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM task_patterns 
-            WHERE archived = false AND department_id = %s
-        """, (dept_id,))
+            WHERE archived = false
+        """)
         result = cursor.fetchone()
         pattern_count = result['count'] if result else 0
 
         if pattern_count == 0:
-            return jsonify({'message': 'No active task patterns found'}), 200
-
-        # Main query to generate tasks
+            return jsonify({'message': 'No active task patterns found'}), 200# Main query to generate tasks
         query = """
             WITH RECURSIVE date_series AS (
                 SELECT generate_series(
@@ -618,8 +615,7 @@ def generate_tasks():
             FROM task_patterns tp
             CROSS JOIN date_series ds
             WHERE 
-                tp.department_id = %s::integer
-                AND tp.archived = false
+                tp.archived = false
                 AND (
                     tp.frequency = 'weekly'
                     OR (
@@ -631,24 +627,18 @@ def generate_tasks():
                     )
                 )
                 AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
-                AND NOT EXISTS (
-                    SELECT 1 FROM tasks t 
-                    WHERE t.title = tp.title 
-                    AND DATE(t.due_date) = ds.date
-                    AND t.department_id = tp.department_id
-                )
             RETURNING *
         """
 
-        cursor.execute(query, (days_ahead, employee_id, dept_id))
+        cursor.execute(query, (days_ahead, employee_id))
         new_tasks = cursor.fetchall()
         cursor.connection.commit()
 
         task_count = len(new_tasks)
-        logger.info('Generated %d new tasks for department %d', task_count, dept_id)
+        logger.info('Generated %d new tasks', task_count)
 
         if task_count == 0:
-            return jsonify({'message': 'No new tasks were generated - possible duplicates or no matching patterns'}), 200
+            return jsonify({'message': 'No new tasks were generated - no matching patterns found'}), 200
 
         # Optionally log sample
         for task in new_tasks[:3]:
