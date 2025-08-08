@@ -1,12 +1,16 @@
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor, get_db
-import psycopg2.extras
-from functools import wraps
+from utils.db import get_db_cursor
 from utils.auth_decorator import token_required
-from datetime import datetime
-import os
-import jwt
 import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+tasks_bp = Blueprint('tasks', __name__)
+
+import psycopg2.extras
+from utils.auth_decorator import token_required
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -562,98 +566,102 @@ def update_task_pattern(pattern_id):
 @token_required
 def generate_tasks():
     """Generate tasks from task patterns."""
-    data = request.get_json() or {}
-    days_ahead = int(data.get('days_ahead', 14))
-
-    if days_ahead <= 0:
-        return jsonify({'error': 'days_ahead must be a positive integer'}), 400
-
-    logger.info('Generating tasks for next %d days', days_ahead)
-    cursor = get_db_cursor()
-
     try:
-        # Check for active patterns
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM task_patterns 
-            WHERE archived = false
-        """)
-        result = cursor.fetchone()
-        pattern_count = result['count'] if result else 0
+        data = request.get_json() or {}
+        days_ahead = int(data.get('days_ahead', 14))
 
-        if pattern_count == 0:
-            return jsonify({'message': 'No active task patterns found'}), 200
+        if days_ahead <= 0:
+            return jsonify({'error': 'days_ahead must be a positive integer'}), 400
 
-        # Generate tasks
-        cursor.execute("""
-            WITH date_series AS (
-                SELECT generate_series(
-                    CURRENT_DATE,
-                    CURRENT_DATE + %s::integer,
-                    '1 day'::interval
-                )::date AS date
-            )
-            INSERT INTO tasks (
-                title,
-                description,
-                status,
-                priority,
-                department_id,
-                due_date,
-                notes,
-                archived,
-                shift_id
-            )
-            SELECT 
-                tp.title,
-                tp.description,
-                'pending' AS status,
-                COALESCE(tp.priority, 'medium') AS priority,
-                tp.department_id,
-                ds.date AS due_date,
-                NULL AS notes,
-                false AS archived,
-                NULL AS shift_id
-            FROM task_patterns tp
-            CROSS JOIN date_series ds
-            WHERE 
-                tp.archived = false
-                AND (
-                    tp.frequency = 'weekly'
-                    OR (
-                        tp.frequency = 'bi-weekly' AND
-                        tp.week_number = CASE 
-                            WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
-                            ELSE 2 
-                        END
-                    )
+        logger.info('Generating tasks for next %d days', days_ahead)
+        cursor = get_db_cursor()
+        
+        try:
+            # Check for active patterns
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM task_patterns 
+                WHERE archived = false
+            """)
+            result = cursor.fetchone()
+            
+            if not result or result['count'] == 0:
+                return jsonify({'message': 'No active task patterns found'}), 200
+
+            # Generate tasks
+            cursor.execute("""
+                WITH date_series AS (
+                    SELECT generate_series(
+                        CURRENT_DATE,
+                        CURRENT_DATE + %s::integer,
+                        '1 day'::interval
+                    )::date AS date
                 )
-                AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
-            RETURNING *
-        """, (days_ahead,))
+                INSERT INTO tasks (
+                    title,
+                    description,
+                    status,
+                    priority,
+                    department_id,
+                    due_date,
+                    notes,
+                    archived,
+                    shift_id
+                )
+                SELECT 
+                    tp.title,
+                    tp.description,
+                    'pending' AS status,
+                    COALESCE(tp.priority, 'medium') AS priority,
+                    tp.department_id,
+                    ds.date AS due_date,
+                    NULL AS notes,
+                    false AS archived,
+                    NULL AS shift_id
+                FROM task_patterns tp
+                CROSS JOIN date_series ds
+                WHERE 
+                    tp.archived = false
+                    AND (
+                        tp.frequency = 'weekly'
+                        OR (
+                            tp.frequency = 'bi-weekly' AND
+                            tp.week_number = CASE 
+                                WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                                ELSE 2 
+                            END
+                        )
+                    )
+                    AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+                RETURNING *
+            """, (days_ahead,))
 
-        new_tasks = cursor.fetchall()
-        cursor.connection.commit()
+            new_tasks = cursor.fetchall()
+            cursor.connection.commit()
 
-        task_count = len(new_tasks)
-        logger.info('Generated %d new tasks', task_count)
+            task_count = len(new_tasks)
+            logger.info('Generated %d new tasks', task_count)
 
-        # Log sample of generated tasks
-        for task in new_tasks[:3]:
-            logger.info('Sample Task: %s, Due: %s, Dept: %s',
-                      task['title'], task.get('due_date'), task.get('department_id'))
+            # Log sample of generated tasks
+            for task in new_tasks[:3]:
+                logger.info('Sample Task: %s, Due: %s, Dept: %s',
+                        task['title'], task.get('due_date'), task.get('department_id'))
 
-        return jsonify({
-            'message': f'Successfully generated {task_count} tasks',
-            'tasks': new_tasks
-        })
+            return jsonify({
+                'message': f'Successfully generated {task_count} tasks',
+                'tasks': new_tasks
+            })
 
+        except Exception as db_error:
+            cursor.connection.rollback()
+            logger.error('Database error in generate_tasks: %s', str(db_error))
+            return jsonify({'error': 'Database error', 'details': str(db_error)}), 500
+        finally:
+            cursor.close()
+            
     except Exception as e:
-        cursor.connection.rollback()
-        logger.error('Error generating tasks: %s', str(e))
-        return jsonify({'error': 'Failed to generate tasks', 'details': str(e)}), 500
-    finally:
-        cursor.close()
+        logger.error('Error in generate_tasks: %s', str(e))
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 @token_required
 def generate_tasks():
     try:
