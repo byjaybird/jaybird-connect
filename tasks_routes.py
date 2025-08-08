@@ -578,6 +578,7 @@ def generate_tasks():
 
         if pattern_count == 0:
             return jsonify({'message': 'No active task patterns found'}), 200# Main query to generate tasks
+        logger.info('Building query for task generation')
         query = """
             WITH RECURSIVE date_series AS (
                 SELECT generate_series(
@@ -595,12 +596,11 @@ def generate_tasks():
                 notes,
                 archived,
                 shift_id
-            )
-            SELECT 
+            )SELECT 
                 tp.title,
                 tp.description,
-                'pending'::text AS status,
-                COALESCE(tp.priority, 'medium'::text) AS priority,
+                'pending' AS status,
+                COALESCE(tp.priority, 'medium') AS priority,
                 tp.department_id,
                 ds.date AS due_date,
                 NULL AS notes,
@@ -624,7 +624,10 @@ def generate_tasks():
             RETURNING *
         """
 
-        cursor.execute(query, (days_ahead,))
+        # Ensure we pass a tuple with trailing comma
+        params = (days_ahead,)  # The trailing comma is important!
+        logger.info('Executing query with params: %s', params)
+        cursor.execute(query, params)
         new_tasks = cursor.fetchall()
         cursor.connection.commit()
 
