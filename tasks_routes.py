@@ -557,21 +557,18 @@ def update_task_pattern(pattern_id):
         logger.error('Error updating task pattern: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()# Generate tasks from patterns
-        
-@tasks_bp.route('/tasks/generate', methods=['POST'])
+        cursor.close()# Generate tasks from patterns@tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
-    """Generate tasks from task patterns."""
+    """Generate tasks from patterns for specified days ahead."""
     data = request.get_json() or {}
     days_ahead = int(data.get('days_ahead', 14))
-
+    
     if days_ahead <= 0:
         return jsonify({'error': 'days_ahead must be a positive integer'}), 400
-
+        
     cursor = get_db_cursor()
     try:
-        # Main query to generate tasks
         cursor.execute("""
             WITH date_series AS (
                 SELECT generate_series(
@@ -581,15 +578,8 @@ def generate_tasks():
                 )::date AS date
             )
             INSERT INTO tasks (
-                title,
-                description,
-                status,
-                priority,
-                department_id,
-                due_date,
-                notes,
-                archived,
-                shift_id
+                title, description, status, priority, 
+                department_id, due_date, notes, archived, shift_id
             )
             SELECT 
                 tp.title,
@@ -617,22 +607,18 @@ def generate_tasks():
             AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
             RETURNING *
         """, (days_ahead,))
-
+        
         new_tasks = cursor.fetchall()
         cursor.connection.commit()
-
-        task_count = len(new_tasks)
-        logger.info('Generated %d new tasks', task_count)
-
+        
         return jsonify({
-            'message': f'Successfully generated {task_count} tasks',
+            'message': f'Generated {len(new_tasks)} tasks',
             'tasks': new_tasks
         })
-
+        
     except Exception as e:
         cursor.connection.rollback()
-        logger.error('Error generating tasks: %s', str(e))
-        return jsonify({'error': 'Failed to generate tasks', 'details': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
 @token_required
