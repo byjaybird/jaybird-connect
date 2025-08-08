@@ -3,10 +3,7 @@ from utils.db import get_db_cursor
 from utils.auth_decorator import token_required
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 tasks_bp = Blueprint('tasks', __name__)
 
 import psycopg2.extras
@@ -563,6 +560,81 @@ def update_task_pattern(pattern_id):
         cursor.close()# Generate tasks from patterns
         
 @tasks_bp.route('/tasks/generate', methods=['POST'])
+@token_required
+def generate_tasks():
+    """Generate tasks from task patterns."""
+    data = request.get_json() or {}
+    days_ahead = int(data.get('days_ahead', 14))
+
+    if days_ahead <= 0:
+        return jsonify({'error': 'days_ahead must be a positive integer'}), 400
+
+    cursor = get_db_cursor()
+    try:
+        # Main query to generate tasks
+        cursor.execute("""
+            WITH date_series AS (
+                SELECT generate_series(
+                    CURRENT_DATE,
+                    CURRENT_DATE + %s::integer,
+                    '1 day'::interval
+                )::date AS date
+            )
+            INSERT INTO tasks (
+                title,
+                description,
+                status,
+                priority,
+                department_id,
+                due_date,
+                notes,
+                archived,
+                shift_id
+            )
+            SELECT 
+                tp.title,
+                tp.description,
+                'pending',
+                COALESCE(tp.priority, 'medium'),
+                tp.department_id,
+                ds.date,
+                NULL,
+                false,
+                NULL
+            FROM task_patterns tp
+            CROSS JOIN date_series ds
+            WHERE tp.archived = false
+            AND (
+                tp.frequency = 'weekly'
+                OR (
+                    tp.frequency = 'bi-weekly' 
+                    AND tp.week_number = CASE 
+                        WHEN EXTRACT(WEEK FROM ds.date) % 2 = 1 THEN 1 
+                        ELSE 2 
+                    END
+                )
+            )
+            AND EXTRACT(DOW FROM ds.date)::integer = ANY(tp.days_of_week)
+            RETURNING *
+        """, (days_ahead,))
+
+        new_tasks = cursor.fetchall()
+        cursor.connection.commit()
+
+        task_count = len(new_tasks)
+        logger.info('Generated %d new tasks', task_count)
+
+        return jsonify({
+            'message': f'Successfully generated {task_count} tasks',
+            'tasks': new_tasks
+        })
+
+    except Exception as e:
+        cursor.connection.rollback()
+        logger.error('Error generating tasks: %s', str(e))
+        return jsonify({'error': 'Failed to generate tasks', 'details': str(e)}), 500
+    finally:
+        cursor.close()
 @token_required
 def generate_tasks():
     """Generate tasks from task patterns."""
