@@ -20,7 +20,7 @@ from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)# Configure CORS
+app = Flask(__name__)# Configure CORS with a more precise configuration
 CORS(app, resources={
     r"/*": {
         "origins": ["https://jaybird-connect.web.app"],
@@ -32,14 +32,23 @@ CORS(app, resources={
     }
 })
 
-# Additional CORS headers for cases not handled by flask-cors
+# Ensure CORS headers are set correctly
 @app.after_request
 def after_request(response):
+    # Only add headers if they don't exist
     if not response.headers.get('Access-Control-Allow-Origin'):
-        response.headers.add('Access-Control-Allow-Origin', 'https://jaybird-connect.web.app')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH')
+        response.headers['Access-Control-Allow-Origin'] = 'https://jaybird-connect.web.app'
+    
+    # Use set() instead of add() to avoid duplicates
+    if not response.headers.get('Access-Control-Allow-Credentials'):
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+    
+    if not response.headers.get('Access-Control-Allow-Headers'):
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+    
+    if not response.headers.get('Access-Control-Allow-Methods'):
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH'
+    
     return response
 
 # Global auth middleware

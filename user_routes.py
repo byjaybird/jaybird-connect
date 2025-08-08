@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, make_response
-from flask_cors import cross_origin
+from flask_cors import CORS, cross_origin
 from utils.db import get_db_cursor
 from auth_routes import token_required
 from datetime import datetime
@@ -7,42 +7,9 @@ from functools import wraps
 
 user_bp = Blueprint('user', __name__)
 
-# CORS configuration
-CORS_CONFIG = {
-    "origins": ["http://localhost:5173", "https://jaybird-connect.web.app", "https://jaybird-connect.ue.r.appspot.com"],
-    "allow_headers": [
-        "Content-Type",
-        "Authorization",
-        "User-Agent",
-        "Accept",
-        "Origin",
-        "Referer",
-        "Sec-Fetch-Mode",
-        "Sec-Fetch-Site",
-        "Sec-Fetch-Dest",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform"
-    ],
-    "supports_credentials": True,
-    "max_age": 600
-}
-
-# Add OPTIONS request handling
-@user_bp.route('/users', methods=['OPTIONS'])
-@cross_origin(**CORS_CONFIG, methods=["GET", "POST", "PATCH", "OPTIONS"])
-def handle_users_options():
-    response = make_response()
-    return response
-
-@user_bp.route('/users/<int:user_id>', methods=['OPTIONS'])
-@cross_origin(**CORS_CONFIG, methods=["GET", "PATCH", "OPTIONS"])
-def handle_user_options(user_id):
-    response = make_response()
-    return response
+# Let the main app handle CORS configuration
 
 @user_bp.route('/users', methods=['GET'])
-@cross_origin(**CORS_CONFIG)
 @token_required
 def get_users():
     cursor = get_db_cursor()
@@ -73,7 +40,6 @@ def get_users():
         cursor.close()
 
 @user_bp.route('/users', methods=['POST'])
-@cross_origin(**CORS_CONFIG)
 @token_required
 def create_user():
     if request.user['role'] != 'Admin':
@@ -113,7 +79,6 @@ def create_user():
         cursor.close()
 
 @user_bp.route('/users/<int:user_id>', methods=['PATCH'])
-@cross_origin(**CORS_CONFIG)
 @token_required
 def update_user(user_id):
     if request.user['role'] != 'Admin':

@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
+from flask_cors import CORS
 from utils.db import get_db_cursor
 from functools import wraps
 import jwt
@@ -12,6 +13,8 @@ from email.mime.multipart import MIMEMultipart
 from utils.auth_decorator import token_required
 
 auth_bp = Blueprint('auth', __name__)
+
+# Let the main app handle CORS configuration
 
 # Secret key for JWT - in production, use a secure environment variable
 JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')
@@ -189,11 +192,63 @@ def change_password():
 
     except Exception as e:
         print(f"Error in change_password: {str(e)}")
-        return jsonify({'error': 'Internal server error during password change'}), 500
-    
-@auth_bp.route('/auth/check', methods=['GET', 'POST'])
-@token_required
+        return jsonify({'error': 'Internal server error during password change'}), 500@auth_bp.route('/auth/check', methods=['GET', 'POST', 'OPTIONS'])
 def check_auth():
+    if request.method == 'OPTIONS':
+        response = make_response()
+        # Let the main CORS configuration handle the headers
+        return response
+        
+    # For GET and POST requests, require token
+    if request.method in ['GET', 'POST']:
+        # Wrap the token_required logic here
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Authentication token is missing'}), 401
+
+        try:
+            # Strip 'Bearer ' from the token if present
+            token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else auth_header
+            
+            # Decode and verify the token
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            
+            # Get user details
+            cursor = get_db_cursor()
+            try:
+                cursor.execute("""
+                    SELECT e.*, d.name as department_name 
+                    FROM employees e
+                    LEFT JOIN departments d ON e.department_id = d.department_id
+                    WHERE e.employee_id = %s AND e.active = TRUE
+                """, (payload['employee_id'],))
+                user = cursor.fetchone()
+                
+                if not user:
+                    return jsonify({'error': 'User not found or inactive'}), 401
+
+                return jsonify({
+                    'status': 'valid',
+                    'user': {
+                        'employee_id': user['employee_id'],
+                        'name': user['name'],
+                        'email': user['email'],
+                        'role': user['role'],
+                        'department': user.get('department_name'),
+                        'department_id': user.get('department_id'),
+                        'isActive': user['active']
+                    }
+                })
+            finally:
+                cursor.close()
+                
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            print(f"Error in check_auth: {str(e)}")
+            return jsonify({'error': 'Internal server error during auth check'}), 500
     try:
         return jsonify({
             'status': 'valid',
