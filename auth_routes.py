@@ -192,11 +192,21 @@ def change_password():
 
     except Exception as e:
         print(f"Error in change_password: {str(e)}")
-        return jsonify({'error': 'Internal server error during password change'}), 500@auth_bp.route('/auth/check', methods=['GET', 'POST', 'OPTIONS'])
+        return jsonify({'error': 'Internal server error during password change'}), 500
+    
+@auth_bp.route('/auth/check', methods=['GET', 'POST', 'OPTIONS'])
 def check_auth():
     if request.method == 'OPTIONS':
         response = make_response()
-        # Let the main CORS configuration handle the headers
+        response.status_code = 200
+        # Ensure CORS headers are set for OPTIONS
+        response.headers.update({
+            'Access-Control-Allow-Origin': 'https://jaybird-connect.web.app',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Max-Age': '3600'
+        })
         return response
         
     # For GET and POST requests, require token
@@ -386,3 +396,28 @@ def reset_password():
     except Exception as e:
         print(f"Error in reset_password: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+    
+
+@auth_bp.route('/auth/debug-cors', methods=['OPTIONS', 'GET'])
+def debug_cors():
+    """Debug endpoint to check CORS configuration"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.status_code = 200
+    else:
+        response = jsonify({
+            'method': request.method,
+            'headers': dict(request.headers),
+            'origin': request.headers.get('Origin'),
+            'cors_enabled': 'yes'
+        })
+    
+    # Explicitly set CORS headers
+    response.headers.update({
+        'Access-Control-Allow-Origin': 'https://jaybird-connect.web.app',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '3600'
+    })
+    return response

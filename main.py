@@ -21,16 +21,39 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
-CORS(app, resources={
-    r"/*": {
-        "origins": ["https://jaybird-connect.web.app"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-        "expose_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True,
-        "max_age": 3600
-    }
-})
+CORS(app, 
+    resources={
+        r"/*": {
+            "origins": ["https://jaybird-connect.web.app"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "max_age": 3600
+        }
+    },
+    allow_origins=["https://jaybird-connect.web.app"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    expose_headers=["Content-Type", "Authorization"],
+    max_age=3600,
+    supports_credentials=True
+)
+
+# Ensure all responses have proper CORS headers
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get('Origin')
+    if origin == 'https://jaybird-connect.web.app':
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        if request.method == 'OPTIONS':
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+            response.headers['Access-Control-Max-Age'] = '3600'
+            response.status_code = 200
+    return response
 
 # Ensure CORS headers are set correctly
 @app.after_request
@@ -118,7 +141,9 @@ def auth_before_request():
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
 app.register_blueprint(tasks_bp, url_prefix='/api')
+# Register auth blueprint twice to handle both URL patterns
 app.register_blueprint(auth_bp, url_prefix='/api')
+app.register_blueprint(auth_bp, url_prefix='')  # This will handle /auth/check
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(shift_bp, url_prefix='/api')
 app.register_blueprint(departments_bp, url_prefix='/api')
