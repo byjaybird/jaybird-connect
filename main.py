@@ -20,45 +20,20 @@ from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
 
-# CORS configuration
-def configure_cors(app):
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", "https://jaybird-connect.web.app")
-            response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-            response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH")
-            response.headers.add("Access-Control-Allow-Credentials", "true")
-            response.headers.add("Access-Control-Max-Age", "3600")
-            return response
-
-    @app.after_request
-    def after_request(response):
-        if not response.headers.get('Access-Control-Allow-Origin'):
-            response.headers.add('Access-Control-Allow-Origin', 'https://jaybird-connect.web.app')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH')
-            response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
-
-
 app = Flask(__name__)
-configure_cors(app)  # Create Flask app# Basic CORS setup
-CORS(app)
 
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": "https://jaybird-connect.web.app",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
 
-# Handle CORS preflight requests@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", "https://jaybird-connect.web.app")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        response.headers.add("Access-Control-Max-Age", "3600")
-        return response
-
+# Additional CORS headers for cases not handled by flask-cors
 @app.after_request
 def after_request(response):
     if not response.headers.get('Access-Control-Allow-Origin'):

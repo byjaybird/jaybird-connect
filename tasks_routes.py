@@ -2,12 +2,7 @@ from flask import Blueprint, request, jsonify
 from utils.db import get_db_cursor
 from utils.auth_decorator import token_required
 import logging
-
-logger = logging.getLogger(__name__)
-tasks_bp = Blueprint('tasks', __name__)
-
 import psycopg2.extras
-from utils.auth_decorator import token_required
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
