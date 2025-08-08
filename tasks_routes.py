@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
+from utils.db import get_db_cursor, get_db
+import psycopg2.extras
 from functools import wraps
 from utils.auth_decorator import token_required
 from datetime import datetime
@@ -63,7 +64,11 @@ def create_task():
         ))
         
         new_task = cursor.fetchone()
-        cursor.connection.commit()
+        conn.commit()
+        
+        # Clean up temp table
+        cursor.execute("DROP TABLE IF EXISTS temp_dates")
+        conn.commit()
         return jsonify(new_task), 201
         cursor.execute("""
             INSERT INTO tasks (
@@ -556,7 +561,8 @@ def update_task_pattern(pattern_id):
 @tasks_bp.route('/tasks/generate', methods=['POST'])
 @token_required
 def generate_tasks():
-    try:# Parse and validate input
+    try:
+        # Parse and validate input
         data = request.get_json() or {}
         days_ahead = int(data.get('days_ahead', 14))
 
@@ -565,10 +571,12 @@ def generate_tasks():
 
         logger.info('Generating tasks for next %d days', days_ahead)
 
-        cursor = get_db_cursor()
+        # Use a named cursor for better control
+        conn = get_db().connection
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
 
         # Check for active patterns across all departments
-        cursor.execute("""
+            cursor.execute("""
             SELECT COUNT(*) as count
             FROM task_patterns 
             WHERE archived = false
@@ -577,10 +585,23 @@ def generate_tasks():
         pattern_count = result['count'] if result else 0
 
         if pattern_count == 0:
-            return jsonify({'message': 'No active task patterns found'}), 200# Main query to generate tasks
-        logger.info('Building query for task generation')
-        query = """
-            WITH RECURSIVE date_series AS (
+            return jsonify({'message': 'No active task patterns found'}), 200# Split the query into two parts for better control
+        # First, create the date series
+        date_series_query = """
+            CREATE TEMP TABLE temp_dates AS
+            SELECT generate_series(
+                CURRENT_DATE,
+                CURRENT_DATE + %s::integer,
+                '1 day'::interval
+            )::date AS date;
+        """
+        
+        logger.info('Creating temp date series')
+        cursor.execute(date_series_query, (days_ahead,))
+
+        # Now use the temp table for task generation
+        task_query = """
+
                 SELECT generate_series(
                     CURRENT_DATE,
                     CURRENT_DATE + %s::integer,
@@ -605,9 +626,8 @@ def generate_tasks():
                 ds.date AS due_date,
                 NULL AS notes,
                 false AS archived,
-                NULL AS shift_id
-            FROM task_patterns tp
-            CROSS JOIN date_series ds
+                NULL AS shift_idFROM task_patterns tp
+            CROSS JOIN temp_dates ds
             WHERE 
                 tp.archived = false
                 AND (
@@ -626,7 +646,8 @@ def generate_tasks():
 
         # Ensure we pass a tuple with trailing comma
         params = (days_ahead,)  # The trailing comma is important!
-        logger.info('Executing query with params: %s', params)
+        logger.info('Executing task generation query')
+        cursor.execute(task_query)
         cursor.execute(query, params)
         new_tasks = cursor.fetchall()
         cursor.connection.commit()
