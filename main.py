@@ -55,71 +55,27 @@ def add_cors_headers(response):
             response.status_code = 200
     return response
 
-# Ensure CORS headers are set correctly
-@app.after_request
-def after_request(response):
-    # Only add headers if they don't exist
-    if not response.headers.get('Access-Control-Allow-Origin'):
-        response.headers['Access-Control-Allow-Origin'] = 'https://jaybird-connect.web.app'
-    
-    # Use set() instead of add() to avoid duplicates
-    if not response.headers.get('Access-Control-Allow-Credentials'):
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-    
-    if not response.headers.get('Access-Control-Allow-Headers'):
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
-    
-    if not response.headers.get('Access-Control-Allow-Methods'):
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH'
-    
-    return response
-
-# Global auth middleware
-def require_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # Skip auth for these endpoints
-        if request.endpoint in ['verify_auth'] or request.method == 'OPTIONS':
-            return f(*args, **kwargs)
-
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Authentication token is missing'}), 401
-
-        try:
-            email = auth_header.split('|')[1] if '|' in auth_header else auth_header
-            cursor = get_db_cursor()
-            cursor.execute("""
-                SELECT e.*, d.name as department_name 
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.department_id
-                WHERE e.email = %s AND e.active = TRUE
-            """, (email,))
-            employee = cursor.fetchone()
-            cursor.close()
-
-            if not employee:
-                return jsonify({'error': 'Employee not found or inactive'}), 401
-
-            request.user = employee
-            return f(*args, **kwargs)
-        except Exception as e:
-            return jsonify({'error': 'Invalid authentication'}), 401
-
-    return decorated
-
-# Apply auth middleware globally except for excluded routes@app.before_request
+# Global auth middleware applied before each request (except allowed endpoints)
+@app.before_request
 def auth_before_request():
-    # Skip auth for login, verify endpoint and OPTIONS requests
+    # Skip auth for login, auth.check/verify endpoints and OPTIONS requests
     if request.endpoint in ['auth.login', 'verify_auth'] or request.method == 'OPTIONS':
         return None
-        
+
     auth_header = request.headers.get('Authorization')
     if not auth_header:
         return jsonify({'error': 'Authentication token is missing'}), 401
 
     try:
-        email = auth_header.split('|')[1] if '|' in auth_header else auth_header
+        # Support both 'Bearer <token>' and legacy 'user|email' header formats
+        if auth_header.startswith('Bearer '):
+            token_or_email = auth_header.replace('Bearer ', '')
+        else:
+            token_or_email = auth_header
+
+        # Older clients sometimes send 'user|email' — prefer the email part if present
+        email = token_or_email.split('|')[1] if '|' in token_or_email else token_or_email
+
         cursor = get_db_cursor()
         cursor.execute("""
             SELECT e.*, d.name as department_name 
@@ -134,9 +90,32 @@ def auth_before_request():
             return jsonify({'error': 'Employee not found or inactive'}), 401
 
         request.user = employee
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'Invalid authentication'}), 401
 
+
+# Ensure CORS headers are set correctly (single after_request handler)
+@app.after_request
+def after_request(response):
+    # Only add headers if they don't exist
+    if not response.headers.get('Access-Control-Allow-Origin'):
+        response.headers['Access-Control-Allow-Origin'] = 'https://jaybird-connect.web.app'
+
+    if not response.headers.get('Access-Control-Allow-Credentials'):
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+
+    if not response.headers.get('Access-Control-Allow-Headers'):
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+
+    if not response.headers.get('Access-Control-Allow-Methods'):
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH'
+
+    # Ensure OPTIONS requests return 200 for preflight
+    if request.method == 'OPTIONS':
+        response.status_code = 200
+        response.headers['Access-Control-Max-Age'] = '3600'
+
+    return response
 
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)

@@ -27,6 +27,7 @@ import ResetPassword from './components/auth/ResetPassword';
 import ShiftSchedulePlanner from './components/ShiftSchedulePlanner';
 import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
 import EmployeeDashboard from './components/EmployeeDashboard';
+import ShiftManager from './components/ShiftManager';
 import { API_URL } from './config';
 
 function Header({ user, onLogout }) {
@@ -48,6 +49,7 @@ function Header({ user, onLogout }) {
                 <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
                 <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
                 <Link to="/shifts/patterns" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Patterns</Link>
+                <Link to="/shifts/manager" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Manager</Link>
               </>
             )}
           </>
@@ -122,6 +124,7 @@ function App() {
         <Route path="/shifts/schedule" element={<PrivateRoute><ShiftSchedulePlanner /></PrivateRoute>} />
         <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
         <Route path="/shifts/dashboard" element={<PrivateRoute><EmployeeDashboard /></PrivateRoute>} />
+        <Route path="/shifts/manager" element={<PrivateRoute><ShiftManager /></PrivateRoute>} />
         {user?.role === 'Admin' && (
           <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
               )}

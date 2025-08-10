@@ -1,0 +1,180 @@
+import React, { useEffect, useState } from 'react';
+import { API_URL } from '../config';
+
+function startOfWeek(date, weekStartsOn = 0) { // 0=Sunday,1=Monday
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day < weekStartsOn) ? -7 + (weekStartsOn - day) : weekStartsOn - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function formatDate(date) {
+  const d = new Date(date);
+  return d.toISOString().slice(0,10);
+}
+
+export default function ShiftManager({ weekStartsOn = 0 }) {
+  const [startDate, setStartDate] = useState(() => startOfWeek(new Date(), weekStartsOn));
+  const [shifts, setShifts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [assigning, setAssigning] = useState({}); // { shiftId: employeeId }
+  const [departmentFilter, setDepartmentFilter] = useState('');
+
+  const token = localStorage.getItem('token');
+  const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+
+  useEffect(() => {
+    fetchEmployees();
+    fetchShifts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, departmentFilter]);
+
+  async function fetchEmployees(){
+    try{
+      const res = await fetch(`${API_URL}/users`, { headers });
+      if(res.ok){
+        const data = await res.json();
+        setEmployees(data);
+      }
+    }catch(e){
+      console.error('Failed to load employees', e);
+    }
+  }
+
+  async function fetchShifts(){
+    setLoading(true);
+    try{
+      const sd = formatDate(startDate);
+      const res = await fetch(`${API_URL}/shifts/weekly?start_date=${sd}${departmentFilter ? `&department_id=${departmentFilter}` : ''}`, { headers });
+      if(res.ok){
+        const data = await res.json();
+        setShifts(data.shifts || []);
+      } else {
+        console.error('Failed to load shifts', await res.text());
+      }
+    }catch(e){
+      console.error('Failed to load shifts', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function adjustWeek(deltaDays){
+    const next = new Date(startDate);
+    next.setDate(next.getDate() + deltaDays);
+    setStartDate(startOfWeek(next, weekStartsOn));
+  }
+
+  async function handleGenerateWeek(){
+    if(!confirm('Generate shifts for this week from patterns?')) return;
+    setLoading(true);
+    try{
+      const res = await fetch(`${API_URL}/shifts/generate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ days_ahead: 7 })
+      });
+      const data = await res.json();
+      if(!res.ok) console.error('Generate error', data);
+      await fetchShifts();
+      alert(data.message || 'Generate completed');
+    }catch(e){
+      console.error('Generate failed', e);
+      alert('Generate failed');
+    }finally{ setLoading(false); }
+  }
+
+  async function handleAssign(shiftId){
+    const employeeId = assigning[shiftId];
+    if(!employeeId){ alert('Select employee first'); return; }
+    try{
+      const res = await fetch(`${API_URL}/shifts/${shiftId}/assign`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ employee_id: Number(employeeId) })
+      });
+      if(res.ok){
+        await fetchShifts();
+        setAssigning(prev => ({ ...prev, [shiftId]: '' }));
+      } else {
+        const err = await res.json();
+        console.error('Assign failed', err);
+        alert(err.error || 'Assign failed');
+      }
+    }catch(e){
+      console.error('Assign failed', e);
+      alert('Assign failed');
+    }
+  }
+
+  function groupByDate(list){
+    const map = {};
+    (list || []).forEach(s => {
+      const dateKey = s.date ? s.date : s['date'];
+      map[dateKey] = map[dateKey] || [];
+      map[dateKey].push(s);
+    });
+    return map;
+  }
+
+  const grouped = groupByDate(shifts);
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <button className="px-3 py-1 bg-gray-200 rounded" onClick={() => adjustWeek(-7)}>Prev</button>
+          <div className="font-semibold">Week of {formatDate(startDate)}</div>
+          <button className="px-3 py-1 bg-gray-200 rounded" onClick={() => adjustWeek(7)}>Next</button>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} className="p-1 border rounded">
+            <option value="">All Departments</option>
+            {/* Departments could be loaded dynamically later */}
+          </select>
+          <button className="px-3 py-1 bg-blue-600 text-white rounded" onClick={handleGenerateWeek} disabled={loading}>Generate Week</button>
+          <button className="px-3 py-1 bg-gray-100 rounded" onClick={fetchShifts}>Refresh</button>
+        </div>
+      </div>
+
+      {loading ? <div>Loading...</div> : (
+        Object.keys(grouped).length === 0 ? <div>No shifts for this week</div> : (
+          Object.keys(grouped).sort().map(dateKey => (
+            <div key={dateKey} className="mb-4">
+              <div className="font-semibold mb-2">{dateKey}</div>
+              <div className="space-y-2">
+                {grouped[dateKey].map(shift => (
+                  <div key={shift.shift_id} className="p-2 border rounded flex items-center justify-between">
+                    <div>
+                      <div className="text-lg">{shift.label} — {shift.start_time ? shift.start_time : ''} - {shift.end_time ? shift.end_time : ''}</div>
+                      <div className="text-sm text-gray-500">Dept: {shift.department_id}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-[160px]">
+                        {shift.assignments && shift.assignments.length > 0 ? (
+                          <div>{shift.assignments.map(a => a.employee_id).join(', ')}</div>
+                        ) : (
+                          <div className="text-sm text-red-500">Unassigned</div>
+                        )}
+                      </div>
+                      <select value={assigning[shift.shift_id] || ''} onChange={e => setAssigning(prev => ({ ...prev, [shift.shift_id]: e.target.value }))} className="p-1 border rounded">
+                        <option value="">Select Employee</option>
+                        {employees.map(emp => (
+                          <option key={emp.employee_id} value={emp.employee_id}>{emp.name} ({emp.email})</option>
+                        ))}
+                      </select>
+                      <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={() => handleAssign(shift.shift_id)}>Assign</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )
+      )}
+    </div>
+  );
+}

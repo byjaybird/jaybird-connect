@@ -14,24 +14,14 @@ tasks_bp = Blueprint('tasks', __name__)
 @tasks_bp.route('/tasks', methods=['POST'])
 @token_required
 def create_task():
-    data = request.get_json()
-    required_fields = ['title']
-    
+    """Create a new task."""
+    data = request.get_json() or {}
+
     # Validate required fields
-    for field in required_fields:
-        if not data.get(field):
-            logger.warning('Missing required field: %s', field)
-            return jsonify({'error': f'{field} is required'}), 400
-    
-        cursor = get_db_cursor()# Get and validate input data
-        data = request.get_json() or {}
-        days_ahead = int(data.get('days_ahead', 14))  # Default to 2 weeks
+    if not data.get('title'):
+        return jsonify({'error': 'title is required'}), 400
 
-        if days_ahead <= 0:
-            return jsonify({'error': 'days_ahead must be a positive integer'}), 400
-
-        logger.info('Generating tasks for next %d days', days_ahead)
-        cursor = get_db_cursor()
+    cursor = get_db_cursor()
     try:
         cursor.execute("""
             INSERT INTO tasks (
@@ -50,55 +40,24 @@ def create_task():
         """, (
             data['title'],
             data.get('description'),
-            'pending',  # default status
+            data.get('status', 'pending'),
             data.get('priority', 'medium'),
-            request.user['employee_id'],  # current user as assigned_by
+            request.user.get('employee_id'),
             data.get('department_id'),
             data.get('due_date'),
             data.get('notes'),
             data.get('shift_id')
         ))
-        
-        new_task = cursor.fetchone()
-        conn.commit()
-        
-        # Clean up temp table
-        cursor.execute("DROP TABLE IF EXISTS temp_dates")
-        conn.commit()
-        return jsonify(new_task), 201
-        cursor.execute("""
-            INSERT INTO tasks (
-                title,
-                description,
-                status,
-                priority,
-                assigned_by,
-                department_id,
-                due_date,
-                notes,
-                shift_id
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
-            ) RETURNING *
-        """, (
-            data['title'],
-            data.get('description'),
-            'pending',  # default status
-            data.get('priority', 'medium'),
-            request.user['employee_id'],  # current user as assigned_by
-            data.get('department_id'),
-            data.get('due_date'),
-            data.get('notes'),
-            data.get('shift_id')
-        ))
-        
+
         new_task = cursor.fetchone()
         cursor.connection.commit()
         return jsonify(new_task), 201
+
     except Exception as e:
         cursor.connection.rollback()
         logger.error('Error creating task: %s', str(e), exc_info=True)
         return jsonify({'error': str(e)}), 500
+
     finally:
         cursor.close()
 
