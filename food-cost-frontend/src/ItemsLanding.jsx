@@ -6,9 +6,25 @@ function ItemsLanding() {
   const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
-    fetch('https://jaybird-connect.ue.r.appspot.com/api/items')
-      .then((res) => res.json())
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+    fetch('https://jaybird-connect.ue.r.appspot.com/api/items', { headers })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('Failed to load items', res.status, text);
+          return [];
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!Array.isArray(data)) {
+          console.warn('Unexpected items payload, expected array:', data);
+          setItemsByCategory({});
+          return;
+        }
+
         const grouped = data.reduce((acc, item) => {
           const category = item.category || 'Uncategorized';
           if (!acc[category]) acc[category] = [];
@@ -20,6 +36,9 @@ function ItemsLanding() {
         }
 
         setItemsByCategory(grouped);
+      })
+      .catch((err) => {
+        console.error('Error fetching items:', err);
       });
   }, []);
   

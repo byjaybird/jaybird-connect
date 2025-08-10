@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import os
+import jwt
 import psycopg2
 import psycopg2.extras
 from psycopg2.extras import RealDictCursor
@@ -58,8 +59,15 @@ def add_cors_headers(response):
 # Global auth middleware applied before each request (except allowed endpoints)
 @app.before_request
 def auth_before_request():
-    # Skip auth for login, auth.check/verify endpoints and OPTIONS requests
-    if request.endpoint in ['auth.login', 'verify_auth'] or request.method == 'OPTIONS':
+    # Allow OPTIONS and public auth endpoints to bypass auth
+    public_paths = {
+        '/auth/login', '/api/auth/login',
+        '/auth/check', '/api/auth/check',
+        '/auth/debug-cors', '/api/auth/debug-cors'
+    }
+
+    # Allow public GET access to items listing (UI calls /api/items without auth)
+    if request.method == 'OPTIONS' or request.path in public_paths or (request.path == '/api/items' and request.method == 'GET'):
         return None
 
     auth_header = request.headers.get('Authorization')
@@ -67,30 +75,54 @@ def auth_before_request():
         return jsonify({'error': 'Authentication token is missing'}), 401
 
     try:
-        # Support both 'Bearer <token>' and legacy 'user|email' header formats
+        cursor = None
+        # If a Bearer token is provided, treat it as a JWT and decode
         if auth_header.startswith('Bearer '):
-            token_or_email = auth_header.replace('Bearer ', '')
+            token = auth_header[len('Bearer '):]
+            try:
+                payload = jwt.decode(token, os.getenv('JWT_SECRET', ''), algorithms=['HS256'])
+            except jwt.ExpiredSignatureError:
+                return jsonify({'error': 'Token has expired'}), 401
+            except jwt.InvalidTokenError:
+                return jsonify({'error': 'Invalid token'}), 401
+
+            employee_id = payload.get('employee_id')
+            if not employee_id:
+                return jsonify({'error': 'Invalid token payload'}), 401
+
+            cursor = get_db_cursor()
+            cursor.execute("""
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.employee_id = %s AND e.active = TRUE
+            """, (employee_id,))
+            employee = cursor.fetchone()
+
         else:
+            # Legacy clients may send 'user|email' or plain email in the header
             token_or_email = auth_header
+            email = token_or_email.split('|')[1] if '|' in token_or_email else token_or_email
 
-        # Older clients sometimes send 'user|email' — prefer the email part if present
-        email = token_or_email.split('|')[1] if '|' in token_or_email else token_or_email
+            cursor = get_db_cursor()
+            cursor.execute("""
+                SELECT e.*, d.name as department_name 
+                FROM employees e
+                LEFT JOIN departments d ON e.department_id = d.department_id
+                WHERE e.email = %s AND e.active = TRUE
+            """, (email,))
+            employee = cursor.fetchone()
 
-        cursor = get_db_cursor()
-        cursor.execute("""
-            SELECT e.*, d.name as department_name 
-            FROM employees e
-            LEFT JOIN departments d ON e.department_id = d.department_id
-            WHERE e.email = %s AND e.active = TRUE
-        """, (email,))
-        employee = cursor.fetchone()
-        cursor.close()
+        if cursor:
+            cursor.close()
 
         if not employee:
             return jsonify({'error': 'Employee not found or inactive'}), 401
 
         request.user = employee
-    except Exception:
+
+    except Exception as e:
+        print(f"Auth error: {str(e)}")
         return jsonify({'error': 'Invalid authentication'}), 401
 
 
