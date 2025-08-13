@@ -85,8 +85,10 @@ def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
                     "message": "Conversion factor is invalid",
                     "conversion": conversion
                 }
-            # Apply conversion factor
-            price_per_unit *= conversion_factor
+            # Apply conversion factor for price rates:
+            # factor is (to_unit per 1 from_unit). Since price_per_unit is per from_unit,
+            # price per to_unit = price per from_unit / factor.
+            price_per_unit /= conversion_factor
 
         total_cost = price_per_unit * float(quantity)
         return {
