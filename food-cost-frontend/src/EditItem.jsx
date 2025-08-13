@@ -97,7 +97,8 @@ function EditItem() {
         ingredient_id: recipe[fixingIndex].source_id,
         from_unit: fixData.from_unit,
         to_unit: fixData.to_unit,
-        conversion_factor: fixData.suggested_factor
+        // store as `factor` (how many `to_unit` in 1 `from_unit`)
+        factor: parseFloat(fixData.suggested_factor)
       });
       setFixingIndex(null);
       setFixData(null);
