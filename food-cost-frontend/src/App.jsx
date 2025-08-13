@@ -4,7 +4,8 @@ import {
   Route,
   Routes,
   Link,
-  Navigate
+  Navigate,
+  useLocation
 } from 'react-router-dom';
 import Logo from './assets/logo.png';
 import EditItem from './EditItem';
@@ -28,40 +29,80 @@ import ShiftSchedulePlanner from './components/ShiftSchedulePlanner';
 import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import ShiftManager from './components/ShiftManager';
+import Dashboard from './Dashboard.jsx';
 import { API_URL } from './config';
 
 function Header({ user, onLogout }) {
+  const location = useLocation();
+  const path = location.pathname;
+  let mainSection = 'dashboard';
+  if (path.startsWith('/menu') || path.startsWith('/ingredients')) mainSection = 'menu';
+  else if (path.startsWith('/prices')) mainSection = 'prices';
+  else if (path.startsWith('/inventory')) mainSection = 'inventory';
+  else if (path.startsWith('/users')) mainSection = 'users';
+  else if (path.startsWith('/shifts')) mainSection = 'shifts';
+  else if (path.startsWith('/tasks')) mainSection = 'tasks';
+
+  const subNavItems = [];
+  if (mainSection === 'menu') {
+    subNavItems.push({ href: '/menu', label: 'Menu' });
+    subNavItems.push({ href: '/ingredients', label: 'Ingredients' });
+  } else if (mainSection === 'prices') {
+    subNavItems.push({ href: '/prices', label: 'Prices' });
+  } else if (mainSection === 'inventory') {
+    subNavItems.push({ href: '/inventory', label: 'Inventory' });
+  } else if (mainSection === 'users') {
+    subNavItems.push({ href: '/users', label: 'User Management' });
+  } else if (mainSection === 'shifts') {
+    subNavItems.push({ href: '/shifts', label: 'Shifts' });
+    subNavItems.push({ href: '/shifts/patterns', label: 'Shift Patterns' });
+    subNavItems.push({ href: '/shifts/manager', label: 'Shift Manager' });
+  } else if (mainSection === 'tasks') {
+    subNavItems.push({ href: '/tasks', label: 'Tasks' });
+  }
+
   return (
-    <header className="bg-white shadow-md py-4 px-6 flex items-center justify-between">
-      <div className="flex items-center space-x-4">
-        <Link to="/">
-          <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
-        </Link>
-        
-        {user?.role === 'Admin' ? (
-          <>
-            <Link to="/" className="text-sm font-semibold text-gray-700 hover:text-black">Items</Link>
-            <Link to="/ingredients" className="text-sm font-semibold text-gray-700 hover:text-black">Ingredients</Link>
-            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link><Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
-            <Link to="/shifts/dashboard" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
-            {user?.role === 'Admin' && (
-              <>
-                <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">User Management</Link>
-                <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
-                <Link to="/shifts/patterns" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Patterns</Link>
-                <Link to="/shifts/manager" className="text-sm font-semibold text-gray-700 hover:text-black">Shift Manager</Link>
-              </>
-            )}
-          </>
-        ) : user ? (
-          <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">My Tasks</Link>
-        ) : null}
-      </div>
-      {user && (
+    <header className="bg-white shadow-md py-4 px-6">
+      <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <span className="font-medium text-gray-600">{user.name}</span>
-          <button onClick={onLogout} className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition">Logout</button>
+          <Link to="/">
+            <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
+          </Link>
+          <Link to="/menu" className="text-sm font-semibold text-gray-700 hover:text-black">Menu</Link>
+          <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
+          <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
+          {user?.role === 'Admin' && (
+            <>
+              <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">Users</Link>
+              <Link to="/shifts" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
+              <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
+            </>
+          )}
+          {user?.role !== 'Admin' && user && (
+            <>
+              <Link to="/shifts" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
+              <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
+            </>
+          )}
         </div>
+        {user && (
+          <div className="flex items-center space-x-4">
+            <span className="font-medium text-gray-600">{user.name}</span>
+            <button onClick={onLogout} className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition">Logout</button>
+          </div>
+        )}
+      </div>
+      {subNavItems.length > 0 && (
+        <nav className="mt-3 border-t border-gray-200 pt-2">
+          <div className="flex space-x-4 justify-start">
+            {subNavItems.map((s) => {
+              const isActive = location.pathname.startsWith(s.href);
+              return (
+                <Link key={s.href} to={s.href} className={`text-sm font-semibold ${isActive ? 'text-black' : 'text-gray-600 hover:text-black'}`}>{s.label}</Link>
+              );
+            })}
+          </div>
+        </nav>
       )}
     </header>
   );
@@ -71,6 +112,7 @@ function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
 }
+
 function App() {
   const [user, setUser] = useState(null);
   useEffect(() => {
@@ -101,35 +143,38 @@ function App() {
   };
 
   return (
-        <Router>
-          <Header user={user} onLogout={handleLogout} />
-          <Routes><Route path="/login" element={<Login setUser={setUser} />} />
+    <Router>
+      <Header user={user} onLogout={handleLogout} />
+      <Routes>
+        <Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Temporary dashboard redirect until we build the dashboard */}
-        <Route path="/dashboard" element={<PrivateRoute><Navigate to="/" replace /></PrivateRoute>} />
-        <Route path="/" element={<PrivateRoute><ItemsLanding /></PrivateRoute>} />
+        {/* Dashboard is root for all users */}
+        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+
+        {/* Main nav structure routes */}
+        <Route path="/menu" element={<PrivateRoute><ItemsLanding /></PrivateRoute>} />
+        <Route path="/ingredients" element={<PrivateRoute><IngredientsPage /></PrivateRoute>} />
+        <Route path="/prices" element={<PrivateRoute><Prices /></PrivateRoute>} />
+        <Route path="/inventory" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
+        <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
+        <Route path="/shifts" element={<PrivateRoute><EmployeeDashboard /></PrivateRoute>} />
+        <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
+        <Route path="/shifts/manager" element={<PrivateRoute><ShiftManager /></PrivateRoute>} />
+        <Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
+
+        {/* Other routes */}
         <Route path="/item/:id" element={<PrivateRoute><ItemDetail /></PrivateRoute>} />
         <Route path="/item/:id/edit" element={<PrivateRoute><EditItem /></PrivateRoute>} />
         <Route path="/item/new" element={<PrivateRoute><NewItemPage /></PrivateRoute>} />
-        <Route path="/ingredients" element={<PrivateRoute><IngredientsPage /></PrivateRoute>} />
         <Route path="/ingredients/:id" element={<PrivateRoute><IngredientDetail /></PrivateRoute>} />
         <Route path="/ingredients/:id/edit" element={<PrivateRoute><EditIngredient /></PrivateRoute>} />
-        <Route path="/prices" element={<PrivateRoute><Prices /></PrivateRoute>} />
         <Route path="/prices/new" element={<PrivateRoute><NewPriceQuoteForm /></PrivateRoute>} />
-        <Route path="/inventory" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
         <Route path="/inventory-scanner" element={<PrivateRoute><InventoryScanner /></PrivateRoute>} />
-        <Route path="/receiving/new" element={<PrivateRoute><NewReceivingForm /></PrivateRoute>} /><Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
-        <Route path="/shifts/schedule" element={<PrivateRoute><ShiftSchedulePlanner /></PrivateRoute>} />
-        <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
-        <Route path="/shifts/dashboard" element={<PrivateRoute><EmployeeDashboard /></PrivateRoute>} />
-        <Route path="/shifts/manager" element={<PrivateRoute><ShiftManager /></PrivateRoute>} />
-        {user?.role === 'Admin' && (
-          <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
-              )}
-          </Routes>
-        </Router>
+        <Route path="/receiving/new" element={<PrivateRoute><NewReceivingForm /></PrivateRoute>} />
+      </Routes>
+    </Router>
   );
 }
 

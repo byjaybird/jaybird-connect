@@ -57,6 +57,8 @@ def add_cors_headers(response):
     return response
 
 # Global auth middleware applied before each request (except allowed endpoints)
+JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')
+
 @app.before_request
 def auth_before_request():
     # Allow OPTIONS and public auth endpoints to bypass auth
@@ -70,17 +72,29 @@ def auth_before_request():
     if request.method == 'OPTIONS' or request.path in public_paths or (request.path == '/api/items' and request.method == 'GET'):
         return None
 
-    auth_header = request.headers.get('Authorization')
+    # Gather possible token sources: Authorization header, X-Auth-Token header, cookie, or query param
+    auth_header = request.headers.get('Authorization') or request.headers.get('X-Auth-Token') or request.cookies.get('token') or request.args.get('token')
     if not auth_header:
         return jsonify({'error': 'Authentication token is missing'}), 401
 
     try:
         cursor = None
-        # If a Bearer token is provided, treat it as a JWT and decode
-        if auth_header.startswith('Bearer '):
+        employee = None
+        token = None
+
+        # If header uses Bearer, strip it
+        if isinstance(auth_header, str) and auth_header.startswith('Bearer '):
             token = auth_header[len('Bearer '):]
+        # If header looks like a JWT (three dot-separated parts), treat it as a raw JWT
+        elif isinstance(auth_header, str) and auth_header.count('.') == 2:
+            token = auth_header
+        # If it came from cookie or X-Auth-Token or query param, treat as token string
+        elif request.cookies.get('token') or request.headers.get('X-Auth-Token') or request.args.get('token'):
+            token = auth_header
+
+        if token:
             try:
-                payload = jwt.decode(token, os.getenv('JWT_SECRET', ''), algorithms=['HS256'])
+                payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'], options={"verify_exp": True}, leeway=10)
             except jwt.ExpiredSignatureError:
                 return jsonify({'error': 'Token has expired'}), 401
             except jwt.InvalidTokenError:

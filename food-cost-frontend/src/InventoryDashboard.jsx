@@ -11,11 +11,8 @@ export default function InventoryDashboard() {
     const fetchInventory = async () => {
       try {
         // Get auth token
-        const authToken = localStorage.getItem('authToken');
-        const headers = {
-          'Authorization': authToken,
-          'Content-Type': 'application/json'
-        };
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 
         // Fetch ingredients with auth
         const ingredientsRes = await fetch(`${API_URL}/api/ingredients`, { headers });

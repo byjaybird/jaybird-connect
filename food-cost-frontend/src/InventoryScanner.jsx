@@ -19,9 +19,12 @@ function InventoryScanner() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
+        const token = localStorage.getItem('token');
+        const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         const [itemsRes, ingredientsRes] = await Promise.all([
-          fetch(`${API_URL}/items?is_prep=true`),
-          fetch(`${API_URL}/ingredients`)
+          fetch(`${API_URL}/items?is_prep=true`, { headers: authHeader }),
+          fetch(`${API_URL}/ingredients`, { headers: authHeader })
         ]);
 
         if (!itemsRes.ok || !ingredientsRes.ok) {
@@ -59,18 +62,13 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
+      const token = localStorage.getItem('token');
+      const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       // Load the items first to ensure we have data
       const [itemsRes, ingredientsRes] = await Promise.all([
-        fetch(`${API_URL}/items?is_prep=true`, {
-          headers: {
-            'Authorization': localStorage.getItem('authToken')
-          }
-        }),
-        fetch(`${API_URL}/ingredients`, {
-          headers: {
-            'Authorization': localStorage.getItem('authToken')
-          }
-        })
+        fetch(`${API_URL}/items?is_prep=true`, { headers: authHeader }),
+        fetch(`${API_URL}/ingredients`, { headers: authHeader })
       ]);
 
       const [itemsData, ingredientsData] = await Promise.all([
@@ -87,7 +85,8 @@ const handleScanSubmit = async (e) => {
       // Now check the barcode mapping
       const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
         headers: {
-          'Authorization': localStorage.getItem('authToken')
+          'Content-Type': 'application/json',
+          ...authHeader
         }
       });
       if (!res.ok) throw new Error('Failed to fetch');
@@ -204,7 +203,7 @@ const renderDropdown = () => {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': localStorage.getItem('authToken')
+                    ...authHeader
                   },
                   body: JSON.stringify(mappingPayload)
                 });
@@ -287,7 +286,7 @@ const handleSave = async () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': localStorage.getItem('authToken') // Add auth token
+          ...authHeader // Add auth token
         },
         body: JSON.stringify(scanData)
       });
