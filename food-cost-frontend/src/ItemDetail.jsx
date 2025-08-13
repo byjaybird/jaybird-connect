@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import CostCell from './components/CostCell';
 import { QRCodeCanvas } from 'qrcode.react';
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { API_URL } from './config';
+import { api } from './utils/auth';
 
 function ItemDetail() {
   const { id } = useParams();
@@ -12,13 +13,22 @@ function ItemDetail() {
   const [fixData, setFixData] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/items/${id}`)
-      .then((res) => res.json())
-      .then(setItem);
-
-    fetch(`${API_URL}/recipes/${id}`)
-      .then((res) => res.json())
-      .then(setRecipe);
+    let mounted = true;
+    async function load() {
+      try {
+        const [itemRes, recipeRes] = await Promise.all([
+          api.get(`/api/items/${id}`),
+          api.get(`/api/recipes/${id}`)
+        ]);
+        if (!mounted) return;
+        setItem(itemRes.data);
+        setRecipe(recipeRes.data || []);
+      } catch (err) {
+        console.error('Failed to load item/recipe', err.response || err);
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, [id]);
 
   const handleDownloadLabel = () => {
@@ -71,7 +81,7 @@ function ItemDetail() {
       <div style={{ display: 'none' }}>
         <QRCodeCanvas
           id="qr-code"
-          value={`${API_URL}/items/${id}`}
+          value={`${API_URL}/api/items/${id}`}
           size={100}
           level={"H"}
           includeMargin={true}

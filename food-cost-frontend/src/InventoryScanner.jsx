@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function InventoryScanner() {
   const [barcode, setBarcode] = useState('');
@@ -19,28 +18,19 @@ function InventoryScanner() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem('token');
-        const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
-
         const [itemsRes, ingredientsRes] = await Promise.all([
-          fetch(`${API_URL}/items?is_prep=true`, { headers: authHeader }),
-          fetch(`${API_URL}/ingredients`, { headers: authHeader })
+          api.get('/api/items?is_prep=true'),
+          api.get('/api/ingredients')
         ]);
 
-        if (!itemsRes.ok || !ingredientsRes.ok) {
-          throw new Error('Failed to fetch data');
-        }
-
-        const [itemsData, ingredientsData] = await Promise.all([
-          itemsRes.json(),
-          ingredientsRes.json()
-        ]);
+        const itemsData = itemsRes.data;
+        const ingredientsData = ingredientsRes.data;
 
         setPrepItems(itemsData);
         setIngredients(ingredientsData);
         setFeedback('Ready');
       } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Fetch error:', error.response || error);
         setError('Failed to load items');
         setFeedback('Error loading items');
       } finally {
@@ -62,19 +52,14 @@ const handleScanSubmit = async (e) => {
     if (!barcode) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
-
       // Load the items first to ensure we have data
       const [itemsRes, ingredientsRes] = await Promise.all([
-        fetch(`${API_URL}/items?is_prep=true`, { headers: authHeader }),
-        fetch(`${API_URL}/ingredients`, { headers: authHeader })
+        api.get('/api/items?is_prep=true'),
+        api.get('/api/ingredients')
       ]);
 
-      const [itemsData, ingredientsData] = await Promise.all([
-        itemsRes.json(),
-        ingredientsRes.json()
-      ]);
+      const itemsData = itemsRes.data;
+      const ingredientsData = ingredientsRes.data;
 
       console.log('Loaded items:', itemsData);
       console.log('Loaded ingredients:', ingredientsData);
@@ -83,15 +68,8 @@ const handleScanSubmit = async (e) => {
       setIngredients(ingredientsData);
 
       // Now check the barcode mapping
-      const res = await fetch(`${API_URL}/barcode-map?barcode=${barcode}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeader
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch');
-
-      const data = await res.json();
+      const res = await api.get(`/api/barcode-map?barcode=${encodeURIComponent(barcode)}`);
+      const data = res.data;
       console.log('Barcode map response:', data);
 
       if (!data.found) {
@@ -133,7 +111,7 @@ const handleScanSubmit = async (e) => {
         }
       }
     } catch (error) {
-      console.error('Scan error:', error);
+      console.error('Scan error:', error.response || error);
       setFeedback('Error - Try again');
     }
 };
@@ -199,22 +177,9 @@ const renderDropdown = () => {
                 };
                 console.log('Mapping payload:', mappingPayload);
 
-                const mappingRes = await fetch(`${API_URL}/barcode-map`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...authHeader
-                  },
-                  body: JSON.stringify(mappingPayload)
-                });
+                const mappingRes = await api.post('/api/barcode-map', mappingPayload);
 
-                if (!mappingRes.ok) {
-                  const errorData = await mappingRes.json();
-                  console.error('Mapping response error:', errorData);
-                  throw new Error(`Failed to create barcode mapping: ${errorData.error || mappingRes.statusText}`);
-                }
-
-                const mappingData = await mappingRes.json();
+                const mappingData = mappingRes.data;
                 console.log('Mapping response:', mappingData);
                 
                 // Normalize the item structure when setting
@@ -228,7 +193,7 @@ const renderDropdown = () => {
                 setShowDropdown(false);
                 setFeedback(`Selected: ${selected.name} - Enter quantity`);
               } catch (error) {
-                console.error('Selection error:', error);
+                console.error('Selection error:', error.response || error);
                 setFeedback('Failed to create barcode mapping');
               }
             }
@@ -282,25 +247,12 @@ const handleSave = async () => {
 
       console.log('Inventory save payload:', scanData);
 
-      const saveRes = await fetch(`${API_URL}/inventory/upload-scan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeader // Add auth token
-        },
-        body: JSON.stringify(scanData)
-      });
-
-      if (!saveRes.ok) {
-        const errorData = await saveRes.json();
-        console.error('Save response error:', errorData);
-        throw new Error(`Failed to save inventory count: ${errorData.error || saveRes.statusText}`);
-      }
+      const saveRes = await api.post('/api/inventory/upload-scan', scanData);
 
       setFeedback('Saved');
       resetForm();
     } catch (error) {
-      console.error('Save error:', error);
+      console.error('Save error:', error.response || error);
       setFeedback('Save failed - Try again');
     }
   };

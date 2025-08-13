@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CostCell from './components/CostCell';
 import Select from 'react-select';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function NewItemForm() {
   const navigate = useNavigate();
@@ -25,18 +24,18 @@ function NewItemForm() {
   const [filterText, setFilterText] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients`)
-      .then(res => res.json())
-      .then(data => {
+    api.get('/ingredients')
+      .then(res => {
+        const data = res.data;
         console.log('Ingredients:', data); // Inspect to ensure names are present
         const active = data.filter(i => !i.archived); // Ensure only active ingredients are used
         const sorted = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setIngredients(sorted); // Keep the directory-based method for consistent data structuring
       });
 
-    fetch(`${API_URL}/items`)
-      .then(res => res.json())
-      .then(data => {
+    api.get('/items')
+      .then(res => {
+        const data = res.data;
         const preps = data.filter(i => i.is_prep && !i.is_archived);
         const sorted = preps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setPrepItems(sorted);
@@ -52,18 +51,13 @@ function NewItemForm() {
       return;
     }
 
-    fetch(`${API_URL}/ingredients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newIngredientName })
-    })
-      .then(res => res.json())
+    api.post('/ingredients', { name: newIngredientName })
       .then(() => {
         setNewIngredientName('');
-        return fetch(`${API_URL}/ingredients`);
+        return api.get('/ingredients');
       })
-      .then(res => res.json())
-      .then(data => {
+      .then(res => {
+        const data = res.data;
         const active = data.filter(i => !i.archived);
         const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
         setIngredients(sorted);
@@ -73,23 +67,19 @@ function NewItemForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const res = await fetch(`${API_URL}/items/new`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        category,
-        is_prep: isPrep,
-        is_for_sale: isForSale,
-        price: price === '' ? null : parseFloat(price),
-        description,
-        process_notes: processNotes,
-        yield_qty: isPrep ? yieldQty : null,
-        yield_unit: isPrep ? yieldUnit : null
-      })
+    const res = await api.post('/items/new', {
+      name,
+      category,
+      is_prep: isPrep,
+      is_for_sale: isForSale,
+      price: price === '' ? null : parseFloat(price),
+      description,
+      process_notes: processNotes,
+      yield_qty: isPrep ? yieldQty : null,
+      yield_unit: isPrep ? yieldUnit : null
     });
 
-    const result = await res.json();
+    const result = res.data;
     if (!res.ok) {
       alert(result.error || 'Failed to create item');
       return;
@@ -106,17 +96,13 @@ function NewItemForm() {
     });
 
     for (let r of cleaned) {
-      const response = await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: itemId,
-          source_type: r.source_type,
-          source_id: r.source_id,
-          quantity: r.quantity,
-          unit: r.unit,
-          instructions: r.instructions || ''
-        })
+      const response = await api.post('/recipes', {
+        item_id: itemId,
+        source_type: r.source_type,
+        source_id: r.source_id,
+        quantity: r.quantity,
+        unit: r.unit,
+        instructions: r.instructions || ''
       });
 
       if (!response.ok) {

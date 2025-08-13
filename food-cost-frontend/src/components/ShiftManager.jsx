@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { API_URL } from '../config';
+import { api } from '../utils/auth';
 
 function startOfWeek(date, weekStartsOn = 0) { // 0=Sunday,1=Monday
   const d = new Date(date);
@@ -23,9 +23,6 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
   const [assigning, setAssigning] = useState({}); // { shiftId: employeeId }
   const [departmentFilter, setDepartmentFilter] = useState('');
 
-  const token = localStorage.getItem('token');
-  const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-
   useEffect(() => {
     fetchEmployees();
     fetchShifts();
@@ -34,13 +31,10 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
 
   async function fetchEmployees(){
     try{
-      const res = await fetch(`${API_URL}/users`, { headers });
-      if(res.ok){
-        const data = await res.json();
-        setEmployees(data);
-      }
+      const res = await api.get('/api/users');
+      setEmployees(res.data || []);
     }catch(e){
-      console.error('Failed to load employees', e);
+      console.error('Failed to load employees', e.response || e);
     }
   }
 
@@ -48,15 +42,10 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
     setLoading(true);
     try{
       const sd = formatDate(startDate);
-      const res = await fetch(`${API_URL}/shifts/weekly?start_date=${sd}${departmentFilter ? `&department_id=${departmentFilter}` : ''}`, { headers });
-      if(res.ok){
-        const data = await res.json();
-        setShifts(data.shifts || []);
-      } else {
-        console.error('Failed to load shifts', await res.text());
-      }
+      const res = await api.get(`/api/shifts/weekly?start_date=${sd}${departmentFilter ? `&department_id=${departmentFilter}` : ''}`);
+      setShifts(res.data.shifts || []);
     }catch(e){
-      console.error('Failed to load shifts', e);
+      console.error('Failed to load shifts', e.response || e);
     } finally {
       setLoading(false);
     }
@@ -72,17 +61,12 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
     if(!confirm('Generate shifts for this week from patterns?')) return;
     setLoading(true);
     try{
-      const res = await fetch(`${API_URL}/shifts/generate`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ days_ahead: 7 })
-      });
-      const data = await res.json();
-      if(!res.ok) console.error('Generate error', data);
+      const res = await api.post('/api/shifts/generate', { days_ahead: 7 });
+      const data = res.data;
       await fetchShifts();
       alert(data.message || 'Generate completed');
     }catch(e){
-      console.error('Generate failed', e);
+      console.error('Generate failed', e.response || e);
       alert('Generate failed');
     }finally{ setLoading(false); }
   }
@@ -91,22 +75,12 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
     const employeeId = assigning[shiftId];
     if(!employeeId){ alert('Select employee first'); return; }
     try{
-      const res = await fetch(`${API_URL}/shifts/${shiftId}/assign`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ employee_id: Number(employeeId) })
-      });
-      if(res.ok){
-        await fetchShifts();
-        setAssigning(prev => ({ ...prev, [shiftId]: '' }));
-      } else {
-        const err = await res.json();
-        console.error('Assign failed', err);
-        alert(err.error || 'Assign failed');
-      }
+      const res = await api.post(`/api/shifts/${shiftId}/assign`, { employee_id: Number(employeeId) });
+      await fetchShifts();
+      setAssigning(prev => ({ ...prev, [shiftId]: '' }));
     }catch(e){
-      console.error('Assign failed', e);
-      alert('Assign failed');
+      console.error('Assign failed', e.response || e);
+      alert(e.response?.data?.error || 'Assign failed');
     }
   }
 

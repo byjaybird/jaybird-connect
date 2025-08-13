@@ -30,6 +30,7 @@ import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import ShiftManager from './components/ShiftManager';
 import Dashboard from './Dashboard.jsx';
+import { api } from './utils/auth';
 import { API_URL } from './config';
 
 function Header({ user, onLogout }) {
@@ -109,6 +110,7 @@ function Header({ user, onLogout }) {
 }
 
 function PrivateRoute({ children }) {
+  // Use token existing in storage checked by axios interceptor pattern
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
 }
@@ -118,25 +120,10 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
-    // Call the auth check endpoint under /api — backend expects /api/auth/check
-    fetch(`${API_URL}/api/auth/check`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
+    api.get('/api/auth/check')
       .then((res) => {
-        if (!res.ok) {
-          // If unauthorized or any error, clear token and force login
-          console.warn('Auth check failed:', res.status);
-          handleLogout();
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        if (data.status === 'valid') {
+        const data = res.data;
+        if (data?.status === 'valid') {
           setUser(data.user);
         } else {
           handleLogout();

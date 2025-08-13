@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../config';
-import { checkAuthStatus, getAuthHeaders } from '../utils/auth';
+import { api } from '../utils/auth';
 
 function UserManagement() {
   const navigate = useNavigate();
@@ -22,29 +21,10 @@ function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      // Check auth status first
-      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      if (response.status === 401) {
-        console.error('Unauthorized - Token might be invalid or expired');
-        const responseText = await response.text();
-        console.error('Response:', responseText);
-        navigate('/login');
-        throw new Error('Please login again');
-      }
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      const data = await response.json();
-      setUsers(data);
+      const response = await api.get('/api/users');
+      setUsers(response.data || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching users:', error.response || error);
       alert('Failed to load users: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
@@ -52,44 +32,29 @@ function UserManagement() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();try {
-      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(newUser)
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create user');
-      }
-      
-      await fetchUsers(); // Refresh user list
-      setNewUser({ // Reset form
+    e.preventDefault();
+    try {
+      const response = await api.post('/api/users', newUser);
+      setNewUser({
         email: '',
         name: '',
         role: 'Employee',
         department_id: '',
         active: true
-      });} catch (error) {
-      console.error('Error creating user:', error);
-      alert(error.message || 'Failed to create user');
+      });
+      await fetchUsers();
+    } catch (error) {
+      console.error('Error creating user:', error.response || error);
+      alert(error.response?.data?.error || 'Failed to create user');
     }
   };
 
   const toggleUserActive = async (userId, currentActive) => {
     try {
-      await checkAuthStatus();const response = await fetch(`${API_URL}/api/users/${userId}`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ active: !currentActive })
-      });
-      
-      if (!response.ok) throw new Error('Failed to update user');
-      
-      await fetchUsers(); // Refresh user list
+      await api.patch(`/api/users/${userId}`, { active: !currentActive });
+      await fetchUsers();
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error('Error updating user:', error.response || error);
       alert('Failed to update user');
     }
   };

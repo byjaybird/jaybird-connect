@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { api } from '../../utils/auth';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
@@ -21,17 +22,9 @@ const ResetPassword = () => {
     }
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token, password }),
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
+      const response = await api.post('/api/auth/reset-password', { token, password });
+      const data = response.data;
+      if (response.status === 200) {
         setMessage('Password has been reset successfully');
         setTimeout(() => {
           navigate('/login');

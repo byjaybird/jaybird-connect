@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function NewPriceQuoteForm() {
   const [ingredients, setIngredients] = useState([]);
@@ -16,9 +15,20 @@ function NewPriceQuoteForm() {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients`)
-      .then(res => res.json())
-      .then(setIngredients);
+    let mounted = true;
+    async function loadIngredients() {
+      try {
+        const res = await api.get('/api/ingredients');
+        const data = res.data;
+        if (mounted) {
+          setIngredients(data);
+        }
+      } catch (err) {
+        console.error('Failed to load ingredients', err);
+      }
+    }
+    loadIngredients();
+    return () => { mounted = false; };
   }, []);
 
   const handleChange = (e) => {
@@ -29,39 +39,39 @@ function NewPriceQuoteForm() {
     }));
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  const payload = {
-    ...form,
-    ingredient_id: parseInt(form.ingredient_id, 10),
-    size_qty: parseFloat(form.size_qty),
-    price: parseFloat(form.price)
+    const payload = {
+      ...form,
+      ingredient_id: parseInt(form.ingredient_id, 10),
+      size_qty: parseFloat(form.size_qty),
+      price: parseFloat(form.price)
+    };
+
+    try {
+      const res = await api.post('/api/price_quotes', payload);
+      const data = res.data;
+      if (res.status === 201 || res.status === 200) {
+        alert('Price quote added!');
+        setForm({
+          ingredient_id: '',
+          source: '',
+          size_qty: '',
+          size_unit: '',
+          price: '',
+          date_found: '',
+          notes: '',
+          is_purchase: false
+        });
+      } else {
+        alert(`Error: ${data?.error}`);
+      }
+    } catch (err) {
+      console.error('Error creating price quote', err.response || err);
+      alert(err.response?.data?.error || 'Failed to create price quote');
+    }
   };
-
-  const res = await fetch(`${API_URL}/price_quotes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await res.json();
-  if (res.ok) {
-    alert('Price quote added!');
-    setForm({
-      ingredient_id: '',
-      source: '',
-      size_qty: '',
-      size_unit: '',
-      price: '',
-      date_found: '',
-      notes: '',
-      is_purchase: false
-    });
-  } else {
-    alert(`Error: ${data.error}`);
-  }
-};
 
   return (
     <form onSubmit={handleSubmit} className="p-4 space-y-4 max-w-md">

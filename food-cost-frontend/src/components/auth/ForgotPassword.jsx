@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../../utils/auth';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -13,24 +14,13 @@ const ForgotPassword = () => {
     setMessage('');
     
     try {
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setIsSubmitted(true);
-        setMessage('Password reset instructions have been sent to your email');
-      } else {
-        setError(data.message || 'Failed to process request');
-      }
+      const response = await api.post('/api/auth/forgot-password', { email });
+      const data = response.data;
+      setIsSubmitted(true);
+      setMessage('Password reset instructions have been sent to your email');
     } catch (err) {
-      setError('An error occurred while processing your request');
+      console.error('Forgot password error', err.response || err);
+      setError(err.response?.data?.message || 'Failed to process request');
     }
   };
 

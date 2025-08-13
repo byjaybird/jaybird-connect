@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function IngredientsPage() {
   const [ingredients, setIngredients] = useState([]);
@@ -11,14 +10,16 @@ function IngredientsPage() {
   const [filterText, setFilterText] = useState('');
   const navigate = useNavigate();
 
-  const fetchIngredients = () => {
-    fetch(`${API_URL}/ingredients`)
-      .then((res) => res.json())
-      .then((data) => {
-        const visible = data.filter((i) => !i.archived);
-        setIngredients(visible);
-      })
-      .catch((err) => setError('Failed to fetch ingredients'));
+  const fetchIngredients = async () => {
+    try {
+      const res = await api.get('/api/ingredients');
+      const data = res.data;
+      const visible = data.filter((i) => !i.archived);
+      setIngredients(visible);
+    } catch (err) {
+      console.error('Failed to fetch ingredients', err.response || err);
+      setError('Failed to fetch ingredients');
+    }
   };
 
   useEffect(() => {
@@ -31,27 +32,21 @@ function IngredientsPage() {
     );
   };
 
-  const handleMerge = () => {
+  const handleMerge = async () => {
     if (selected.length < 2) {
       alert('Select at least two ingredients to merge.');
       return;
     }
 
-    fetch(`${API_URL}/ingredients/merge`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: selected })
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to merge ingredients');
-        return res.json();
-      })
-      .then(() => {
-        setSelected([]);
-        fetchIngredients();
-        navigate('/ingredients');
-      })
-      .catch((err) => setError('Failed to merge ingredients.'));
+    try {
+      const res = await api.post('/api/ingredients/merge', { ids: selected });
+      setSelected([]);
+      fetchIngredients();
+      navigate('/ingredients');
+    } catch (err) {
+      console.error('Merge failed', err.response || err);
+      setError('Failed to merge ingredients.');
+    }
   };
 
   const sortedFilteredIngredients = ingredients

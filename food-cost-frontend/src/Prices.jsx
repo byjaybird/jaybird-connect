@@ -1,44 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_URL } from './config';
+import { api } from './utils/auth';
 
 function Prices() {
   const [quotes, setQuotes] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    fetch(`${API_URL}/api/price_quotes`, { headers })
-      .then(async (res) => {
-        if (res.status === 401) {
-          // Unauthorized — clear token and send user to login
-          localStorage.removeItem('token');
-          navigate('/login');
-          return null;
-        }
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Failed to fetch price quotes: ${res.status} - ${text}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        // Some endpoints return an object; ensure we always set an array
+    let mounted = true;
+    async function load() {
+      try {
+        const res = await api.get('/api/price_quotes');
+        if (!mounted) return;
+        const data = res.data;
         if (Array.isArray(data)) setQuotes(data);
         else if (Array.isArray(data.price_quotes)) setQuotes(data.price_quotes);
         else if (Array.isArray(data.quotes)) setQuotes(data.quotes);
         else setQuotes([]);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Failed to load price quotes', err);
         setQuotes([]);
-      });
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, [navigate]);
 
   return (
@@ -51,29 +36,13 @@ function Prices() {
               to="/prices/new"
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-150 ease-in-out inline-flex items-center"
             >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5 mr-2" 
-                viewBox="0 0 20 20" 
-                fill="currentColor"
-              >
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Add Quote
+              <span>Add Quote</span>
             </Link>
             <Link
               to="/receiving/new"
               className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-150 ease-in-out inline-flex items-center"
             >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5 mr-2" 
-                viewBox="0 0 20 20" 
-                fill="currentColor"
-              >
-                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-              </svg>
-              Receive Goods
+              <span>Receive Goods</span>
             </Link>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com';
+import { api } from './utils/auth';
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState({});
@@ -14,21 +13,14 @@ export default function InventoryDashboard() {
   useEffect(() => {
     const fetchInventory = async () => {
       try {
-        // Get auth token
-        const token = localStorage.getItem('token');
-        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+        const ingredientsRes = await api.get('/api/ingredients');
+        const itemsRes = await api.get('/api/items?is_prep=true');
 
-        // Fetch ingredients with auth
-        const ingredientsRes = await fetch(`${API_URL}/api/ingredients`, { headers });
-        if (!ingredientsRes.ok) throw new Error('Failed to fetch ingredients');
-        const allIngredients = await ingredientsRes.json();
+        const allIngredients = ingredientsRes.data;
+        const allItems = itemsRes.data;
+
         const visibleIngredients = allIngredients.filter(i => !i.archived);
-
-        // Fetch items with auth
-        const itemsRes = await fetch(`${API_URL}/api/items?is_prep=true`, { headers });
-        if (!itemsRes.ok) throw new Error('Failed to fetch items');
-        const allItems = await itemsRes.json();
-        const visibleItems = allItems.filter(i => !i.archived);
+        const visibleItems = allItems.filter(i => !i.is_archived);
 
         const allVisible = [
           ...visibleIngredients.map(i => ({ ...i, source_type: 'ingredient', source_id: i.ingredient_id })),
@@ -36,12 +28,8 @@ export default function InventoryDashboard() {
         ];
 
         const enriched = await Promise.all(allVisible.map(async (item) => {
-          const res = await fetch(
-            `${API_URL}/api/inventory/current?source_type=${item.source_type}&source_id=${item.source_id}`,
-            { headers }
-          );
-          if (!res.ok) throw new Error(`Failed to fetch inventory for ${item.source_id}`);
-          const latest = await res.json();
+          const res = await api.get(`/api/inventory/current?source_type=${item.source_type}&source_id=${item.source_id}`);
+          const latest = res.data;
           return {
             ...item,
             quantity: latest?.quantity || 0,
@@ -70,7 +58,7 @@ export default function InventoryDashboard() {
 
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch inventory', err);
+        console.error('Failed to fetch inventory', err.response || err);
         setError('Failed to load inventory data. Please check your connection and try again.');
       } finally {
         setLoading(false);

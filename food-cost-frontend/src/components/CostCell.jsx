@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../utils/auth';
 
 const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
 
@@ -16,35 +17,22 @@ function CostCell({ sourceType, sourceId, unit, qty, onMissing }) {
       try {
         const endpoint =
           sourceType === 'ingredient'
-            ? `/ingredient_cost/${sourceId}?unit=${unit}&qty=${qty}`
-            : `/item_cost/${sourceId}?unit=${unit}&qty=${qty}`;
+            ? `/api/ingredient_cost/${sourceId}?unit=${encodeURIComponent(unit)}&qty=${encodeURIComponent(qty)}`
+            : `/api/item_cost/${sourceId}?unit=${encodeURIComponent(unit)}&qty=${encodeURIComponent(qty)}`;
 
-        const res = await fetch(`${API_URL}${endpoint}`);
-
-        if (!res.ok) {
-          console.warn('Non-OK response:', res.status);
-          setCostData({ status: 'error', message: `HTTP ${res.status}` });
-          return;
-        }
-
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          const text = await res.text();
-          console.error("Expected JSON, got HTML:", text.slice(0, 100));
-          setCostData({ status: 'error', message: 'Invalid response format' });
-          return;
-        }
-
-        const data = await res.json();
-        setCostData(data);
+        const res = await api.get(endpoint);
+        setCostData(res.data);
       } catch (err) {
-        console.error('Cost fetch failed', err);
-        setCostData({ status: 'error', message: 'Fetch error' });
+        console.error('Cost fetch failed', err.response || err);
+        if (err.response) {
+          setCostData({ status: 'error', message: `HTTP ${err.response.status}` });
+        } else {
+          setCostData({ status: 'error', message: 'Fetch error' });
+        }
       } finally {
         setLoading(false);
       }
     }
-
 
     fetchCost();
   }, [sourceType, sourceId, unit, qty]);

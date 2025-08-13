@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CostCell from './components/CostCell';
 import Select from 'react-select';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function EditItem() {
   const { id } = useParams();
@@ -42,46 +41,46 @@ function EditItem() {
   };
 
   useEffect(() => {
-    fetch(`${API_URL}/items/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setItem(data);
-        setFormData({
-          name: data.name || '',
-          category: data.category || '',
-          is_prep: !!data.is_prep,
-          is_for_sale: !!data.is_for_sale,
-          price: data.price ?? '',
-          description: data.description || '',
-          notes: data.process_notes || '',
-          is_archived: !!data.archived,
-          yield_qty: data.yield_qty ?? '',
-          yield_unit: data.yield_unit ?? ''
-        });
-      });
+    let mounted = true;
+    async function load() {
+      try {
+        const itemRes = await api.get(`/api/items/${id}`);
+        if (mounted) {
+          const data = itemRes.data;
+          setItem(data);
+          setFormData({
+            name: data.name || '',
+            category: data.category || '',
+            is_prep: !!data.is_prep,
+            is_for_sale: !!data.is_for_sale,
+            price: data.price ?? '',
+            description: data.description || '',
+            notes: data.process_notes || '',
+            is_archived: !!data.archived,
+            yield_qty: data.yield_qty ?? '',
+            yield_unit: data.yield_unit ?? ''
+          });
+        }
 
-    fetch(`${API_URL}/ingredients`)
-      .then((res) => res.json())
-      .then((data) => {
-        const active = data.filter(i => !i.archived);
-        console.log('Ingredients:', active); // Add console logs if necessary
-        const sorted = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        setIngredients(sorted);
-      });
+        const ingRes = await api.get('/api/ingredients');
+        const active = (ingRes.data || []).filter(i => !i.archived);
+        const sortedIngredients = active.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        if (mounted) setIngredients(sortedIngredients);
 
-    fetch(`${API_URL}/items`)
-      .then(res => res.json())
-      .then((data) => {
-        const preps = data.filter(i => i.is_prep && !i.is_archived);
-        const sorted = preps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        setPrepItems(sorted);
-      });
+        const itemResAll = await api.get('/api/items');
+        const preps = (itemResAll.data || []).filter(i => i.is_prep && !i.is_archived);
+        const sortedPreps = preps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        if (mounted) setPrepItems(sortedPreps);
 
-    fetch(`${API_URL}/recipes/${id}`)
-      .then((res) => res.json())
-      .then(setRecipe);
+        const recipeRes = await api.get(`/api/recipes/${id}`);
+        if (mounted) setRecipe(recipeRes.data);
+      } catch (err) {
+        console.error('EditItem load error', err);
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, [id]);
-
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -93,49 +92,42 @@ function EditItem() {
 
   const handleFixSave = async () => {
     if (!fixData || fixingIndex === null) return;
-    const res = await fetch(`${API_URL}/ingredient_conversions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      const res = await api.post('/api/ingredient_conversions', {
         ingredient_id: recipe[fixingIndex].source_id,
         from_unit: fixData.from_unit,
         to_unit: fixData.to_unit,
         conversion_factor: fixData.suggested_factor
-      })
-    });
-    if (res.ok) {
+      });
       setFixingIndex(null);
       setFixData(null);
-    } else {
-      alert("Failed to save conversion");
+    } catch (err) {
+      console.error('Failed to save conversion', err);
+      alert('Failed to save conversion');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const res = await fetch(`${API_URL}/items/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: formData.name,
-        category: formData.category,
-        is_prep: formData.is_prep,
-        is_for_sale: formData.is_for_sale,
-        price: formData.price === '' ? null : parseFloat(formData.price),
-        description: formData.description,
-        process_notes: formData.notes,
-        is_archived: formData.is_archived,
-        yield_qty: formData.is_prep ? formData.yield_qty : null,
-        yield_unit: formData.is_prep ? formData.yield_unit : null
-      })
+    const res = await api.put(`/api/items/${id}`, {
+      name: formData.name,
+      category: formData.category,
+      is_prep: formData.is_prep,
+      is_for_sale: formData.is_for_sale,
+      price: formData.price === '' ? null : parseFloat(formData.price),
+      description: formData.description,
+      process_notes: formData.notes,
+      is_archived: formData.is_archived,
+      yield_qty: formData.is_prep ? formData.yield_qty : null,
+      yield_unit: formData.is_prep ? formData.yield_unit : null
     });
     if (!res.ok) {
-      const error = await res.json();
+      const error = res.data || {};
       alert(error.error || 'Failed to update item');
       return;
     }
 
-    await fetch(`${API_URL}/recipes/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/recipes/${id}`);
     const seen = new Set();
     const cleaned = recipe.filter(r => {
       if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
@@ -145,13 +137,9 @@ function EditItem() {
       return true;
     });
 
-    await fetch(`${API_URL}/recipes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        item_id: parseInt(id),
-        recipe: cleaned
-      })
+    await api.post(`/api/recipes`, {
+      item_id: parseInt(id),
+      recipe: cleaned
     });
 
     navigate(`/item/${id}`);
@@ -159,13 +147,9 @@ function EditItem() {
 
   const handleAddNewIngredient = async () => {
     if (!newIngredientName.trim()) return;
-    const res = await fetch(`${API_URL}/ingredients`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newIngredientName, category: '', notes: '', unit: '' })
-    });
-    const data = await res.json();
-    if (res.ok) {
+    const res = await api.post('/api/ingredients', { name: newIngredientName, category: '', notes: '', unit: '' });
+    const data = res.data;
+    if (res.status === 200 || res.status === 201) {
       const newList = [...ingredients, data].sort((a, b) => a.name.localeCompare(b.name));
       setIngredients(newList);
       setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '' }]);
@@ -214,7 +198,7 @@ function EditItem() {
           )}
         </div>
         <div className="mt-6">
-          <h2 className="font-semibold mb-2">Recipe Ingredients</h2>
+          <h2 className="text-xl font-semibold mb-2">Recipe Ingredients</h2>
           <input
             type="text"
             placeholder="Filter ingredients/prep items..."
@@ -238,17 +222,22 @@ function EditItem() {
                     label: '🧂 Ingredients',
                     options: ingredients
                       .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                      .map(i => ({ value: `ingredient:${i.ingredient_id}`, label: `🧂 ${i.name || 'Unnamed Ingredient'}` }))
+                      .map((i) => ({
+                        value: `ingredient:${i.ingredient_id}`,
+                        label: `🧂 ${i.name || 'Unnamed Ingredient'}`
+                      }))
                   },
                   {
                     label: '🛠️ Prep Items',
                     options: prepItems
                       .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
-                      .map(i => ({ value: `item:${i.item_id}`, label: `🛠️ ${i.name}` }))
+                      .map((i) => ({
+                        value: `item:${i.item_id}`,
+                        label: `🛠️ ${i.name || 'Unnamed Prep Item'}`
+                      }))
                   }
                 ]}
-                className="basic-single w-full"
-                classNamePrefix="select"
+                className="w-full border p-1 rounded"
               />
               <input
                 type="number"

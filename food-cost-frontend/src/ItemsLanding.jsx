@@ -1,24 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from './utils/auth';
 
 function ItemsLanding() {
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-    fetch('https://jaybird-connect.ue.r.appspot.com/api/items', { headers })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text();
-          console.error('Failed to load items', res.status, text);
-          return [];
-        }
-        return res.json();
-      })
-      .then((data) => {
+    let mounted = true;
+    async function load() {
+      try {
+        const res = await api.get('/api/items');
+        if (!mounted) return;
+        const data = res.data;
         if (!Array.isArray(data)) {
           console.warn('Unexpected items payload, expected array:', data);
           setItemsByCategory({});
@@ -36,10 +30,12 @@ function ItemsLanding() {
         }
 
         setItemsByCategory(grouped);
-      })
-      .catch((err) => {
-        console.error('Error fetching items:', err);
-      });
+      } catch (err) {
+        console.error('Error fetching items:', err.response || err);
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, []);
   
   const toggleCategory = (category) => {

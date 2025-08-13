@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function IngredientDetail() {
   const { id } = useParams();
@@ -17,83 +16,53 @@ function IngredientDetail() {
   const [fromAmount, setFromAmount] = useState('');
   const [toAmount, setToAmount] = useState('');
 
-
   const [priceQuotes, setPriceQuotes] = useState([]);
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch ingredient');
-        return res.json();
-      })
-      .then((data) => {
-        if (!data || data.error) throw new Error('Invalid ingredient response');
-        if (!Array.isArray(data.recipes)) data.recipes = [];
-        setIngredient(data);
-      })
-      .catch((err) => {
-        console.error('Fetch error:', err);
+    let mounted = true;
+    async function load() {
+      try {
+        const ingrRes = await api.get(`/api/ingredients/${id}`);
+        const convRes = await api.get(`/api/ingredient_conversions?ingredient_id=${id}`);
+        const quotesRes = await api.get(`/api/price_quotes?ingredient_id=${id}&limit=10`);
+
+        if (!mounted) return;
+        const ingrData = ingrRes.data;
+        if (!ingrData || ingrData.error) throw new Error('Invalid ingredient response');
+        if (!Array.isArray(ingrData.recipes)) ingrData.recipes = [];
+        setIngredient(ingrData);
+
+        const conversionsData = convRes.data.filter(conv => conv.ingredient_id !== null);
+        setConversions(conversionsData);
+
+        setPriceQuotes(quotesRes.data || []);
+      } catch (err) {
+        console.error('Load error:', err.response || err);
         setError('Could not load ingredient data.');
-      });
-
-    fetch(`${API_URL}/ingredient_conversions?ingredient_id=${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        // Filter out global conversions
-        const filteredConversions = data.filter(conv => conv.ingredient_id !== null);
-        setConversions(filteredConversions);
-      })
-      .catch((err) => {
-        console.error('Conversion fetch error:', err);
-        setConversions([]);
-      });
-
-     fetch(`${API_URL}/price_quotes?ingredient_id=${id}&limit=10`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch price quotes');
-        return res.json();
-      })
-      .then((data) => {
-        setPriceQuotes(data);
-      })
-      .catch((err) => {
-        console.error('Price quotes fetch error:', err);
-      });
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, [id]);
 
-  const handleDeleteConversion = (convId) => {
-    fetch(`${API_URL}/ingredient_conversions/${convId}`, {
-      method: 'DELETE'
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to delete conversion');
-        setConversions(conversions.filter(conv => conv.id !== convId));
-      })
-      .catch((err) => {
-        console.error('Delete conversion error:', err);
-        setError('Failed to delete conversion.');
-      });
+  const handleDeleteConversion = async (convId) => {
+    try {
+      await api.delete(`/api/ingredient_conversions/${convId}`);
+      setConversions(conversions.filter(conv => conv.id !== convId));
+    } catch (err) {
+      console.error('Delete conversion error:', err.response || err);
+      setError('Failed to delete conversion.');
+    }
   };
 
-  const handleArchive = () => {
-    fetch(`${API_URL}/ingredients/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ archived: true })
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to archive ingredient');
-        return res.json();
-      })
-      .then(() => {
-        navigate('/ingredients');
-      })
-      .catch((err) => {
-        console.error('Archive error:', err);
-        setError('Failed to archive ingredient.');
-      });
+  const handleArchive = async () => {
+    try {
+      await api.put(`/api/ingredients/${id}`, { archived: true });
+      navigate('/ingredients');
+    } catch (err) {
+      console.error('Archive error:', err.response || err);
+      setError('Failed to archive ingredient.');
+    }
   };
 
   if (error) {
@@ -219,23 +188,18 @@ function IngredientDetail() {
                 factor: factor,
               };
 
-              fetch(`${API_URL}/ingredient_conversions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              })
-              .then((res) => res.json())
-              .then((newConv) => {
+              try {
+                const res = await api.post('/api/ingredient_conversions', payload);
+                const newConv = res.data;
                 setConversions([...conversions, newConv]);
                 setShowForm(false);
                 setFromAmount('');
                 setFromUnit('');
                 setToAmount('');
                 setToUnit('');
-              })
-              .catch((err) => {
-                console.error('Failed to save conversion:', err);
-              });
+              } catch (err) {
+                console.error('Failed to save conversion:', err.response || err);
+              }
             }}>
               <div className="flex items-center gap-2 mt-4">
                 <input

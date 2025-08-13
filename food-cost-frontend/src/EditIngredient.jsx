@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from './utils/auth';
 
 function EditIngredient() {
   const { id } = useParams();
@@ -10,16 +9,20 @@ function EditIngredient() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/ingredients/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-        setIngredient(data);
-      })
-      .catch((err) => {
-        console.error(err);
+    let mounted = true;
+    async function load() {
+      try {
+        const res = await api.get(`/api/ingredients/${id}`);
+        if (!mounted) return;
+        if (res.data.error) throw new Error(res.data.error);
+        setIngredient(res.data);
+      } catch (err) {
+        console.error(err.response || err);
         setError('Failed to load ingredient');
-      });
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, [id]);
 
   const handleChange = (e) => {
@@ -37,30 +40,22 @@ function EditIngredient() {
       is_archived: ingredient.is_archived || false
     };
 
-    const res = await fetch(`${API_URL}/ingredients/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
+    try {
+      const res = await api.put(`/api/ingredients/${id}`, payload);
       navigate(`/ingredients/${id}`);
-    } else {
-      const error = await res.json();
-      alert(error.error || 'Failed to update ingredient');
+    } catch (err) {
+      console.error(err.response || err);
+      const message = err.response?.data?.error || 'Failed to update ingredient';
+      alert(message);
     }
   };
 
   const handleArchive = async () => {
-    const res = await fetch(`${API_URL}/ingredients/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_archived: true })
-    });
-
-    if (res.ok) {
+    try {
+      await api.put(`/api/ingredients/${id}`, { is_archived: true });
       navigate(`/ingredients`);
-    } else {
+    } catch (err) {
+      console.error(err.response || err);
       alert('Failed to archive ingredient');
     }
   };
