@@ -117,24 +117,35 @@ function App() {
   const [user, setUser] = useState(null);
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      fetch(`${API_URL}/auth/check`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`
+    if (!token) return;
+
+    // Call the auth check endpoint under /api — backend expects /api/auth/check
+    fetch(`${API_URL}/api/auth/check`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then((res) => {
+        if (!res.ok) {
+          // If unauthorized or any error, clear token and force login
+          console.warn('Auth check failed:', res.status);
+          handleLogout();
+          return null;
         }
+        return res.json();
       })
-      .then(res => res.json())
-      .then(data => {
+      .then((data) => {
+        if (!data) return;
         if (data.status === 'valid') {
           setUser(data.user);
         } else {
           handleLogout();
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Auth check error:', err);
         handleLogout();
       });
-    }
   }, []);
   const handleLogout = () => {
     localStorage.removeItem('token');

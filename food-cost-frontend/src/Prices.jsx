@@ -1,16 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { API_URL } from './config';
 
 function Prices() {
   const [quotes, setQuotes] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${API_URL}/price_quotes`)
-      .then(res => res.json())
-      .then(setQuotes);
-  }, []);
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`${API_URL}/api/price_quotes`, { headers })
+      .then(async (res) => {
+        if (res.status === 401) {
+          // Unauthorized — clear token and send user to login
+          localStorage.removeItem('token');
+          navigate('/login');
+          return null;
+        }
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to fetch price quotes: ${res.status} - ${text}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!data) return;
+        // Some endpoints return an object; ensure we always set an array
+        if (Array.isArray(data)) setQuotes(data);
+        else if (Array.isArray(data.price_quotes)) setQuotes(data.price_quotes);
+        else if (Array.isArray(data.quotes)) setQuotes(data.quotes);
+        else setQuotes([]);
+      })
+      .catch((err) => {
+        console.error('Failed to load price quotes', err);
+        setQuotes([]);
+      });
+  }, [navigate]);
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -90,10 +119,10 @@ function Prices() {
                   {q.size_qty} {q.size_unit}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${q.price.toFixed(2)}
+                  ${q.price?.toFixed ? q.price.toFixed(2) : q.price}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {new Date(q.date_found).toLocaleDateString()}
+                  {q.date_found ? new Date(q.date_found).toLocaleDateString() : ''}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   {q.notes}
