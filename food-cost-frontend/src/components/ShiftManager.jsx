@@ -42,7 +42,11 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
     setLoading(true);
     try{
       const sd = formatDate(startDate);
-      const res = await api.get(`/api/shifts/weekly?start_date=${sd}${departmentFilter ? `&department_id=${departmentFilter}` : ''}`);
+      // Debug: ensure token exists in localStorage (helps track 401 causes)
+      console.log('fetchShifts - token present:', !!localStorage.getItem('token'));
+      const params = { start_date: sd };
+      if (departmentFilter) params.department_id = departmentFilter;
+      const res = await api.get('/api/shifts/weekly', { params });
       setShifts(res.data.shifts || []);
     }catch(e){
       console.error('Failed to load shifts', e.response || e);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { api } from '../utils/auth';
-import jwtDecode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 
 const EmployeeDashboard = () => {
   const [shifts, setShifts] = useState([]);
