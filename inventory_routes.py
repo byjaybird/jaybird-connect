@@ -102,6 +102,49 @@ def get_barcode_map():
     finally:
         cursor.close()
 
+# Batch lookup endpoint: accepts JSON { "barcodes": ["b1", "b2", ...] }
+@inventory_bp.route('/api/barcode-map/batch', methods=['POST'])
+def barcode_map_batch():
+    data = request.json or {}
+    barcodes = data.get('barcodes')
+
+    if not barcodes or not isinstance(barcodes, list):
+        return jsonify({'error': 'Missing or invalid barcodes list'}), 400
+
+    # Preserve order and remove duplicates while keeping insertion order
+    seen = set()
+    unique_barcodes = []
+    for b in barcodes:
+        if b not in seen:
+            seen.add(b)
+            unique_barcodes.append(b)
+
+    if not unique_barcodes:
+        return jsonify({'mappings': {}}), 200
+
+    cursor = get_db_cursor()
+    try:
+        # Build a parameterized IN clause safely
+        placeholders = ','.join(['%s'] * len(unique_barcodes))
+        query = f"SELECT barcode, source_type, source_id FROM barcode_map WHERE barcode IN ({placeholders})"
+        cursor.execute(query, tuple(unique_barcodes))
+        rows = cursor.fetchall()
+
+        # Initialize result with not-found entries
+        result = {b: {'found': False} for b in unique_barcodes}
+        for r in rows:
+            result[r['barcode']] = {
+                'found': True,
+                'data': {'source_type': r['source_type'], 'source_id': r['source_id']}
+            }
+
+        return jsonify({'mappings': result}), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        cursor.close()
+
 @inventory_bp.route('/api/inventory/adjustment', methods=['POST'])
 def adjustment():
     data = request.json

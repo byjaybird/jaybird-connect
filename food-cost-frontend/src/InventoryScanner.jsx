@@ -67,10 +67,13 @@ const handleScanSubmit = async (e) => {
       setPrepItems(itemsData);
       setIngredients(ingredientsData);
 
-      // Now check the barcode mapping
-      const res = await api.get(`/api/barcode-map?barcode=${encodeURIComponent(barcode)}`);
-      const data = res.data;
-      console.log('Barcode map response:', data);
+      // Now check the barcode mapping using the new batch endpoint
+      const res = await api.post('/api/barcode-map/batch', { barcodes: [barcode] });
+      console.log('Barcode map batch response:', res.data);
+
+      // The batch endpoint returns { mappings: { <barcode>: { found: true/false, data: {...} } } }
+      const mappings = (res.data && res.data.mappings) || {};
+      const data = mappings[barcode] || { found: false };
 
       if (!data.found) {
         setShowDropdown(true);
