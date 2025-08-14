@@ -359,7 +359,7 @@ def get_weekly_shifts():
             query = """
                 SELECT s.*, array_agg(json_build_object(
                     'employee_id', sa.employee_id,
-                    'assigned_at', sa.assigned_at
+                    'assigned_at', sa.assigned_at::text
                 )) as assignments
                 FROM shifts s
                 LEFT JOIN shift_assignments sa ON s.shift_id = sa.shift_id

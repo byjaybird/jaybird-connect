@@ -15,7 +15,7 @@ function formatDate(date) {
   return d.toISOString().slice(0,10);
 }
 
-export default function ShiftManager({ weekStartsOn = 0 }) {
+export default function ShiftManager({ weekStartsOn = 1 }) {
   const [startDate, setStartDate] = useState(() => startOfWeek(new Date(), weekStartsOn));
   const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -97,6 +97,14 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
 
   const grouped = groupByDate(shifts);
 
+  // Compute the seven days for the currently selected week
+  const weekDates = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    d.setHours(0,0,0,0);
+    return d;
+  });
+
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
@@ -116,39 +124,48 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
       </div>
 
       {loading ? <div>Loading...</div> : (
-        Object.keys(grouped).length === 0 ? <div>No shifts for this week</div> : (
-          Object.keys(grouped).sort().map(dateKey => (
-            <div key={dateKey} className="mb-4">
-              <div className="font-semibold mb-2">{dateKey}</div>
-              <div className="space-y-2">
-                {grouped[dateKey].map(shift => (
-                  <div key={shift.shift_id} className="p-2 border rounded flex items-center justify-between">
-                    <div>
-                      <div className="text-lg">{shift.label} — {shift.start_time ? shift.start_time : ''} - {shift.end_time ? shift.end_time : ''}</div>
-                      <div className="text-sm text-gray-500">Dept: {shift.department_id}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="min-w-[160px]">
-                        {shift.assignments && shift.assignments.length > 0 ? (
-                          <div>{shift.assignments.map(a => a.employee_id).join(', ')}</div>
-                        ) : (
-                          <div className="text-sm text-red-500">Unassigned</div>
-                        )}
+        // Week grid: 7 equal columns, one per day
+        <div className="grid grid-cols-7 gap-4">
+          {weekDates.map(d => {
+            const key = formatDate(d);
+            const dayShifts = grouped[key] || [];
+            return (
+              <div key={key} className="bg-white p-2 rounded border">
+                <div className="font-semibold mb-2">{d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                <div className="space-y-2 min-h-[120px]">
+                  {dayShifts.length === 0 ? (
+                    <div className="text-sm text-gray-400">No shifts</div>
+                  ) : (
+                    dayShifts.map(shift => (
+                      <div key={shift.shift_id} className="p-2 border rounded flex items-center justify-between bg-gray-50">
+                        <div>
+                          <div className="text-lg">{shift.label} — {shift.start_time ? shift.start_time : ''} - {shift.end_time ? shift.end_time : ''}</div>
+                          <div className="text-sm text-gray-500">Dept: {shift.department_id}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-[140px]">
+                            {shift.assignments && shift.assignments.length > 0 ? (
+                              <div>{shift.assignments.map(a => a.employee_id).join(', ')}</div>
+                            ) : (
+                              <div className="text-sm text-red-500">Unassigned</div>
+                            )}
+                          </div>
+                          <select value={assigning[shift.shift_id] || ''} onChange={e => setAssigning(prev => ({ ...prev, [shift.shift_id]: e.target.value }))} className="p-1 border rounded">
+                            <option value="">Select Employee</option>
+                            {employees.map(emp => (
+                              <option key={emp.employee_id} value={emp.employee_id}>{emp.name} ({emp.email})</option>
+                            ))}
+                          </select>
+                          <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={() => handleAssign(shift.shift_id)}>Assign</button>
+                        </div>
                       </div>
-                      <select value={assigning[shift.shift_id] || ''} onChange={e => setAssigning(prev => ({ ...prev, [shift.shift_id]: e.target.value }))} className="p-1 border rounded">
-                        <option value="">Select Employee</option>
-                        {employees.map(emp => (
-                          <option key={emp.employee_id} value={emp.employee_id}>{emp.name} ({emp.email})</option>
-                        ))}
-                      </select>
-                      <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={() => handleAssign(shift.shift_id)}>Assign</button>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ))
-        )
+            );
+          })}
+        </div>
       )}
     </div>
   );

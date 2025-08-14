@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
-
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+import { api } from '../utils/auth';
+import jwtDecode from 'jwt-decode';
 
 const EmployeeDashboard = () => {
   const [shifts, setShifts] = useState([]);
@@ -36,13 +34,8 @@ const EmployeeDashboard = () => {
       
       const employeeId = getEmployeeId();
       const startDate = format(startOfWeek(new Date()), 'yyyy-MM-dd');
-      console.log('Making request to:', `${API_URL}/shifts/weekly`);
-      console.log('With params:', {
-          start_date: startDate,
-          employee_id: employeeId
-      });
-      
-      const response = await axios.get(`${API_URL}/shifts/weekly`, {
+      console.log('Making authenticated request to /api/shifts/weekly with params:', { start_date: startDate, employee_id: employeeId });
+      const response = await api.get('/api/shifts/weekly', {
         params: {
           start_date: startDate,
           employee_id: employeeId
@@ -53,7 +46,7 @@ const EmployeeDashboard = () => {
 
       const shifts = response.data.shifts || [];
       const employeeShifts = shifts.filter(shift =>
-        shift.assignments.some(assignment => assignment.employee_id === employeeId)
+        (shift.assignments || []).some(assignment => Number(assignment.employee_id) === employeeId)
       );
       
       setShifts(employeeShifts);
