@@ -15,8 +15,11 @@ function formatDate(date) {
   return d.toISOString().slice(0,10);
 }
 
-function initials(name = ''){
-  return name.split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+function initials(name){
+  // ensure we never call .split on null/undefined
+  const s = String(name || '').trim();
+  if (!s) return '';
+  return s.split(/\s+/).map(part => part[0]).slice(0,2).join('').toUpperCase();
 }
 
 export default function ShiftManager({ weekStartsOn = 1 }) {
