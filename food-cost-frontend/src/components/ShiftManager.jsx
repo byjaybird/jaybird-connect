@@ -61,7 +61,8 @@ export default function ShiftManager({ weekStartsOn = 0 }) {
     if(!confirm('Generate shifts for this week from patterns?')) return;
     setLoading(true);
     try{
-      const res = await api.post('/api/shifts/generate', { days_ahead: 7 });
+      const sd = formatDate(startDate);
+      const res = await api.post('/api/shifts/generate', { start_date: sd, days_ahead: 7 });
       const data = res.data;
       await fetchShifts();
       alert(data.message || 'Generate completed');

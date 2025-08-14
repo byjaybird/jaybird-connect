@@ -175,21 +175,28 @@ def create_shift_pattern():
 @shift_routes.route('/shifts/generate', methods=['POST'])
 @token_required
 def generate_shifts():
-    """Generate shifts for the next N days."""
+    """Generate shifts for the next N days, optionally starting from a provided start_date (YYYY-MM-DD)."""
     try:
-        data = request.json
+        data = request.json or {}
         print("Received data in generate_shifts:", data)  # Debug log
-        
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-            
+
+        # days_ahead: number of days to generate (default 14)
         days_ahead = data.get('days_ahead', 14)
         if not isinstance(days_ahead, int) or days_ahead < 1:
             return jsonify({'error': 'days_ahead must be a positive integer'}), 400
-            
-        start_date = datetime.now().date()
+
+        # start_date: optional YYYY-MM-DD string. If provided, use it as the first day.
+        start_date_str = data.get('start_date')
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
+        else:
+            start_date = datetime.now().date()
+
         cursor = get_db_cursor()
-        
+
         try:
             # Get shift patterns from database
             cursor.execute("""
@@ -200,26 +207,23 @@ def generate_shifts():
             """)
             patterns = cursor.fetchall()
             print(f"Found {len(patterns)} patterns in database") # Debug log
-            
+
             if not patterns:
                 return jsonify({'error': 'No shift patterns found in database'}), 400
-            
-            if not patterns:
-                return jsonify({'message': 'No shift patterns found to generate from'}), 200
-            
+
             shifts_generated = 0
             # Generate shifts for each day and pattern
             for day_offset in range(days_ahead):
                 current_date = start_date + timedelta(days=day_offset)
                 weekday = current_date.strftime("%A")
-                
+
                 for pattern in patterns:
                     # Validate required pattern fields
                     required_fields = ['days_of_week', 'label', 'start_time', 'department_id', 'number_of_shifts']
                     if not all(field in pattern for field in required_fields):
                         print(f"Warning: Pattern {pattern.get('pattern_id')} missing required fields")
                         continue
-                        
+
                     try:
                         if weekday in pattern['days_of_week']:
                             # Check for existing shifts
@@ -227,7 +231,7 @@ def generate_shifts():
                                 SELECT COUNT(*) as count FROM shifts 
                                 WHERE date = %s AND label = %s AND start_time = %s
                             """, (current_date, pattern['label'], pattern['start_time']))
-                            
+
                             if cursor.fetchone()['count'] == 0:
                                 # Generate the required number of shifts
                                 num_shifts = pattern['number_of_shifts'] or 1
@@ -247,20 +251,20 @@ def generate_shifts():
                     except Exception as pattern_error:
                         print(f"Error processing pattern {pattern.get('pattern_id')}: {str(pattern_error)}")
                         continue
-            
+
             cursor.connection.commit()
             return jsonify({
-                'message': f'Generated {shifts_generated} shifts for next {days_ahead} days',
+                'message': f'Generated {shifts_generated} shifts starting {start_date.isoformat()} for next {days_ahead} days',
                 'shifts_generated': shifts_generated
             })
-            
+
         except Exception as db_error:
             cursor.connection.rollback()
             print("Database error in generate_shifts:", str(db_error))
             return jsonify({'error': 'Database error', 'details': str(db_error)}), 500
         finally:
             cursor.close()
-            
+
     except Exception as e:
         print("Error in generate_shifts:", str(e))
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
