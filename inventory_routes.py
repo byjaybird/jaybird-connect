@@ -199,3 +199,71 @@ def current_inventory():
         cursor.close()
 
     return jsonify(rows)
+
+
+# Batch endpoint: accept JSON { items: [{ source_type, source_id }, ...] }
+@inventory_bp.route('/api/inventory/current/batch', methods=['POST'])
+def current_inventory_batch():
+    data = request.json or {}
+    items = data.get('items')
+
+    if not items or not isinstance(items, list):
+        return jsonify({'error': 'Missing or invalid items list'}), 400
+
+    # Build list of unique pairs while preserving order
+    seen = set()
+    unique_pairs = []
+    for it in items:
+        st = it.get('source_type')
+        sid = it.get('source_id')
+        key = f"{st}::{sid}"
+        if key not in seen:
+            seen.add(key)
+            unique_pairs.append((st, sid))
+
+    if not unique_pairs:
+        return jsonify({'results': []}), 200
+
+    cursor = get_db_cursor()
+    try:
+        # Build WHERE clause with AND/OR pairs and use a window function to pick latest per pair
+        pair_conditions = []
+        params = []
+        for st, sid in unique_pairs:
+            pair_conditions.append('(source_type = %s AND source_id = %s)')
+            params.extend([st, sid])
+
+        where_clause = ' OR '.join(pair_conditions)
+
+        query = f'''
+            SELECT source_type, source_id, quantity, unit, location, created_at, user_id FROM (
+                SELECT source_type, source_id, quantity, unit, location, created_at, user_id,
+                       ROW_NUMBER() OVER (PARTITION BY source_type, source_id ORDER BY created_at DESC) AS rn
+                FROM inventory_count_entries
+                WHERE {where_clause}
+            ) t
+            WHERE rn = 1
+        '''
+
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+
+        # Build lookup
+        lookup = {f"{r['source_type']}-{r['source_id']}": r for r in rows}
+
+        results = []
+        for st, sid in unique_pairs:
+            key = f"{st}-{sid}"
+            results.append({
+                'source_type': st,
+                'source_id': sid,
+                'found': key in lookup,
+                'data': lookup.get(key)
+            })
+
+        return jsonify({'results': results}), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        cursor.close()

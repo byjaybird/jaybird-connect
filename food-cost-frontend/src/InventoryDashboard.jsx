@@ -27,9 +27,23 @@ export default function InventoryDashboard() {
           ...visibleItems.map(i => ({ ...i, source_type: 'item', source_id: i.item_id })),
         ];
 
-        const enriched = await Promise.all(allVisible.map(async (item) => {
-          const res = await api.get(`/api/inventory/current?source_type=${item.source_type}&source_id=${item.source_id}`);
-          const latest = res.data;
+        // Batch fetch latest inventory rows for all visible items in a single request
+        const batchPayload = { items: allVisible.map(i => ({ source_type: i.source_type, source_id: i.source_id })) };
+        const batchRes = await api.post('/api/inventory/current/batch', batchPayload);
+        if (batchRes.data && batchRes.data.error) {
+          throw new Error(batchRes.data.error || 'Batch inventory lookup failed');
+        }
+
+        const results = (batchRes.data && batchRes.data.results) || [];
+        const lookup = results.reduce((acc, r) => {
+          acc[`${r.source_type}-${r.source_id}`] = r;
+          return acc;
+        }, {});
+
+        const enriched = allVisible.map((item) => {
+          const key = `${item.source_type}-${item.source_id}`;
+          const res = lookup[key];
+          const latest = res && res.data ? res.data : null;
           return {
             ...item,
             quantity: latest?.quantity || 0,
@@ -38,7 +52,7 @@ export default function InventoryDashboard() {
             created_at: latest?.created_at || null,
             user_id: latest?.user_id || '-'
           };
-        }));
+        });
 
         const groupedByCategory = enriched.reduce((acc, item) => {
           const category = item.category || 'Uncategorized';
