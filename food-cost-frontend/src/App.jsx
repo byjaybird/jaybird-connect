@@ -27,7 +27,7 @@ import ForgotPassword from './components/auth/ForgotPassword';
 import ResetPassword from './components/auth/ResetPassword';
 import ShiftSchedulePlanner from './components/ShiftSchedulePlanner';
 import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
-import EmployeeDashboard from './components/EmployeeDashboard';
+import ShiftDashboard from './components/ShiftDashboard';
 import ShiftManager from './components/ShiftManager';
 import Dashboard from './Dashboard.jsx';
 import { api } from './utils/auth';
@@ -157,7 +157,7 @@ function App() {
         <Route path="/prices" element={<PrivateRoute><Prices /></PrivateRoute>} />
         <Route path="/inventory" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
         <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
-        <Route path="/shifts" element={<PrivateRoute><EmployeeDashboard /></PrivateRoute>} />
+        <Route path="/shifts" element={<PrivateRoute><ShiftDashboard /></PrivateRoute>} />
         <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
         <Route path="/shifts/manager" element={<PrivateRoute><ShiftManager /></PrivateRoute>} />
         <Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
