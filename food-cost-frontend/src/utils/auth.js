@@ -21,9 +21,20 @@ api.interceptors.request.use(
       data: config.data
     });
 
-    // Skip token check for login and other public endpoints
-    if (config.url.includes('/auth/login')) {
-      console.log('Skipping token check for login request');
+    // Ensure we have a string URL to check
+    const url = config?.url || '';
+
+    // Public endpoints that do NOT require an auth token
+    const publicPaths = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/check'
+    ];
+
+    if (publicPaths.some((p) => url.includes(p))) {
+      console.log('Skipping token check for public endpoint:', url);
       return config;
     }
 
@@ -31,13 +42,14 @@ api.interceptors.request.use(
     console.log('Request interceptor - Token:', token ? 'Present' : 'Missing');
 
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
       console.log('Request interceptor - Headers after token:', config.headers);
       return config;
     }
 
     // Don't redirect on auth check requests
-    if (config.url.includes('/api/auth/check')) {
+    if (url.includes('/api/auth/check') || url.includes('/auth/check')) {
       console.log('Skipping redirect for auth check');
       return Promise.reject('No auth token found');
     }
