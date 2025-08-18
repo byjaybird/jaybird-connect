@@ -1,7 +1,7 @@
 """Service for managing shift patterns."""
 from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict
-from utils.db import get_db_cursor
+from server.utils.db import get_db_cursor
 
 class ShiftPatternService:
     @staticmethod
@@ -96,3 +96,4 @@ class ShiftPatternService:
             WHERE pattern_id = %s
         """, (pattern_id,))
         cursor.connection.commit()
+

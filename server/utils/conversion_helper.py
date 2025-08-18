@@ -1,4 +1,4 @@
-from server.utils.db import get_db_cursor
+from .db import get_db_cursor
 
 def convert_to_base(source_id, source_type, from_unit, quantity):
     cursor = get_db_cursor()

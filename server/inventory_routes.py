@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
-from utils.conversion_helper import convert_to_base
+from .utils.db import get_db_cursor
+from .utils.conversion_helper import convert_to_base
 import traceback
 
 inventory_bp = Blueprint('inventory', __name__)

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import CORS
-from utils.db import get_db_cursor
+from .utils.db import get_db_cursor
 from functools import wraps
 import jwt
 import bcrypt
@@ -10,7 +10,7 @@ import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from utils.auth_decorator import token_required
+from .utils.auth_decorator import token_required
 
 auth_bp = Blueprint('auth', __name__)
 

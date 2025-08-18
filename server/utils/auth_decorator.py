@@ -2,7 +2,7 @@ from flask import request, jsonify
 from functools import wraps
 import jwt
 import os
-from server.utils.db import get_db_cursor
+from .db import get_db_cursor
 
 # Secret key for JWT
 JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')

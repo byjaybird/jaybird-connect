@@ -1,5 +1,5 @@
 from datetime import date
-from server.utils.db import get_db_cursor
+from .db import get_db_cursor
 
 def resolve_ingredient_cost(ingredient_id, recipe_unit, quantity=1):
     cursor = get_db_cursor()
@@ -237,4 +237,3 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
             cursor.close()
         except Exception:
             pass
-

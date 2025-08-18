@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import CORS, cross_origin
-from utils.db import get_db_cursor
-from auth_routes import token_required
+from .utils.db import get_db_cursor
+from .auth_routes import token_required
 from datetime import datetime
 from functools import wraps
 

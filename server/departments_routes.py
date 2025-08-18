@@ -1,6 +1,6 @@
 """API routes for department management."""
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
+from .utils.db import get_db_cursor
 
 departments_bp = Blueprint('departments', __name__)
 

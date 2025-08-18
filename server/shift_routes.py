@@ -1,8 +1,8 @@
 """API routes for shift management."""
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
-from utils.auth_decorator import token_required
+from .utils.db import get_db_cursor
+from .utils.auth_decorator import token_required
 
 shift_routes = Blueprint('shifts', __name__)
 

@@ -6,17 +6,17 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-from utils.cost_resolver import resolve_ingredient_cost
-from utils.cost_resolver import resolve_item_cost
-from utils.db import get_db_cursor
-from inventory_routes import inventory_bp
-from receiving_routes import receiving_bp
-from tasks_routes import tasks_bp
-from auth_routes import auth_bp
-from user_routes import user_bp
-from shift_routes import shift_routes as shift_bp
-from departments_routes import departments_bp
-from services.shift_api import ShiftAPI
+from .utils.cost_resolver import resolve_ingredient_cost
+from .utils.cost_resolver import resolve_item_cost
+from .utils.db import get_db_cursor
+from .inventory_routes import inventory_bp
+from .receiving_routes import receiving_bp
+from .tasks_routes import tasks_bp
+from .auth_routes import auth_bp
+from .user_routes import user_bp
+from .shift_routes import shift_routes as shift_bp
+from .departments_routes import departments_bp
+from .services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
@@ -804,3 +804,4 @@ for rule in app.url_map.iter_rules():
 
 if __name__ == '__main__':
     app.run(debug=True)
+

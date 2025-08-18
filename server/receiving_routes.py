@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
-from utils.conversion_helper import convert_to_base
+from .utils.db import get_db_cursor
+from .utils.conversion_helper import convert_to_base
 import traceback
 
 receiving_bp = Blueprint('receiving', __name__, url_prefix='/api')
@@ -47,4 +47,5 @@ def submit_receiving():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
+
 

@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from flask import jsonify
-from utils.db import get_db_cursor
+from server.utils.db import get_db_cursor
 
 class ShiftAPI:
     @staticmethod

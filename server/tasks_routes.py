@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from utils.db import get_db_cursor
-from utils.auth_decorator import token_required
+from .utils.db import get_db_cursor
+from .utils.auth_decorator import token_required
 import logging
 import psycopg2.extras
 
@@ -670,3 +670,4 @@ def generate_tasks():
     except Exception as e:
         logger.error('Error in generate_tasks: %s', str(e), exc_info=True)
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
