@@ -65,7 +65,9 @@ def auth_before_request():
     public_paths = {
         '/auth/login', '/api/auth/login',
         '/auth/check', '/api/auth/check',
-        '/auth/debug-cors', '/api/auth/debug-cors'
+        '/auth/debug-cors', '/api/auth/debug-cors',
+        '/auth/forgot-password', '/api/auth/forgot-password',
+        '/auth/reset-password', '/api/auth/reset-password'
     }
 
     # Allow public GET access to items listing (UI calls /api/items without auth)
