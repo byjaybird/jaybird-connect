@@ -25,6 +25,11 @@ env_variables:
   DB_PASSWORD: bagels4life
   FLASK_ENV: "production"
   JWT_SECRET: "49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd"
+  SMTP_SERVER: smtp.gmail.com
+  SMTP_PORT: 587
+  SMTP_USERNAME: info@byjaybird.com
+  SMTP_PASSWORD: bagels4life
+  SMTP_FROM_EMAIL: info@byjaybird.com
 
 beta_settings:
   cloud_sql_instances: jaybird-connect:us-east1:jaybird-db

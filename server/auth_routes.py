@@ -17,7 +17,7 @@ auth_bp = Blueprint('auth', __name__)
 # Let the main app handle CORS configuration
 
 # Secret key for JWT - in production, use a secure environment variable
-JWT_SECRET = os.getenv('JWT_SECRET', '49d83126fae6cd7e8f3575e06c89c2ddb34f2bcd34cba4af8cc48009f074f8fd')
+JWT_SECRET = os.getenv('JWT_SECRET')
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
 SMTP_USERNAME = os.getenv('SMTP_USERNAME')
