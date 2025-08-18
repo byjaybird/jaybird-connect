@@ -11,6 +11,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from .utils.auth_decorator import token_required
+import traceback
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -277,36 +278,77 @@ def check_auth():
         return jsonify({'error': 'Internal server error during auth check'}), 500
 
 def send_reset_email(email, reset_token):
+    """
+    Send a password reset email. Adds extra logging for debugging and optionally
+    writes a debug entry to /tmp/reset_emails.log when EMAIL_DEBUG is truthy.
+    """
     try:
         reset_link = f"{request.host_url}reset-password?token={reset_token}"
-        
+
+        # Debug print of link (only when EMAIL_DEBUG enabled)
+        email_debug = os.getenv('EMAIL_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+        if email_debug:
+            print(f"[EMAIL DEBUG] Preparing reset email to {email}; reset_link={reset_link}")
+            print(f"[EMAIL DEBUG] SMTP_SERVER={SMTP_SERVER}, SMTP_PORT={SMTP_PORT}, SMTP_USERNAME={'***' if SMTP_USERNAME else None}")
+
         msg = MIMEMultipart()
         msg['From'] = SMTP_FROM_EMAIL
         msg['To'] = email
         msg['Subject'] = "Password Reset Request"
-        
+
         body = f"""
         You have requested to reset your password.
-        
+
         Please click the following link to reset your password:
         {reset_link}
-        
+
         This link will expire in 1 hour.
-        
+
         If you did not request this password reset, please ignore this email.
         """
-        
+
         msg.attach(MIMEText(body, 'plain'))
-        
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
-        
+
+        try:
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+        except Exception as e:
+            # Log full SMTP exception
+            print(f"[EMAIL ERROR] Failed to send reset email to {email}: {e}")
+            traceback.print_exc()
+            # Record debug entry to /tmp if possible
+            try:
+                if email_debug:
+                    with open('/tmp/reset_emails.log', 'a') as f:
+                        f.write(f"{datetime.utcnow().isoformat()} FAILED {email} error={str(e)}\n")
+            except Exception as ex:
+                print("[EMAIL DEBUG] Failed to write debug log file:", ex)
+            return False
+
+        print(f"[EMAIL] Reset email sent to {email} via {SMTP_SERVER}:{SMTP_PORT}")
+
+        # Optionally write a debug record containing the token to /tmp for verification
+        if email_debug:
+            try:
+                with open('/tmp/reset_emails.log', 'a') as f:
+                    f.write(f"{datetime.utcnow().isoformat()} SENT {email} token={reset_token}\n")
+            except Exception as ex:
+                print("[EMAIL DEBUG] Failed to write debug log file:", ex)
+
         return True
     except Exception as e:
         print(f"Error sending email: {str(e)}")
+        traceback.print_exc()
+        try:
+            if os.getenv('EMAIL_DEBUG', 'false').lower() in ('1', 'true', 'yes'):
+                with open('/tmp/reset_emails.log', 'a') as f:
+                    f.write(f"{datetime.utcnow().isoformat()} ERROR sending to {email} error={str(e)}\n")
+        except Exception:
+            pass
         return False
+
 
 @auth_bp.route('/auth/forgot-password', methods=['POST'])
 def forgot_password():
@@ -317,40 +359,55 @@ def forgot_password():
 
         email = data['email']
         cursor = get_db_cursor()
-        
+
         try:
             # Check if user exists
             cursor.execute("SELECT employee_id FROM employees WHERE email = %s AND active = TRUE", (email,))
             employee = cursor.fetchone()
-            
+
             if not employee:
                 # Return success even if email not found to prevent email enumeration
                 return jsonify({'message': 'If an account exists with this email, you will receive password reset instructions'}), 200
-            
+
             # Generate reset token
             reset_token = secrets.token_urlsafe(32)
             reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
-            
+
             # Store reset token in database
             cursor.execute("""
                 UPDATE employees 
                 SET reset_token = %s, reset_token_expires = %s 
                 WHERE employee_id = %s
             """, (reset_token, reset_token_expiry, employee['employee_id']))
-            
+
             cursor.connection.commit()
-            
+
+            print(f"[FORGOT] Generated reset token for {email} (employee_id={employee['employee_id']})")
+
             # Send reset email
-            if send_reset_email(email, reset_token):
+            sent = send_reset_email(email, reset_token)
+            print(f"[FORGOT] send_reset_email returned {sent} for {email}")
+
+            # Optionally write debug file entry
+            if os.getenv('EMAIL_DEBUG', 'false').lower() in ('1', 'true', 'yes'):
+                try:
+                    with open('/tmp/reset_emails.log', 'a') as f:
+                        f.write(f"{datetime.utcnow().isoformat()} GENERATED {email} token={reset_token} sent={sent}\n")
+                except Exception as ex:
+                    print("[FORGOT] Failed to write debug file:", ex)
+
+            if sent:
                 return jsonify({'message': 'If an account exists with this email, you will receive password reset instructions'}), 200
             else:
-                return jsonify({'error': 'Failed to send reset email'}), 500
+                # If email failed to send, return a generic 200 but log server-side; optionally return 500 if you want explicit failure
+                return jsonify({'message': 'If an account exists with this email, you will receive password reset instructions'}), 200
 
         finally:
             cursor.close()
 
     except Exception as e:
         print(f"Error in forgot_password: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': 'Internal server error'}), 500
 
 @auth_bp.route('/auth/reset-password', methods=['POST'])
@@ -360,7 +417,9 @@ def reset_password():
         if not data or 'token' not in data or 'password' not in data:
             return jsonify({'error': 'Token and new password are required'}), 400
 
-        
+        token = data.get('token')
+        new_password = data.get('password')
+
         cursor = get_db_cursor()
         try:
             # Find user with valid reset token
@@ -371,23 +430,25 @@ def reset_password():
                 AND reset_token_expires > CURRENT_TIMESTAMP 
                 AND active = TRUE
             """, (token,))
-            
+
             employee = cursor.fetchone()
-            
+
             if not employee:
+                print(f"[RESET] Invalid or expired token attempted: token={token}")
                 return jsonify({'error': 'Invalid or expired reset token'}), 400
-            
+
             # Hash and update new password
             password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
-            
+
             # Update password and clear reset token
             cursor.execute("""
                 UPDATE employees 
                 SET password_hash = %s, reset_token = NULL, reset_token_expires = NULL 
                 WHERE employee_id = %s
             """, (password_hash.decode('utf-8'), employee['employee_id']))
-            
+
             cursor.connection.commit()
+            print(f"[RESET] Password reset successful for employee_id={employee['employee_id']}")
             return jsonify({'message': 'Password has been reset successfully'}), 200
 
         finally:
@@ -395,6 +456,7 @@ def reset_password():
 
     except Exception as e:
         print(f"Error in reset_password: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': 'Internal server error'}), 500
     
 
