@@ -30,7 +30,7 @@ env_variables:
   SMTP_USERNAME: info@byjaybird.com
   SMTP_PASSWORD: bagels4life
   SMTP_FROM_EMAIL: info@byjaybird.com
-  EMAIL_DEBUG: 'true"'
+  EMAIL_DEBUG: "true"
 
 beta_settings:
   cloud_sql_instances: jaybird-connect:us-east1:jaybird-db
