@@ -6,6 +6,7 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
+import requests
 from .utils.cost_resolver import resolve_ingredient_cost
 from .utils.cost_resolver import resolve_item_cost
 from .utils.db import get_db_cursor
@@ -118,7 +119,8 @@ def auth_before_request():
         else:
             # Legacy clients may send 'user|email' or plain email in the header
             token_or_email = auth_header
-            email = token_or_email.split('|')[1] if '|' in token_or_email else token_or_email
+            # normalize email to lowercase for lookup
+            email = (token_or_email.split('|')[1] if '|' in token_or_email else token_or_email).strip().lower()
 
             cursor = get_db_cursor()
             cursor.execute("""
@@ -799,6 +801,50 @@ def delete_ingredient_conversion(conversion_id):
 
     finally:
         cursor.connection.close()
+
+@app.route('/api/print-label', methods=['POST'])
+def print_label():
+    data = request.get_json() or {}
+    item_id = data.get('item_id')
+    name = data.get('name')
+    yield_str = data.get('yield')
+    barcode = data.get('barcode')
+    roll = data.get('roll', 'left')
+
+    # Basic validation
+    if not name or not barcode:
+        return jsonify({'error': 'Missing name or barcode'}), 400
+
+    # Send to Raspberry Pi print server
+    rpi_url = os.getenv('RPi_PRINT_URL') or 'http://192.168.0.115:8080/print-label'
+    payload = {
+        'name': name,
+        'yield': yield_str,
+        'barcode': barcode,
+        'roll': roll
+    }
+
+    try:
+        r = requests.post(rpi_url, json=payload, timeout=5)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"Failed to contact RPi print server: {e}")
+        return jsonify({'error': 'Failed to contact print server', 'details': str(e)}), 502
+
+    # Log the print action to DB
+    try:
+        cursor = get_db_cursor()
+        cursor.execute("""
+            INSERT INTO print_logs (employee_id, item_id, item_name, barcode, printed_at)
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (getattr(request.user, 'employee_id', None) or request.user.get('employee_id'), item_id, name, barcode))
+        cursor.connection.commit()
+        cursor.close()
+    except Exception as e:
+        print(f"Failed to log print action: {e}")
+        # non-fatal
+
+    return jsonify({'status': 'print_sent'})
 
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():

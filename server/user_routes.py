@@ -51,10 +51,13 @@ def create_user():
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
+    # Normalize email to lowercase
+    email_lower = (data.get('email') or '').strip().lower()
+
     cursor = get_db_cursor()
     try:
         # Check if email already exists
-        cursor.execute("SELECT email FROM employees WHERE email = %s", (data['email'],))
+        cursor.execute("SELECT email FROM employees WHERE email = %s", (email_lower,))
         if cursor.fetchone():
             return jsonify({'error': 'Email already exists'}), 400
 
@@ -63,7 +66,7 @@ def create_user():
             VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING employee_id
         """, (
-            data['email'],
+            email_lower,
             data['name'],
             data['role'],
             data.get('active', True)

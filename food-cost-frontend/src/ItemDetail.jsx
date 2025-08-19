@@ -31,35 +31,24 @@ function ItemDetail() {
     return () => { mounted = false; };
   }, [id]);
 
-  const handleDownloadLabel = () => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+  const handlePrintLabel = async () => {
+    try {
+      const itemId = item.item_id || item.id;
+      const yieldStr = item?.yield_qty ? `${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : '';
+      const payload = {
+        item_id: itemId,
+        name: item.name,
+        yield: yieldStr,
+        barcode: item.barcode || `JB-ITEM-${String(itemId).padStart(6, '0')}`,
+        roll: 'left'
+      };
 
-    canvas.width = 900;
-    canvas.height = 750;
-
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-
-    const qrCodeCanvas = document.getElementById('qr-code');
-    ctx.drawImage(qrCodeCanvas, 50, 50, 300, 300);
-
-    ctx.fillStyle = '#000';
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 48px Arial';
-    ctx.fillText(item.name, 400, 50);
-
-    ctx.font = '36px Arial';
-    ctx.fillText(`Category: ${item.category}`, 400, 150);
-    ctx.fillText(`Price: $${item.price?.toFixed(2) ?? 'N/A'}`, 400, 200);
-
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png', 1.0);
-    link.download = `${item.name}-label.png`;
-    link.click();
+      await api.post('/api/print-label', payload);
+      alert('Print request sent to server');
+    } catch (err) {
+      console.error('Failed to send print request', err?.response || err);
+      alert('Failed to send print request');
+    }
   };
 
   if (!item) return <div className="p-4">Loading item...</div>;
@@ -72,8 +61,8 @@ function ItemDetail() {
           <Link to={`/item/${id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
           ✏️ Edit Item
         </Link>
-          <button onClick={handleDownloadLabel} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-            Get A Label
+          <button onClick={handlePrintLabel} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+            Print Label
           </button>
       </div>
       </div>

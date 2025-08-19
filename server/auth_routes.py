@@ -34,7 +34,8 @@ def login():
         if not data:
             return jsonify({'error': 'No JSON data received'}), 400
 
-        email = data.get('email')
+        # normalize email to lowercase to avoid case-sensitivity issues
+        email = (data.get('email') or '').strip().lower()
         password = data.get('password')
 
         if not email or not password:
@@ -118,8 +119,9 @@ def register():
 
         cursor = get_db_cursor()
         try:
-            # Check if email already exists
-            cursor.execute("SELECT email FROM employees WHERE email = %s", (data['email'],))
+            # Normalize email to lowercase and check if it already exists
+            email_lower = (data['email'] or '').strip().lower()
+            cursor.execute("SELECT email FROM employees WHERE email = %s", (email_lower,))
             if cursor.fetchone():
                 return jsonify({'error': 'Email already registered'}), 400
 
@@ -129,7 +131,7 @@ def register():
                 ) VALUES (%s, %s, %s, %s, %s, TRUE)
                 RETURNING employee_id
             """, (
-                data['email'],
+                email_lower,
                 password_hash.decode('utf-8'),
                 data['name'],
                 data['role'],
@@ -357,7 +359,8 @@ def forgot_password():
         if not data or 'email' not in data:
             return jsonify({'error': 'Email is required'}), 400
 
-        email = data['email']
+        # normalize email to lowercase
+        email = (data['email'] or '').strip().lower()
         cursor = get_db_cursor()
 
         try:
