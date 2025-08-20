@@ -804,47 +804,70 @@ def delete_ingredient_conversion(conversion_id):
 
 @app.route('/api/print-label', methods=['POST'])
 def print_label():
-    data = request.get_json() or {}
-    item_id = data.get('item_id')
-    name = data.get('name')
-    yield_str = data.get('yield')
-    barcode = data.get('barcode')
-    roll = data.get('roll', 'left')
+    # Parse and validate input
+    data = request.get_json(force=True, silent=True) or {}
+    item_id   = data.get('item_id')
+    name      = (data.get('name') or '').strip()
+    yield_str = (data.get('yield') or '').strip()
+    barcode   = (data.get('barcode') or '').strip()
+    roll      = (data.get('roll') or 'left').lower()
 
-    # Basic validation
     if not name or not barcode:
         return jsonify({'error': 'Missing name or barcode'}), 400
 
-    # Send to Raspberry Pi print server
-    rpi_url = os.getenv('RPi_PRINT_URL') or 'http://192.168.0.115:8080/print-label'
+    # Build request to Raspberry Pi label server
+    rpi_url = os.getenv('RPi_PRINT_URL', 'http://192.168.0.115:8080/print-label')
+    headers = {}
     payload = {
         'name': name,
-        'yield': yield_str,
+        'yield': yield_str,   # key name is fine even though 'yield' is a Python keyword
         'barcode': barcode,
         'roll': roll
     }
 
+    # Call the Pi with explicit timeouts (connect, read)
     try:
-        r = requests.post(rpi_url, json=payload, timeout=5)
-        r.raise_for_status()
-    except Exception as e:
-        print(f"Failed to contact RPi print server: {e}")
-        return jsonify({'error': 'Failed to contact print server', 'details': str(e)}), 502
+        resp = requests.post(rpi_url, json=payload, headers=headers, timeout=(2, 5))
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        # Surface the response text if we have one — super useful for debugging
+        details = getattr(e, 'response', None).text if getattr(e, 'response', None) else str(e)
+        print(f"Failed to contact RPi print server @ {rpi_url}: {details}")
+        return jsonify({'error': 'Failed to contact print server', 'details': details}), 502
 
-    # Log the print action to DB
+    # Non-fatal DB logging
     try:
+        # Safely read employee_id whether request.user exists or not
+        req_user = getattr(request, 'user', None) or {}
+        employee_id = getattr(req_user, 'employee_id', None)
+        if employee_id is None and isinstance(req_user, dict):
+            employee_id = req_user.get('employee_id')
+
         cursor = get_db_cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO print_logs (employee_id, item_id, item_name, barcode, printed_at)
             VALUES (%s, %s, %s, %s, NOW())
-        """, (getattr(request.user, 'employee_id', None) or request.user.get('employee_id'), item_id, name, barcode))
+            """,
+            (employee_id, item_id, name, barcode)
+        )
         cursor.connection.commit()
-        cursor.close()
     except Exception as e:
         print(f"Failed to log print action: {e}")
-        # non-fatal
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
-    return jsonify({'status': 'print_sent'})
+    # Bubble up the Pi’s response for easier troubleshooting during POC
+    try:
+        pi_json = resp.json()
+    except Exception:
+        pi_json = {'raw': resp.text}
+
+    return jsonify({'status': 'print_sent', 'rpi': pi_json})
+
 
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():
