@@ -21,7 +21,8 @@ const Login = ({ setUser }) => {
       // Set the user state with the employee data
       setUser(data.employee);
       // Keep the dashboard navigation - we'll build this page later
-      navigate('/dashboard');
+      // Route for the Dashboard is mounted at '/', so navigate there
+      navigate('/');
     } else {
       console.warn('❌ Login failed:', data);
 
