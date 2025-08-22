@@ -816,7 +816,7 @@ def print_label():
         return jsonify({'error': 'Missing name or barcode'}), 400
 
     # Build request to Raspberry Pi label server
-    rpi_url = os.getenv('RPi_PRINT_URL', 'http://192.168.0.115:8080/print-label')
+    rpi_url = os.getenv('RPi_PRINT_URL')
     headers = {}
     payload = {
         'name': name,

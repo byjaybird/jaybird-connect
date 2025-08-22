@@ -31,6 +31,7 @@ env_variables:
   SMTP_PASSWORD: bagels4life
   SMTP_FROM_EMAIL: info@byjaybird.com
   EMAIL_DEBUG: "true"
+  RPi_PRINT_URL: "https://chinese-float-michelle-treasurer.trycloudflare.com/print-label"
 
 beta_settings:
   cloud_sql_instances: jaybird-connect:us-east1:jaybird-db
