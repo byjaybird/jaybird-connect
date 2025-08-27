@@ -1,119 +1,74 @@
-# Jaybird Connect – Data Structure and System Overview
 
-This document serves as a living, centralized explanation of how data is structured, interconnected, and consumed in the Jaybird Connect project. This information is designed to provide deep context to any future contributor or assistant and will include space for release notes appended over time.
+# Jaybird Connect – System Overview & README
+
+Jaybird Connect is a full-stack application for tracking food cost, recipes, ingredients, and menu items in a restaurant setting. It is designed for reliability, security, and ease of use, with a modern architecture leveraging Google Cloud and robust authentication.
 
 ---
 
-## CORE DATABASE STRUCTURE
+## Major Functions
 
-The backend is built with **Flask** and uses a **PostgreSQL** database. It is designed to track food cost, recipes, ingredients, and menu items for a restaurant setting. Here's how the data is organized:
+- **Food Cost Tracking:** Calculate and display real-time food costs for recipes and menu items, including nested prep items and ingredient conversions.
+- **Inventory & Ingredients:** Manage inventory, add/edit ingredients, and track price quotes from vendors.
+- **Recipe Management:** Build recipes from ingredients and prep items, supporting recursive nesting and yield calculations.
+- **Menu Items:** Organize and manage menu items, including pricing, categories, and process notes.
+- **User Management:** Admins can register new users, assign roles, and manage departments.
+- **Shift & Task Management:** Track employee shifts, assign tasks, and manage department schedules.
 
-### ITEMS TABLE
+## Architecture
 
-* Represents any discrete product or prep.
-* Fields:
+- **Frontend:** React (Vite) app hosted on [Firebase Hosting](https://jaybird-connect.web.app).
+- **Backend:** Flask API deployed on **Google App Engine**.
+- **Database:** Google Cloud SQL (PostgreSQL).
+- **Migrations:** Database updates are performed via the Google Cloud Console SQL Editor using raw SQL files in `/migrations`.
+- **External Systems:**
+  - Google Cloud SQL (Postgres)
+  - Firebase Hosting
+  - SMTP (for password reset emails)
 
-  * `item_id`: Primary key
-  * `name`: Name of the item
-  * `category`: Used for organizing items
-  * `is_prep`: TRUE if this is a prep recipe used in other recipes
-  * `is_for_sale`: TRUE if this is a menu item sold to customers
-  * `price`: Selling price if `is_for_sale` is TRUE
-  * `description`: Display description for menus
-  * `process_notes`: Internal notes or SOPs for prep
-  * `is_archived`: If TRUE, item is hidden from menus and editing UIs
-  * `yield_qty`, `yield_unit`: Only relevant if `is_prep = TRUE`. Specifies how much the prep yields (e.g. 1 quart, 12 each)
+## Authentication (AUTH)
 
-### INGREDIENTS TABLE
+- **JWT-based Auth:** All API endpoints (except login, password reset, and public item listing) require a valid JWT in the `Authorization` header.
+- **Password Security:** Passwords are hashed with bcrypt.
+- **Admin Registration:** Only authenticated admins can register new users.
+- **Password Reset:** Users can request password resets; reset tokens are emailed via SMTP and expire after 1 hour.
+- **No SSO:** All authentication is handled in-house; no Google OAuth or third-party providers.
 
-* Represents basic inventory items (e.g., flour, cheese, chicken).
-* Fields:
+## CORS
 
-  * `ingredient_id`: Primary key
-  * `name`, `category`, `unit`, `notes`, `is_archived`
+- **Production Only:** CORS is strictly configured to allow requests from `https://jaybird-connect.web.app`.
+- **Headers:** Supports credentials, exposes `Authorization` and `Content-Type`, and allows standard HTTP methods.
+- **Preflight:** OPTIONS requests are handled with appropriate CORS headers and a 200 response.
 
-### RECIPES TABLE
+## Axios Usage
 
-* Connects an `item_id` to its components. Components can be either ingredients or prep items.
-* Fields:
+- **Frontend API Calls:** All frontend communication with the backend uses [Axios](https://axios-http.com/) for HTTP requests.
+- **Auth Handling:** Axios interceptors are used to attach JWT tokens to requests and handle 401/403 errors globally.
+- **Error Handling:** API errors are surfaced in the UI, with warnings for missing conversions or prices.
 
-  * `item_id`: FK to `items`
-  * `source_type`: 'ingredient' or 'item'
-  * `source_id`: FK to either `ingredients` or `items`, depending on `source_type`
-  * `quantity`: How much is used
-  * `unit`: Unit used in the recipe (e.g., oz, cup)
-  * `instructions`: Optional prep-specific instruction
+## Common API Endpoints
 
-This model allows **recursive nesting of items** — prep items can contain other prep items, forming a tree.
+- `POST /auth/login` – Authenticate and receive JWT
+- `POST /auth/register` – Register new user (admin only)
+- `POST /auth/forgot-password` – Request password reset
+- `POST /auth/reset-password` – Reset password with token
+- `GET /auth/check` – Validate JWT and get user info
+- `GET /api/items` – List menu/prep items
+- `POST /api/items` – Add new item
+- `PUT /api/items/:id` – Update item
+- `GET /api/ingredients` – List ingredients
+- `POST /api/ingredients` – Add new ingredient
+- `GET /api/ingredient_cost/:id` – Get cost for ingredient
+- `GET /api/item_cost/:id` – Get cost for item
 
-### PRICE\_QUOTES TABLE
+## Database & Migrations
 
-* Contains pricing data (often pulled manually from invoices).
-* Fields:
+- **Schema:** PostgreSQL tables for items, ingredients, recipes, price quotes, conversions, employees, departments, shifts, and tasks.
+- **Updates:** All database changes are made via the Google Cloud Console SQL Editor using migration files in `/migrations`.
 
-  * `ingredient_id`: FK to `ingredients`
-  * `source`: e.g., Sysco, US Foods
-  * `size`: Human-readable size descriptor (e.g., 5 lb bag)
-  * `price`: Numeric
-  * `date_found`: Timestamp
-  * `is_purchase`: Indicates if this is an actual purchase or just a quote
+## Contact & Support
 
-### INGREDIENT\_CONVERSIONS TABLE
+- For questions, support, or contributions, email [info@byjaybird.com](mailto:info@byjaybird.com).
 
-* Resolves conversions between purchased sizes and recipe usage.
-* Fields:
+---
 
-  * `ingredient_id`: FK to `ingredients`
-  * `from_unit`: e.g., "lb"
-  * `to_unit`: e.g., "oz"
-  * `conversion_factor`: e.g., 16
-
-This enables the backend to compute cost per recipe unit even when prices are logged using different units.
-
-## COST RESOLUTION
-
-Cost resolution for a given `source_type`, `source_id`, `unit`, and `quantity` happens through the `resolve_item_cost()` or `resolve_ingredient_cost()` utilities in the backend. These functions:
-
-* Look up the most recent price quote
-* Convert the price into the recipe unit using the `ingredient_conversions` table (if needed)
-* Multiply by quantity
-* Return a structured response like `{ status: 'ok', total_cost: 0.87 }` or `{ status: 'error', missing: { from_unit, to_unit }, message }`
-
-CostCell in the frontend displays the results and shows a ⚠️ warning icon if a conversion or price is missing.
-
-## FRONTEND LOGIC
-
-* Ingredients and Prep Items are selected using `<select>` menus.
-* Each dropdown is populated using two fetch calls:
-
-  * `GET /ingredients` (filtered for `!is_archived`)
-  * `GET /items` (filtered for `is_prep && !is_archived`)
-* Entries are formatted as `source_type:source_id` (e.g. `ingredient:12`, `item:99`).
-* When creating or editing an item, the UI tracks each ingredient/prep added to a recipe.
-* The app supports both creating **new ingredients** (with name only) and selecting existing ones.
-* The Edit and New Item forms both now support **filtering/search** for ingredients.
-
-## SPECIAL CASES
-
-* `CostCell` can return invalid data (non-JSON or HTML) if the backend API is misconfigured.
-* `FixData` allows user to input missing conversion info directly into the UI.
-* Duplicate recipe entries are prevented using a `Set` check on `${source_type}:${source_id}`.
-
-## APPENDIX: URL ROUTES (SELECTED)
-
-* `GET /api/items`, `POST /api/items/new`, `PUT /api/items/:id`, `DELETE /api/recipes/:id`
-* `GET /api/ingredients`, `POST /api/ingredients`
-* `GET /api/ingredient_cost/:id`, `GET /api/item_cost/:id`
-* `POST /api/ingredient_conversions`
-
-## RELEASE NOTES
-
-* **2025-06-04:** Added ingredient filtering to EditItem and NewItem pages. Improved `CostCell` diagnostics for non-JSON API responses. Confirmed recursive prep item nesting is stable.
-* **2025-06-04:** Expanded documentation on how `source_type` and `source_id` work together to allow flexible sourcing of ingredients from either purchased inventory or in-house prep items:
-
-  * Each line in the `recipes` table defines one component of a dish. That component is either a raw ingredient (e.g., flour) or another item (e.g., chili, cheese sauce, grilled chicken).
-  * This is specified via the `source_type` field — either `'ingredient'` or `'item'` — and paired with a `source_id` from the corresponding table.
-  * Example: a burger might include `ingredient:5` (lettuce), `item:12` (house chili), and `item:27` (cheese sauce).
-  * The system uses this distinction to calculate costs and build prep dependencies. If the source is an `ingredient`, the system looks for price quotes and conversions. If the source is an `item`, it recursively resolves its ingredients and costs.
-  * In the frontend, dropdowns are built with `<optgroup>` sections to visually separate raw ingredients (🧂) and prep items (🛠️), and the selected value is saved as a joined string `source_type:source_id`.
-  * This logic underpins the ability to calculate total cost, detect missing data, and allow prep items to be nested arbitrarily deep.
+© 2025 byjaybird. All rights reserved.

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../utils/auth';
+import { canEdit } from '../utils/permissions';
 
 function startOfWeek(date, weekStartsOn = 0) { // 0=Sunday,1=Monday
   const d = new Date(date);
@@ -22,6 +23,10 @@ function initials(name){
   return s.split(/\s+/).map(part => part[0]).slice(0,2).join('').toUpperCase();
 }
 
+function getLocalUser() {
+  try { const raw = localStorage.getItem('appUser'); if (!raw) return null; return JSON.parse(raw); } catch (e) { return null; }
+}
+
 export default function ShiftManager({ weekStartsOn = 1 }) {
   const [startDate, setStartDate] = useState(() => startOfWeek(new Date(), weekStartsOn));
   const [shifts, setShifts] = useState([]);
@@ -29,6 +34,12 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
   const [employees, setEmployees] = useState([]);
   const [assigning, setAssigning] = useState({}); // { shiftId: employeeId }
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedManage, setAllowedManage] = useState(false);
+
+  useEffect(() => {
+    setAllowedManage(canEdit(user, 'shift_manager'));
+  }, [user]);
 
   useEffect(() => {
     fetchEmployees();
@@ -69,6 +80,7 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
   }
 
   async function handleGenerateWeek(){
+    if(!allowedManage) return alert('You do not have permission to generate shifts');
     if(!confirm('Generate shifts for this week from patterns?')) return;
     setLoading(true);
     try{
@@ -84,6 +96,7 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
   }
 
   async function handleAssign(shiftId){
+    if(!allowedManage) return alert('You do not have permission to assign shifts');
     const employeeId = assigning[shiftId];
     if(!employeeId){ alert('Select employee first'); return; }
     try{
@@ -147,10 +160,12 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
             {/* Departments could be loaded dynamically later */}
           </select>
 
-          <button className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition" onClick={handleGenerateWeek} disabled={loading}>Generate Week</button>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition" onClick={handleGenerateWeek} disabled={loading || !allowedManage}>Generate Week</button>
           <button className="px-4 py-2 bg-white border rounded shadow-sm hover:shadow-md transition" onClick={fetchShifts}>Refresh</button>
         </div>
       </div>
+
+      {!allowedManage && <div className="mb-4 text-yellow-700">You can view shifts but you do not have permission to modify them (assign/generate).</div>}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
@@ -204,13 +219,13 @@ export default function ShiftManager({ weekStartsOn = 1 }) {
                         </div>
 
                         <div className="flex flex-col items-end gap-2">
-                          <select value={assigning[shift.shift_id] || ''} onChange={e => setAssigning(prev => ({ ...prev, [shift.shift_id]: e.target.value }))} className="p-2 border rounded bg-white text-sm w-44">
+                          <select value={assigning[shift.shift_id] || ''} onChange={e => setAssigning(prev => ({ ...prev, [shift.shift_id]: e.target.value }))} className="p-2 border rounded bg-white text-sm w-44" disabled={!allowedManage}>
                             <option value="">Select Employee</option>
                             {employees.map(emp => (
                               <option key={emp.employee_id} value={emp.employee_id}>{emp.name} ({emp.email})</option>
                             ))}
                           </select>
-                          <button className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition" onClick={() => handleAssign(shift.shift_id)}>Assign</button>
+                          <button className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition" onClick={() => handleAssign(shift.shift_id)} disabled={!allowedManage}>Assign</button>
                         </div>
                       </div>
                     ))

@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import CostCell from './components/CostCell';
 import Select from 'react-select';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function NewItemForm() {
   const navigate = useNavigate();
@@ -22,6 +33,12 @@ function NewItemForm() {
   const [yieldQty, setYieldQty] = useState('');
   const [yieldUnit, setYieldUnit] = useState('');
   const [filterText, setFilterText] = useState('');
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedCreate, setAllowedCreate] = useState(false);
+
+  useEffect(() => {
+    setAllowedCreate(canEdit(user, 'items'));
+  }, [user]);
 
   useEffect(() => {
     api.get('/ingredients')
@@ -43,6 +60,8 @@ function NewItemForm() {
   }, []);
 
   const handleAddIngredientToRecipe = () => {
+    if (!allowedCreate) return alert('You do not have permission to create items or ingredients');
+
     if (!newIngredientName) return;
 
     const existing = ingredients.find(i => i.name.toLowerCase() === newIngredientName.toLowerCase());
@@ -66,6 +85,7 @@ function NewItemForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!allowedCreate) return alert('You do not have permission to create items');
 
     const res = await api.post('/items/new', {
       name,
@@ -118,6 +138,7 @@ function NewItemForm() {
   return (
     <div className="max-w-2xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Create New Item</h1>
+      {!allowedCreate && <div className="mb-4 text-yellow-700">You can view items but you do not have permission to create or modify them.</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required />
         <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className="w-full border p-2 rounded" />
@@ -158,6 +179,7 @@ function NewItemForm() {
                       : `🛠️ ${prepItems.find(i => i.item_id === r.source_id)?.name || 'Unnamed Prep Item'}`
                 }}
                 onChange={(selectedOption) => {
+                  if (!allowedCreate) return alert('You do not have permission to modify the recipe');
                   if (selectedOption) {
                     const [type, id] = selectedOption.value.split(':');
                     const updated = [...recipe];
@@ -194,6 +216,7 @@ function NewItemForm() {
                 className="w-16 border p-1 rounded"
                 value={r.quantity}
                 onChange={(e) => {
+                  if (!allowedCreate) return alert('You do not have permission to modify the recipe');
                   const updated = [...recipe];
                   updated[index].quantity = e.target.value;
                   setRecipe(updated);
@@ -204,6 +227,7 @@ function NewItemForm() {
                 className="w-20 border p-1 rounded"
                 value={r.unit}
                 onChange={(e) => {
+                  if (!allowedCreate) return alert('You do not have permission to modify the recipe');
                   const updated = [...recipe];
                   updated[index].unit = e.target.value;
                   setRecipe(updated);
@@ -254,7 +278,7 @@ function NewItemForm() {
           </div>
         </div>
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Create Item</button>
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={!allowedCreate}>Create Item</button>
       </form>
     </div>
   );

@@ -65,3 +65,31 @@ def token_required(f):
             return jsonify({'error': str(e)}), 500
 
     return decorated
+
+
+def roles_required(*allowed_roles):
+    """
+    Decorator to require the authenticated user to have one of the allowed roles.
+    Usage: @roles_required('Admin') or @roles_required('Admin', 'Manager')
+    This decorator wraps token_required so it enforces authentication first.
+    Role comparison is case-insensitive.
+    """
+    def decorator(f):
+        @wraps(f)
+        @token_required
+        def wrapped(*args, **kwargs):
+            user = getattr(request, 'user', None)
+            if not user:
+                return jsonify({'error': 'Unauthorized'}), 401
+
+            user_role = (user.get('role') or '').strip().lower()
+            allowed_lower = [r.strip().lower() for r in allowed_roles]
+
+            # Admins should always be allowed regardless of casing
+            if user_role == 'admin' or user_role in allowed_lower:
+                return f(*args, **kwargs)
+
+            return jsonify({'error': 'Forbidden - insufficient role'}), 403
+
+        return wrapped
+    return decorator

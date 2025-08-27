@@ -1,12 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function EditIngredient() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [ingredient, setIngredient] = useState(null);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedEdit, setAllowedEdit] = useState(false);
+
+  useEffect(() => {
+    setAllowedEdit(canEdit(user, 'ingredients'));
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -32,6 +49,7 @@ function EditIngredient() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!allowedEdit) return alert('You do not have permission to update ingredients');
     const payload = {
       name: ingredient.name || '',
       category: ingredient.category || '',
@@ -51,6 +69,7 @@ function EditIngredient() {
   };
 
   const handleArchive = async () => {
+    if (!allowedEdit) return alert('You do not have permission to archive ingredients');
     try {
       await api.put(`/api/ingredients/${id}`, { is_archived: true });
       navigate(`/ingredients`);
@@ -66,6 +85,7 @@ function EditIngredient() {
   return (
     <div className="max-w-xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Edit Ingredient</h1>
+      {!allowedEdit && <div className="mb-4 text-yellow-700">You can view this ingredient but you do not have permission to change it.</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           name="name"
@@ -100,6 +120,7 @@ function EditIngredient() {
           <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded"
+          disabled={!allowedEdit}
         >
           Save Changes
         </button>
@@ -107,6 +128,7 @@ function EditIngredient() {
             type="button"
             onClick={handleArchive}
             className="bg-red-600 text-white px-4 py-2 rounded"
+            disabled={!allowedEdit}
         >
             Archive
           </button>

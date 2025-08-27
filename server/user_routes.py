@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import CORS, cross_origin
 from .utils.db import get_db_cursor
-from .auth_routes import token_required
+from .utils.auth_decorator import token_required, roles_required
 from datetime import datetime
 from functools import wraps
 
@@ -40,11 +40,8 @@ def get_users():
         cursor.close()
 
 @user_bp.route('/users', methods=['POST'])
-@token_required
+@roles_required('Admin')
 def create_user():
-    if request.user['role'] != 'Admin':
-        return jsonify({'error': 'Unauthorized'}), 403
-
     data = request.get_json()
     required_fields = ['email', 'name', 'role']
     
@@ -82,11 +79,8 @@ def create_user():
         cursor.close()
 
 @user_bp.route('/users/<int:user_id>', methods=['PATCH'])
-@token_required
+@roles_required('Admin')
 def update_user(user_id):
-    if request.user['role'] != 'Admin':
-        return jsonify({'error': 'Unauthorized'}), 403
-
     data = request.get_json()
     cursor = get_db_cursor()
     
@@ -101,6 +95,14 @@ def update_user(user_id):
         if 'role' in data:
             update_fields.append("role = %s")
             values.append(data['role'])
+            
+        # allow name and email changes via API as well
+        if 'name' in data:
+            update_fields.append("name = %s")
+            values.append(data['name'])
+        if 'email' in data:
+            update_fields.append("email = %s")
+            values.append((data['email'] or '').strip().lower())
             
         if not update_fields:
             return jsonify({'error': 'No fields to update'}), 400

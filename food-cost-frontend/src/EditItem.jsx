@@ -3,6 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import CostCell from './components/CostCell';
 import Select from 'react-select';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function EditItem() {
   const { id } = useParams();
@@ -29,6 +40,8 @@ function EditItem() {
   const [yieldQty, setYieldQty] = useState('');
   const [yieldUnit, setYieldUnit] = useState('');
   const [filterText, setFilterText] = useState('');
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedEdit, setAllowedEdit] = useState(false);
 
   const mapRecipeToOptions = (r) => {
     if (r.source_type === 'ingredient') {
@@ -39,6 +52,10 @@ function EditItem() {
       return item ? { value: `item:${item.item_id}`, label: `🛠️ ${item.name || 'Unnamed Prep Item'}` } : null;
     }
   };
+
+  useEffect(() => {
+    setAllowedEdit(canEdit(user, 'items'));
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -110,6 +127,7 @@ function EditItem() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!allowedEdit) return alert('You do not have permission to edit this item');
     const res = await api.put(`/api/items/${id}`, {
       name: formData.name,
       category: formData.category,
@@ -147,6 +165,7 @@ function EditItem() {
   };
 
   const handleAddNewIngredient = async () => {
+    if (!allowedEdit) return alert('You do not have permission to create ingredients');
     if (!newIngredientName.trim()) return;
     const res = await api.post('/api/ingredients', { name: newIngredientName, category: '', notes: '', unit: '' });
     const data = res.data;
@@ -159,6 +178,7 @@ function EditItem() {
   };
 
   const handleRemoveIngredient = (index) => {
+    if (!allowedEdit) return alert('You do not have permission to edit the recipe');
     setRecipe(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -167,6 +187,7 @@ function EditItem() {
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Edit Item</h1>
+      {!allowedEdit && <div className="mb-4 text-yellow-700">You can view this item but you do not have permission to change it.</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input name="name" value={formData.name} onChange={handleChange} placeholder="Name" className="w-full border p-2 rounded" required />
         <input name="category" value={formData.category} onChange={handleChange} placeholder="Category" className="w-full border p-2 rounded" />
@@ -213,6 +234,7 @@ function EditItem() {
               <Select
                 value={mapRecipeToOptions(r)}
                 onChange={(selected) => {
+                  if (!allowedEdit) return alert('You do not have permission to edit this recipe');
                   const [type, id] = selected.value.split(':');
                   const updated = [...recipe];
                   updated[index] = { ...updated[index], source_type: type, source_id: parseInt(id) };
@@ -246,6 +268,7 @@ function EditItem() {
                 className="w-16 border p-1 rounded"
                 value={r.quantity}
                 onChange={(e) => {
+                  if (!allowedEdit) return alert('You do not have permission to edit the recipe');
                   const updated = [...recipe];
                   updated[index] = { ...updated[index], quantity: e.target.value };
                   setRecipe(updated);
@@ -256,6 +279,7 @@ function EditItem() {
                 className="w-20 border p-1 rounded"
                 value={r.unit}
                 onChange={(e) => {
+                  if (!allowedEdit) return alert('You do not have permission to edit the recipe');
                   const updated = [...recipe];
                   updated[index] = { ...updated[index], unit: e.target.value };
                   setRecipe(updated);
@@ -321,7 +345,7 @@ function EditItem() {
             >+ Create & Add</button>
           </div>
         </div>
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Save Changes</button>
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={!allowedEdit}>Save Changes</button>
       </form>
     </div>
   );

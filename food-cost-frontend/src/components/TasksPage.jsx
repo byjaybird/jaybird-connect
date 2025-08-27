@@ -2,18 +2,24 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { checkAuthStatus, api } from '../utils/auth';
+import { canEdit } from '../utils/permissions';
 
 const DAYS_OF_WEEK = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 ];
 
+function getLocalUser() {
+  try { const raw = localStorage.getItem('appUser'); if (!raw) return null; return JSON.parse(raw); } catch (e) { return null; }
+}
+
 function TasksPage({ user }) {
+  const localUser = user || getLocalUser();
   const [patterns, setPatterns] = useState([]);
   const [isCreatingPattern, setIsCreatingPattern] = useState(false);
   const [isEditingPattern, setIsEditingPattern] = useState(false);
   const [currentPattern, setCurrentPattern] = useState({
     title: '', description: '', priority: 'medium',
-    department_id: user?.department_id || '',
+    department_id: localUser?.department_id || '',
     week_number: 1, days_of_week: [], frequency: 'weekly'
   });
   const [generateDays, setGenerateDays] = useState(14);
@@ -21,6 +27,9 @@ function TasksPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [error, setError] = useState(null);
+
+  const allowedTasksEdit = canEdit(localUser, 'tasks');
+  const allowedPatternEdit = canEdit(localUser, 'shift_patterns');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,16 +54,18 @@ function TasksPage({ user }) {
         }
       }
     };
-    if (user) fetchData();
-  }, [user]);
+    if (localUser) fetchData();
+  }, [localUser]);
 
   const handleEditPattern = (pattern) => {
-    setCurrentPattern({ ...pattern, department_id: pattern.department_id || user?.department_id });
+    if (!allowedPatternEdit) return alert('You do not have permission to edit patterns');
+    setCurrentPattern({ ...pattern, department_id: pattern.department_id || localUser?.department_id });
     setIsEditingPattern(true);
     setIsCreatingPattern(true);
   };
 
   const handleDeletePattern = async (id) => {
+    if (!allowedPatternEdit) return alert('You do not have permission to delete patterns');
     if (!window.confirm('Delete this pattern?')) return;
     try {
       await api.delete(`/api/tasks/patterns/${id}`);
@@ -67,6 +78,7 @@ function TasksPage({ user }) {
   const handleSubmitPattern = async (e) => {
     e.preventDefault();
     if (!currentPattern.days_of_week.length) return alert('Select at least one day');
+    if (!allowedPatternEdit) return alert('You do not have permission to save patterns');
     const formData = {
       ...currentPattern,
       department_id: Number(currentPattern.department_id),
@@ -91,7 +103,7 @@ function TasksPage({ user }) {
   const resetPatternForm = () => {
     setCurrentPattern({
       title: '', description: '', priority: 'medium',
-      department_id: user.department_id || '',
+      department_id: localUser.department_id || '',
       week_number: 1, days_of_week: [], frequency: 'weekly'
     });
     setIsCreatingPattern(false);
@@ -99,6 +111,7 @@ function TasksPage({ user }) {
   };
 
   const handleGenerateTasks = async () => {
+    if (!allowedTasksEdit) return alert('You do not have permission to generate tasks');
     try {
       const token = localStorage.getItem('token');
       if (!token) return (window.location.href = '/login');
@@ -114,7 +127,7 @@ function TasksPage({ user }) {
     }
   };
 
-  if (!user || loading) return <div className="p-6">Loading...</div>;
+  if (!localUser || loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
 
   return (
@@ -123,14 +136,14 @@ function TasksPage({ user }) {
         <h1 className="text-2xl font-bold">Task Patterns</h1>
         <div className="space-x-4">
           {!isEditingPattern && (
-            <button onClick={() => setIsCreatingPattern(!isCreatingPattern)} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+            <button onClick={() => setIsCreatingPattern(!isCreatingPattern)} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" disabled={!allowedPatternEdit}>
               {isCreatingPattern ? 'Cancel' : 'Create Pattern'}
             </button>
           )}
           <select value={generateDays} onChange={(e) => setGenerateDays(Number(e.target.value))} className="px-2 py-1 border rounded">
             {[7, 14, 21, 28].map(d => <option key={d} value={d}>{d} days</option>)}
           </select>
-          <button onClick={handleGenerateTasks} className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+          <button onClick={handleGenerateTasks} className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" disabled={!allowedTasksEdit}>
             Generate Tasks
           </button>
         </div>
@@ -175,7 +188,7 @@ function TasksPage({ user }) {
             {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.name}</option>)}
           </select>
           <div className="flex justify-end">
-            <button type="submit" className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600">
+            <button type="submit" className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600" disabled={!allowedPatternEdit}>
               {isEditingPattern ? 'Save Changes' : 'Create Pattern'}
             </button>
           </div>
@@ -189,8 +202,8 @@ function TasksPage({ user }) {
             <div className="flex justify-between items-start">
               <h3 className="font-semibold">{p.title}</h3>
               <div className="flex gap-2">
-                <button onClick={() => handleEditPattern(p)} className="text-blue-600 hover:text-blue-800">Edit</button>
-                <button onClick={() => handleDeletePattern(p.pattern_id)} className="text-red-600 hover:text-red-800">Delete</button>
+                <button onClick={() => handleEditPattern(p)} className="text-blue-600 hover:text-blue-800" disabled={!allowedPatternEdit}>Edit</button>
+                <button onClick={() => handleDeletePattern(p.pattern_id)} className="text-red-600 hover:text-red-800" disabled={!allowedPatternEdit}>Delete</button>
               </div>
             </div>
             <p className="text-gray-600">{p.description}</p>

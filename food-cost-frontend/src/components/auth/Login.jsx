@@ -20,6 +20,8 @@ const Login = ({ setUser }) => {
       localStorage.setItem('token', data.token);
       // Set the user state with the employee data
       setUser(data.employee);
+      // Persist a minimal user object for component-level permission checks
+      try { localStorage.setItem('appUser', JSON.stringify(data.employee)); } catch(e) { console.warn('Failed to persist appUser', e); }
       // Keep the dashboard navigation - we'll build this page later
       // Route for the Dashboard is mounted at '/', so navigate there
       navigate('/');

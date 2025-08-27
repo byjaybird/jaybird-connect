@@ -30,8 +30,88 @@ import ShiftPatternConfigurator from './components/ShiftPatternConfigurator';
 import ShiftDashboard from './components/ShiftDashboard';
 import ShiftManager from './components/ShiftManager';
 import Dashboard from './Dashboard.jsx';
+import RoleManagement from './components/RoleManagement';
 import { api } from './utils/auth';
 import { API_URL } from './config';
+
+// Page keys available for role permissions
+const AVAILABLE_PAGES = [
+  'dashboard', 'menu', 'prices', 'inventory', 'users', 'shifts', 'shift_patterns', 'shift_manager', 'tasks', 'items', 'ingredients', 'receiving', 'inventory_scanner', 'roles'
+];
+
+const DEFAULT_PERMISSIONS = {
+  Admin: AVAILABLE_PAGES.reduce((acc, p) => ({ ...acc, [p]: true }), {}),
+  Manager: {
+    dashboard: true,
+    menu: true,
+    prices: true,
+    inventory: true,
+    users: false,
+    shifts: true,
+    shift_patterns: false,
+    shift_manager: true,
+    tasks: true,
+    items: true,
+    ingredients: true,
+    receiving: true,
+    inventory_scanner: false,
+    roles: false
+  },
+  Employee: {
+    dashboard: true,
+    menu: true,
+    prices: false,
+    inventory: false,
+    users: false,
+    shifts: true,
+    shift_patterns: false,
+    shift_manager: false,
+    tasks: false,
+    items: true,
+    ingredients: true,
+    receiving: false,
+    inventory_scanner: false,
+    roles: false
+  }
+};
+
+function readPermissions() {
+  try {
+    const raw = localStorage.getItem('rolePermissions');
+    if (!raw) return DEFAULT_PERMISSIONS;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to read rolePermissions, falling back to defaults', e);
+    return DEFAULT_PERMISSIONS;
+  }
+}
+
+function hasAccess(user, pageKey) {
+  if (!pageKey) return true; // default allow
+  if (!user) return true; // if user not loaded but token exists, allow until check completes
+  const role = user.role || 'Employee';
+  const perms = readPermissions();
+  // Admins always have full access as a safety fallback
+  if (role === 'Admin') return true;
+  const roleMap = perms[role] || DEFAULT_PERMISSIONS[role] || {};
+  return !!roleMap[pageKey];
+}
+
+function pageKeyFromPath(path) {
+  if (!path) return 'dashboard';
+  if (path.startsWith('/menu') || path.startsWith('/item') || path.startsWith('/ingredients')) return 'menu';
+  if (path.startsWith('/prices')) return 'prices';
+  if (path.startsWith('/inventory')) return 'inventory';
+  if (path.startsWith('/users')) return 'users';
+  if (path.startsWith('/shifts/patterns')) return 'shift_patterns';
+  if (path.startsWith('/shifts/manager')) return 'shift_manager';
+  if (path.startsWith('/shifts')) return 'shifts';
+  if (path.startsWith('/tasks')) return 'tasks';
+  if (path.startsWith('/roles')) return 'roles';
+  if (path.startsWith('/receiving')) return 'receiving';
+  if (path.startsWith('/inventory-scanner')) return 'inventory_scanner';
+  return 'dashboard';
+}
 
 function Header({ user, onLogout }) {
   const location = useLocation();
@@ -69,21 +149,28 @@ function Header({ user, onLogout }) {
           <Link to="/">
             <img src={Logo} alt="Jaybird Connect logo" className="h-10" />
           </Link>
-          <Link to="/menu" className="text-sm font-semibold text-gray-700 hover:text-black">Menu</Link>
-          <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
-          <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
-          {user?.role === 'Admin' && (
-            <>
-              <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">Users</Link>
-              <Link to="/shifts" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
-              <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
-            </>
+
+          {/* Top-level links rendered only if current user role has access */}
+          {hasAccess(user, 'menu') && (
+            <Link to="/menu" className="text-sm font-semibold text-gray-700 hover:text-black">Menu</Link>
           )}
-          {user?.role !== 'Admin' && user && (
-            <>
-              <Link to="/shifts" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
-              <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
-            </>
+          {hasAccess(user, 'prices') && (
+            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
+          )}
+          {hasAccess(user, 'inventory') && (
+            <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
+          )}
+          {hasAccess(user, 'users') && (
+            <Link to="/users" className="text-sm font-semibold text-gray-700 hover:text-black">Users</Link>
+          )}
+          {hasAccess(user, 'shifts') && (
+            <Link to="/shifts" className="text-sm font-semibold text-gray-700 hover:text-black">Shifts</Link>
+          )}
+          {hasAccess(user, 'tasks') && (
+            <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
+          )}
+          {hasAccess(user, 'roles') && (
+            <Link to="/roles" className="text-sm font-semibold text-gray-700 hover:text-black">Role Management</Link>
           )}
         </div>
         {user && (
@@ -109,10 +196,15 @@ function Header({ user, onLogout }) {
   );
 }
 
-function PrivateRoute({ children }) {
-  // Use token existing in storage checked by axios interceptor pattern
+function PrivateRoute({ children, user }) {
   const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" />;
+  const location = useLocation();
+  if (!token) return <Navigate to="/login" />;
+  // If user not yet loaded, allow; auth check in App will load user
+  if (!user) return children;
+  const page = pageKeyFromPath(location.pathname);
+  if (!hasAccess(user, page)) return <div className="p-6">You do not have permission to view this page.</div>;
+  return children;
 }
 
 function App() {
@@ -149,28 +241,29 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Dashboard is root for all users */}
-        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/" element={<PrivateRoute user={user}><Dashboard /></PrivateRoute>} />
 
         {/* Main nav structure routes */}
-        <Route path="/menu" element={<PrivateRoute><ItemsLanding /></PrivateRoute>} />
-        <Route path="/ingredients" element={<PrivateRoute><IngredientsPage /></PrivateRoute>} />
-        <Route path="/prices" element={<PrivateRoute><Prices /></PrivateRoute>} />
-        <Route path="/inventory" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
-        <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
-        <Route path="/shifts" element={<PrivateRoute><ShiftDashboard /></PrivateRoute>} />
-        <Route path="/shifts/patterns" element={<PrivateRoute><ShiftPatternConfigurator /></PrivateRoute>} />
-        <Route path="/shifts/manager" element={<PrivateRoute><ShiftManager /></PrivateRoute>} />
-        <Route path="/tasks" element={<PrivateRoute><TasksPage user={user} /></PrivateRoute>} />
+        <Route path="/menu" element={<PrivateRoute user={user}><ItemsLanding /></PrivateRoute>} />
+        <Route path="/ingredients" element={<PrivateRoute user={user}><IngredientsPage /></PrivateRoute>} />
+        <Route path="/prices" element={<PrivateRoute user={user}><Prices /></PrivateRoute>} />
+        <Route path="/inventory" element={<PrivateRoute user={user}><InventoryDashboard /></PrivateRoute>} />
+        <Route path="/users" element={<PrivateRoute user={user}><UserManagement /></PrivateRoute>} />
+        <Route path="/roles" element={<PrivateRoute user={user}><RoleManagement /></PrivateRoute>} />
+        <Route path="/shifts" element={<PrivateRoute user={user}><ShiftDashboard /></PrivateRoute>} />
+        <Route path="/shifts/patterns" element={<PrivateRoute user={user}><ShiftPatternConfigurator /></PrivateRoute>} />
+        <Route path="/shifts/manager" element={<PrivateRoute user={user}><ShiftManager /></PrivateRoute>} />
+        <Route path="/tasks" element={<PrivateRoute user={user}><TasksPage user={user} /></PrivateRoute>} />
 
         {/* Other routes */}
-        <Route path="/item/:id" element={<PrivateRoute><ItemDetail /></PrivateRoute>} />
-        <Route path="/item/:id/edit" element={<PrivateRoute><EditItem /></PrivateRoute>} />
-        <Route path="/item/new" element={<PrivateRoute><NewItemPage /></PrivateRoute>} />
-        <Route path="/ingredients/:id" element={<PrivateRoute><IngredientDetail /></PrivateRoute>} />
-        <Route path="/ingredients/:id/edit" element={<PrivateRoute><EditIngredient /></PrivateRoute>} />
-        <Route path="/prices/new" element={<PrivateRoute><NewPriceQuoteForm /></PrivateRoute>} />
-        <Route path="/inventory-scanner" element={<PrivateRoute><InventoryScanner /></PrivateRoute>} />
-        <Route path="/receiving/new" element={<PrivateRoute><NewReceivingForm /></PrivateRoute>} />
+        <Route path="/item/:id" element={<PrivateRoute user={user}><ItemDetail /></PrivateRoute>} />
+        <Route path="/item/:id/edit" element={<PrivateRoute user={user}><EditItem /></PrivateRoute>} />
+        <Route path="/item/new" element={<PrivateRoute user={user}><NewItemPage /></PrivateRoute>} />
+        <Route path="/ingredients/:id" element={<PrivateRoute user={user}><IngredientDetail /></PrivateRoute>} />
+        <Route path="/ingredients/:id/edit" element={<PrivateRoute user={user}><EditIngredient /></PrivateRoute>} />
+        <Route path="/prices/new" element={<PrivateRoute user={user}><NewPriceQuoteForm /></PrivateRoute>} />
+        <Route path="/inventory-scanner" element={<PrivateRoute user={user}><InventoryScanner /></PrivateRoute>} />
+        <Route path="/receiving/new" element={<PrivateRoute user={user}><NewReceivingForm /></PrivateRoute>} />
       </Routes>
     </Router>
   );

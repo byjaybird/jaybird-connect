@@ -14,6 +14,10 @@ function UserManagement() {
     active: true
   });
 
+  // --- NEW: edit state ---
+  const [editUser, setEditUser] = useState(null); // { employee_id, name, email, role }
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Fetch users
   useEffect(() => {
     fetchUsers();
@@ -59,12 +63,99 @@ function UserManagement() {
     }
   };
 
+  // --- NEW: edit handlers ---
+  const openEdit = (user) => {
+    setEditUser({
+      employee_id: user.employee_id,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'Employee'
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditUser(null);
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditUser((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveEdit = async () => {
+    if (!editUser) return;
+    const { employee_id, name, email, role } = editUser;
+    if (!name || !email) return alert('Name and email are required');
+    try {
+      setSavingEdit(true);
+      await api.patch(`/api/users/${employee_id}`, { name, email, role });
+      await fetchUsers();
+      setEditUser(null);
+    } catch (err) {
+      console.error('Failed to save user edit', err.response || err);
+      alert(err.response?.data?.error || 'Failed to save user');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6">User Management</h2>
-      
+
+      {/* Edit user panel */}
+      {editUser && (
+        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+          <h3 className="text-xl font-semibold mb-4">Edit User</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                value={editUser.email}
+                onChange={(e) => handleEditChange('email', e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input
+                type="text"
+                value={editUser.name}
+                onChange={(e) => handleEditChange('name', e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Role</label>
+              <select
+                value={editUser.role}
+                onChange={(e) => handleEditChange('role', e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="Employee">Employee</option>
+                <option value="Admin">Admin</option>
+                <option value="Manager">Manager</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex space-x-2">
+            <button
+              onClick={saveEdit}
+              disabled={savingEdit}
+              className={`px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 ${savingEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              {savingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button onClick={cancelEdit} className="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Add New User Form */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <h3 className="text-xl font-semibold mb-4">Add New User</h3>
@@ -135,12 +226,19 @@ function UserManagement() {
                     {user.active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap space-x-2">
                   <button
                     onClick={() => toggleUserActive(user.employee_id, user.active)}
                     className={`px-3 py-1 rounded-md text-sm font-medium ${user.active ? 'bg-red-100 text-red-800 hover:bg-red-200' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
                   >
                     {user.active ? 'Deactivate' : 'Activate'}
+                  </button>
+
+                  <button
+                    onClick={() => openEdit(user)}
+                    className="px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                  >
+                    Edit
                   </button>
                 </td>
               </tr>

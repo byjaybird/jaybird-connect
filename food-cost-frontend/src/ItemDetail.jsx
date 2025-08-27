@@ -4,6 +4,17 @@ import CostCell from './components/CostCell';
 import { QRCodeCanvas } from 'qrcode.react';
 import { API_URL } from './config';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function ItemDetail() {
   const { id } = useParams();
@@ -11,6 +22,12 @@ function ItemDetail() {
   const [recipe, setRecipe] = useState([]);
   const [fixingIndex, setFixingIndex] = useState(null);
   const [fixData, setFixData] = useState(null);
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedEdit, setAllowedEdit] = useState(false);
+
+  useEffect(() => {
+    setAllowedEdit(canEdit(user, 'items'));
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -58,13 +75,15 @@ function ItemDetail() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">{item.name}</h1>
         <div className="flex space-x-2">
-          <Link to={`/item/${id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-          ✏️ Edit Item
-        </Link>
+          {allowedEdit && (
+            <Link to={`/item/${id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              ✏️ Edit Item
+            </Link>
+          )}
           <button onClick={handlePrintLabel} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
             Print Label
           </button>
-      </div>
+        </div>
       </div>
 
       <div style={{ display: 'none' }}>
@@ -75,7 +94,7 @@ function ItemDetail() {
           level={"H"}
           includeMargin={true}
         />
-    </div>
+      </div>
 
       <p className="mb-2"><strong>Category:</strong> {item.category}</p>
       <p className="mb-2"><strong>Description:</strong> {item.description}</p>
