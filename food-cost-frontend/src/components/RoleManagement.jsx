@@ -93,15 +93,18 @@ function RoleManagement() {
     setPerms(DEFAULT_PERMISSIONS);
   };
 
+  // Always render roles alphabetically for consistency
+  const sortedRoles = Object.keys(perms).sort((a, b) => a.localeCompare(b));
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6">Role Management</h2>
       {loadingRemote && <div className="mb-4 text-sm text-gray-500">Loading permissions...</div>}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <p className="mb-4">Configure which top-level pages are accessible to each role. Changes are stored in localStorage under <code>rolePermissions</code>. For production you should persist these to the server.</p>
+        <p className="mb-4">Configure which top-level pages are accessible to each role.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Object.keys(perms).map((role) => (
+          {sortedRoles.map((role) => (
             <div key={role} className="border rounded p-4">
               <h3 className="font-semibold mb-3">{role}</h3>
               {AVAILABLE_PAGES.map((p) => (
@@ -118,10 +121,6 @@ function RoleManagement() {
           <button onClick={save} disabled={saving} className="px-4 py-2 bg-blue-500 text-white rounded-md">{saving ? 'Saving...' : 'Save'}</button>
           <button onClick={resetDefaults} className="px-4 py-2 bg-gray-200 rounded-md">Reset Defaults</button>
         </div>
-      </div>
-
-      <div className="text-sm text-gray-600">
-        Note: This UI stores permissions in localStorage only. To make permissions authoritative across users and environments, add backend storage and expose an API (e.g. GET/POST /api/role-permissions) and load/save from there.
       </div>
     </div>
   );
