@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../utils/auth';
 
 const AVAILABLE_PAGES = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -43,23 +44,45 @@ function readPermissions() {
 function RoleManagement() {
   const [perms, setPerms] = useState(readPermissions());
   const [saving, setSaving] = useState(false);
+  const [loadingRemote, setLoadingRemote] = useState(true);
 
   useEffect(() => {
-    setPerms(readPermissions());
+    // Try to load from server first, fall back to localStorage
+    let mounted = true;
+    api.get('/api/role-permissions')
+      .then((res) => {
+        if (!mounted) return;
+        if (res.data && Object.keys(res.data).length > 0) {
+          setPerms(res.data);
+        } else {
+          setPerms(readPermissions());
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load remote permissions, falling back to localStorage', err);
+        setPerms(readPermissions());
+      })
+      .finally(() => {
+        setLoadingRemote(false);
+      });
+    return () => { mounted = false; };
   }, []);
 
   const toggle = (role, pageKey) => {
     setPerms((p) => ({ ...p, [role]: { ...(p[role] || {}), [pageKey]: !(p[role]?.[pageKey]) } }));
   };
 
-  const save = () => {
+  const save = async () => {
     setSaving(true);
     try {
+      // try API save
+      await api.post('/api/role-permissions', perms);
       localStorage.setItem('rolePermissions', JSON.stringify(perms));
-      alert('Permissions saved locally.');
+      alert('Permissions saved to server and locally.');
     } catch (e) {
-      console.error('Failed to save permissions', e);
-      alert('Failed to save permissions');
+      console.error('Failed to save to server, saving locally', e);
+      try { localStorage.setItem('rolePermissions', JSON.stringify(perms)); } catch (e2) { console.error('Failed to save locally', e2); }
+      alert('Failed to save to server; saved locally as fallback.');
     } finally {
       setSaving(false);
     }
@@ -73,6 +96,7 @@ function RoleManagement() {
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6">Role Management</h2>
+      {loadingRemote && <div className="mb-4 text-sm text-gray-500">Loading permissions...</div>}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <p className="mb-4">Configure which top-level pages are accessible to each role. Changes are stored in localStorage under <code>rolePermissions</code>. For production you should persist these to the server.</p>
 

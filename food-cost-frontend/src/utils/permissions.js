@@ -1,8 +1,19 @@
+import { api } from './auth';
+
 export const AVAILABLE_PAGES = [
   'dashboard','menu','prices','inventory','users','shifts','shift_patterns','shift_manager','tasks','items','ingredients','receiving','inventory_scanner','roles',
   // action-specific permissions
   'items_edit','ingredients_edit'
 ];
+
+export const fetchRemotePermissions = async () => {
+  try {
+    const res = await api.get('/api/role-permissions');
+    return res.data || null;
+  } catch (e) {
+    return null;
+  }
+};
 
 export const readPermissions = () => {
   try {

@@ -21,6 +21,7 @@ from .services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
+from .role_permissions import role_permissions_bp
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
 CORS(app, 
@@ -176,6 +177,7 @@ app.register_blueprint(auth_bp, url_prefix='')  # This will handle /auth/check
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(shift_bp, url_prefix='/api')
 app.register_blueprint(departments_bp, url_prefix='/api')
+app.register_blueprint(role_permissions_bp, url_prefix='/api')
 
 try:
     test_conn = psycopg2.connect(
