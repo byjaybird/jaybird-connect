@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from '../config';
+import { api } from '../utils/auth';
 
 function MissingConversionsCard() {
   const [missing, setMissing] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/recipes/missing_conversions`)
-      .then((r) => r.json())
-      .then((data) => {
-        setMissing(data || []);
+    let mounted = true;
+    api.get('/api/recipes/missing_conversions')
+      .then((res) => {
+        if (!mounted) return;
+        setMissing(res.data || []);
       })
-      .catch((e) => console.error(e))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        // Auth errors are handled by the axios interceptor; still log for debugging
+        console.error('Failed to load missing conversions:', e?.response || e);
+      })
+      .finally(() => mounted && setLoading(false));
+
+    return () => { mounted = false; };
   }, []);
 
   return (
@@ -45,11 +52,16 @@ function MarginsCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/items/margins`)
-      .then((r) => r.json())
-      .then((data) => setRows(data || []))
-      .catch((e) => console.error(e))
-      .finally(() => setLoading(false));
+    let mounted = true;
+    api.get('/api/items/margins')
+      .then((res) => {
+        if (!mounted) return;
+        setRows(res.data || []);
+      })
+      .catch((e) => console.error('Failed to load margins:', e?.response || e))
+      .finally(() => mounted && setLoading(false));
+
+    return () => { mounted = false; };
   }, []);
 
   return (
