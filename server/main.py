@@ -850,6 +850,7 @@ def recalculate_item_cost(item_id):
             pass
 
 
+
 @app.route('/api/items/recalculate_all', methods=['POST'])
 def recalculate_all_items():
     """Recalculate costs for all prep items. Returns summary of successes and failures."""
@@ -937,6 +938,7 @@ def get_item_margins():
             cursor.close()
         except Exception:
             pass
+
 
 
 @app.route('/api/recipes/missing_conversions', methods=['GET'])
