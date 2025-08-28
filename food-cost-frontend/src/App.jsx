@@ -31,6 +31,7 @@ import ShiftDashboard from './components/ShiftDashboard';
 import ShiftManager from './components/ShiftManager';
 import Dashboard from './Dashboard.jsx';
 import RoleManagement from './components/RoleManagement';
+import CostDashboard from './components/CostDashboard';
 import { api } from './utils/auth';
 import { API_URL } from './config';
 
@@ -254,6 +255,7 @@ function App() {
         <Route path="/shifts/patterns" element={<PrivateRoute user={user}><ShiftPatternConfigurator /></PrivateRoute>} />
         <Route path="/shifts/manager" element={<PrivateRoute user={user}><ShiftManager /></PrivateRoute>} />
         <Route path="/tasks" element={<PrivateRoute user={user}><TasksPage user={user} /></PrivateRoute>} />
+        <Route path="/costs" element={<PrivateRoute user={user}><CostDashboard /></PrivateRoute>} />
 
         {/* Other routes */}
         <Route path="/item/:id" element={<PrivateRoute user={user}><ItemDetail /></PrivateRoute>} />

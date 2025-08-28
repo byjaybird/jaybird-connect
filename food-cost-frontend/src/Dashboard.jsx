@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import CostDashboard from './components/CostDashboard';
 
 // A simple dashboard root with quick access cards to the main sections
 export default function Dashboard() {
@@ -10,6 +11,7 @@ export default function Dashboard() {
     { title: 'Users', href: '/users', icon: '👥' },
     { title: 'Shifts', href: '/shifts/dashboard', icon: '🕒' },
     { title: 'Tasks', href: '/tasks', icon: '✅' },
+    { title: 'Cost Dashboard', href: '/costs', icon: '📊' }
   ];
 
   return (
@@ -26,6 +28,10 @@ export default function Dashboard() {
               <div className="mt-2 text-sm text-gray-500">Open {c.title} area</div>
             </Link>
           ))}
+        </div>
+
+        <div className="mt-8">
+          <CostDashboard />
         </div>
       </div>
     </main>

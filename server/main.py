@@ -424,6 +424,41 @@ def update_item(item_id):
             # Some DB cursors are created with autocommit; swallow commit errors but log
             logging.debug("Commit failed or not required for item_id=%s", item_id)
 
+        # Recalculate and persist cost if this is a prep item
+        try:
+            if is_prep:
+                # Use the updated yield_unit if present, fallback to DB
+                recalc_unit = (yield_unit or '').strip() if yield_unit else None
+                recalc_qty = yield_qty or 1
+
+                # Fetch item yield if not provided in payload
+                if not recalc_unit:
+                    tmpc = get_db_cursor()
+                    tmpc.execute("SELECT yield_unit, yield_qty FROM items WHERE item_id = %s", (item_id,))
+                    db_item = tmpc.fetchone()
+                    tmpc.close()
+                    if db_item:
+                        recalc_unit = db_item.get('yield_unit')
+                        recalc_qty = db_item.get('yield_qty') or recalc_qty
+
+                if recalc_unit:
+                    calc = resolve_item_cost(item_id, recalc_unit, 1)
+                    if isinstance(calc, dict) and calc.get('status') == 'ok':
+                        new_cost = calc.get('cost_per_unit')
+                        c2 = get_db_cursor()
+                        try:
+                            c2.execute("UPDATE items SET cost = %s WHERE item_id = %s", (new_cost, item_id))
+                            c2.connection.commit()
+                        except Exception:
+                            c2.connection.rollback()
+                        finally:
+                            try:
+                                c2.close()
+                            except Exception:
+                                pass
+        except Exception as e:
+            print(f"Failed to recalc cost on item update {item_id}: {e}")
+
         return jsonify({'status': 'Item updated'})
 
     except Exception as e:
@@ -633,6 +668,27 @@ def add_recipe():
             ))
 
         cursor.connection.commit()
+
+        # Attempt to recalculate and store item cost after saving recipe
+        try:
+            recalc_cursor = get_db_cursor()
+            recalc_cursor.execute("SELECT yield_qty, yield_unit FROM items WHERE item_id = %s", (item_id,))
+            item = recalc_cursor.fetchone()
+            if item and item.get('yield_unit'):
+                recalc_unit = item.get('yield_unit')
+                # Calculate cost per single unit of yield_unit
+                calc = resolve_item_cost(item_id, recalc_unit, 1)
+                if isinstance(calc, dict) and calc.get('status') == 'ok':
+                    cost_per_unit = calc.get('cost_per_unit')
+                    try:
+                        recalc_cursor.execute("UPDATE items SET cost = %s WHERE item_id = %s", (cost_per_unit, item_id))
+                        recalc_cursor.connection.commit()
+                    except Exception:
+                        recalc_cursor.connection.rollback()
+            recalc_cursor.close()
+        except Exception as e:
+            print(f"Auto-recalculate failed for item {item_id}: {e}")
+
         return jsonify({'status': 'Recipe saved successfully'})
 
     except Exception as e:
@@ -644,346 +700,289 @@ def add_recipe():
         cursor.close()
         cursor.connection.close()
 
-@app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
-def delete_recipes_for_item(item_id):
-    cursor = get_db_cursor()
-    cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
-    cursor.connection.commit()
-    cursor.connection.close()
-    return jsonify({'status': 'deleted'})
-
-
-@app.route('/api/price_quotes', methods=['POST'])
-def create_price_quote():
+@app.route('/api/items/<int:item_id>', methods=['PUT'])
+def update_item(item_id):
     data = request.get_json()
     cursor = get_db_cursor()
+
+    # Safely parse and coerce incoming fields
+    name = data.get('name', '')
+    category = data.get('category')
+    is_prep = data.get('is_prep', False)
+    is_for_sale = data.get('is_for_sale', True)
+    price = parse_float(data.get('price'))
+    description = data.get('description', '')
+    process_notes = data.get('process_notes', '')
+    archived = data.get('archived', data.get('is_archived', False))
+    yield_qty = parse_float(data.get('yield_qty'))
+    yield_unit = data.get('yield_unit')
+
     try:
         cursor.execute("""
-            INSERT INTO price_quotes (
-                ingredient_id, source, size_qty, size_unit, price, date_found, notes, is_purchase
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING *
-        """, (
-            data['ingredient_id'],
-            data['source'],
-            float(data['size_qty']),
-            data['size_unit'],
-            float(data['price']),
-            data.get('date_found', datetime.today().date()),
-            data.get('notes', ''),
-            data.get('is_purchase', False)
-        ))
-        new_quote = cursor.fetchone()
-        cursor.connection.commit()
-        return jsonify(new_quote), 201
-    except Exception as e:
-        cursor.connection.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cursor.connection.close()
-
-
-@app.route('/api/price_quotes/<int:quote_id>', methods=['PUT'])
-def update_price_quote(quote_id):
-    data = request.get_json()
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("""
-            UPDATE price_quotes
-            SET ingredient_id = %s,
-                source = %s,
-                size_qty = %s,
-                size_unit = %s,
+            UPDATE items
+            SET name = %s,
+                category = %s,
+                is_prep = %s,
+                is_for_sale = %s,
                 price = %s,
-                date_found = %s,
-                notes = %s,
-                is_purchase = %s
-            WHERE id = %s
-            RETURNING *
+                description = %s,
+                process_notes = %s,
+                archived = %s,
+                yield_qty = %s,
+                yield_unit = %s
+            WHERE item_id = %s
         """, (
-            data['ingredient_id'],
-            data['source'],
-            float(data['size_qty']),
-            data['size_unit'],
-            float(data['price']),
-            data.get('date_found', datetime.today().date()),
-            data.get('notes', ''),
-            data.get('is_purchase', False),
-            quote_id
+            name,
+            category,
+            is_prep,
+            is_for_sale,
+            price,
+            description,
+            process_notes,
+            archived,
+            yield_qty,
+            yield_unit,
+            item_id
         ))
-        updated_quote = cursor.fetchone()
-        cursor.connection.commit()
-        if not updated_quote:
-            return jsonify({'error': 'Price quote not found'}), 404
-        return jsonify(updated_quote)
-    except Exception as e:
-        cursor.connection.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cursor.connection.close()
 
-@app.route('/api/price_quotes', methods=['GET'])
-def get_price_quotes():
-    ingredient_id = request.args.get('ingredient_id')
-    limit = request.args.get('limit', default=100, type=int)  # Default to 1 if not specified
-
-    cursor = get_db_cursor()
-
-    try:
-        if ingredient_id:
-            cursor.execute("""
-                SELECT * FROM price_quotes WHERE ingredient_id = %s
-                ORDER BY date_found DESC
-                LIMIT %s
-            """, (ingredient_id, limit))
-        else:
-            cursor.execute("""
-                SELECT 
-                    q.id,
-                    q.ingredient_id,
-                    i.name AS ingredient_name,
-                    q.source,
-                    q.size_qty,
-                    q.size_unit,
-                    q.price,
-                    q.date_found,
-                    q.notes,
-                    q.is_purchase
-                FROM price_quotes q
-                JOIN ingredients i ON q.ingredient_id = i.ingredient_id
-                ORDER BY q.date_found DESC
-                LIMIT %s
-            """, (limit,))
-        quotes = cursor.fetchall()
-        return jsonify(quotes)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cursor.connection.close()
-
-@app.route('/api/price_quotes/bulk_insert', methods=['POST'])
-def bulk_insert_price_quotes():
-    quotes = request.json.get('quotes', [])
-
-    errors = []
-    valid_entries = []
-
-    cursor = get_db_cursor()
-
-    # Prepare data for bulk insert
-    for quote in quotes:
-        ingredient_name = quote.get('ingredient_name')
-        cursor.execute("SELECT ingredient_id FROM ingredients WHERE name = %s", (ingredient_name,))
-        ingredient = cursor.fetchone()
-
-        if not ingredient:
-            errors.append(f"No ingredient found for name: {ingredient_name}")
-            continue
-
-        ingredient_id = ingredient['ingredient_id']
-        # Validate and prepare entries
-        try:
-            valid_entry = (
-                ingredient_id,
-                quote['source'],
-                float(quote['qty_amount']),
-                quote['qty_unit'],
-                float(quote['price']),
-                quote.get('date_found', datetime.today().date()),
-                quote.get('notes', ''),
-                bool(quote.get('is_purchase'))
-            )
-            valid_entries.append(valid_entry)
-        except ValueError as e:
-            errors.append(str(e))
-
-    if valid_entries:
-        try:
-            cursor.executemany("""
-                INSERT INTO price_quotes (ingredient_id, source, size_qty, size_unit, price, date_found, notes, is_purchase)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, valid_entries)
-            cursor.connection.commit()
-        except Exception as e:
+        # If no rows were updated, the item likely doesn't exist
+        if hasattr(cursor, 'rowcount') and cursor.rowcount == 0:
             cursor.connection.rollback()
-            return jsonify({'error': 'Database insertion failed', 'details': str(e)}), 500
+            logging.debug("Update attempted for non-existent item_id=%s", item_id)
+            return jsonify({'error': 'Item not found'}), 404
 
-    cursor.connection.close()
-    return jsonify({'status': 'Completed with some errors', 'errors': errors}), 200
+        # Commit and return success
+        try:
+            cursor.connection.commit()
+        except Exception:
+            # Some DB cursors are created with autocommit; swallow commit errors but log
+            logging.debug("Commit failed or not required for item_id=%s", item_id)
 
-@app.route('/api/ingredient_cost/<int:ingredient_id>', methods=['GET'])
-def get_ingredient_cost(ingredient_id):
-    unit = request.args.get('unit')
-    qty = float(request.args.get('qty', 1))
+        # Recalculate and persist cost if this is a prep item
+        try:
+            if is_prep:
+                # Use the updated yield_unit if present, fallback to DB
+                recalc_unit = (yield_unit or '').strip() if yield_unit else None
+                recalc_qty = yield_qty or 1
 
-    if not unit:
-        return jsonify({
-            "status": "error",
-            "issue": "missing_unit",
-            "message": "Missing 'unit' parameter"
-        }), 200
+                # Fetch item yield if not provided in payload
+                if not recalc_unit:
+                    tmpc = get_db_cursor()
+                    tmpc.execute("SELECT yield_unit, yield_qty FROM items WHERE item_id = %s", (item_id,))
+                    db_item = tmpc.fetchone()
+                    tmpc.close()
+                    if db_item:
+                        recalc_unit = db_item.get('yield_unit')
+                        recalc_qty = db_item.get('yield_qty') or recalc_qty
 
-    try:
-        result = resolve_ingredient_cost(ingredient_id, unit, qty)
-        return jsonify(result), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "status": "error",
-            "issue": "internal_exception",
-            "message": str(e)
-        }), 200
+                if recalc_unit:
+                    calc = resolve_item_cost(item_id, recalc_unit, 1)
+                    if isinstance(calc, dict) and calc.get('status') == 'ok':
+                        new_cost = calc.get('cost_per_unit')
+                        c2 = get_db_cursor()
+                        try:
+                            c2.execute("UPDATE items SET cost = %s WHERE item_id = %s", (new_cost, item_id))
+                            c2.connection.commit()
+                        except Exception:
+                            c2.connection.rollback()
+                        finally:
+                            try:
+                                c2.close()
+                            except Exception:
+                                pass
+        except Exception as e:
+            print(f"Failed to recalc cost on item update {item_id}: {e}")
 
-@app.route('/api/item_cost/<int:item_id>', methods=['GET'])
-def get_item_cost(item_id):
-    unit = request.args.get('unit')
-    qty = float(request.args.get('qty', 1))
-
-    if not unit:
-        return jsonify({"error": "Missing 'unit' parameter"}), 400
-
-    result = resolve_item_cost(item_id, unit, qty)
-    return jsonify(result)
-
-@app.route('/api/ingredient_conversions', methods=['GET'])
-def get_ingredient_conversions():
-    ingredient_id = request.args.get('ingredient_id')
-    cursor = get_db_cursor()
-
-    try:
-        if ingredient_id:
-                cursor.execute("""
-                SELECT * FROM ingredient_conversions
-                WHERE ingredient_id = %s OR is_global = TRUE
-                ORDER BY is_global ASC, from_unit, to_unit
-            """, (ingredient_id,))
-        else:
-            cursor.execute("""
-                SELECT * FROM ingredient_conversions
-                ORDER BY ingredient_id NULLS LAST, from_unit, to_unit
-            """)
-        rows = cursor.fetchall()
-        return jsonify(rows)
-
-    finally:
-        cursor.connection.close()
-
-@app.route('/api/ingredient_conversions', methods=['POST'])
-def add_ingredient_conversion():
-    data = request.get_json()
-    ingredient_id = data.get('ingredient_id')
-    from_unit = data.get('from_unit', '').strip().lower()
-    to_unit = data.get('to_unit', '').strip().lower()
-    factor = data.get('factor')
-
-    if not all([from_unit, to_unit, factor is not None]):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    cursor = get_db_cursor()
-
-    try:
-        cursor.execute("""
-            INSERT INTO ingredient_conversions (ingredient_id, from_unit, to_unit, factor, is_global)
-            VALUES (%s, %s, %s, %s, FALSE)
-            RETURNING *
-        """, (ingredient_id, from_unit, to_unit, factor))
-        new_conversion = cursor.fetchone()
-        cursor.connection.commit()
-        return jsonify(new_conversion), 201
-
-    finally:
-        cursor.connection.close()
-
-@app.route('/api/ingredient_conversions/<int:conversion_id>', methods=['DELETE'])
-def delete_ingredient_conversion(conversion_id):
-    cursor = get_db_cursor()
-    
-    try:
-        cursor.execute("""
-            DELETE FROM ingredient_conversions
-            WHERE id = %s
-        """, (conversion_id,))
-        
-        if cursor.rowcount == 0:
-            return jsonify({'error': 'Conversion not found'}), 404
-        
-        cursor.connection.commit()
-        return jsonify({'status': 'Conversion deleted successfully'}), 200
+        return jsonify({'status': 'Item updated'})
 
     except Exception as e:
-        cursor.connection.rollback()
+        # Log full stack trace for debugging
+        logging.exception("Failed to update item %s", item_id)
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
         return jsonify({'error': str(e)}), 500
 
     finally:
-        cursor.connection.close()
+        try:
+            cursor.connection.close()
+        except Exception:
+            pass
 
-@app.route('/api/print-label', methods=['POST'])
-def print_label():
-    # Parse and validate input
-    data = request.get_json(force=True, silent=True) or {}
-    item_id   = data.get('item_id')
-    name      = (data.get('name') or '').strip()
-    yield_str = (data.get('yield') or '').strip()
-    barcode   = (data.get('barcode') or '').strip()
-    roll      = (data.get('roll') or 'left').lower()
-
-    if not name or not barcode:
-        return jsonify({'error': 'Missing name or barcode'}), 400
-
-    # Build request to Raspberry Pi label server
-    rpi_url = os.getenv('RPi_PRINT_URL')
-    headers = {}
-    payload = {
-        'name': name,
-        'yield': yield_str,   # key name is fine even though 'yield' is a Python keyword
-        'barcode': barcode,
-        'roll': roll
-    }
-
-    # Call the Pi with explicit timeouts (connect, read)
+@app.route('/api/items/<int:item_id>/recalculate_cost', methods=['POST'])
+def recalculate_item_cost(item_id):
+    """Recalculate cost for a single item and persist to items.cost if successful."""
+    cursor = get_db_cursor()
     try:
-        resp = requests.post(rpi_url, json=payload, headers=headers, timeout=(2, 5))
-        resp.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        # Surface the response text if we have one — super useful for debugging
-        details = getattr(e, 'response', None).text if getattr(e, 'response', None) else str(e)
-        print(f"Failed to contact RPi print server @ {rpi_url}: {details}")
-        return jsonify({'error': 'Failed to contact print server', 'details': details}), 502
+        cursor.execute("SELECT yield_unit, yield_qty, is_prep FROM items WHERE item_id = %s", (item_id,))
+        item = cursor.fetchone()
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
 
-    # Non-fatal DB logging
-    try:
-        # Safely read employee_id whether request.user exists or not
-        req_user = getattr(request, 'user', None) or {}
-        employee_id = getattr(req_user, 'employee_id', None)
-        if employee_id is None and isinstance(req_user, dict):
-            employee_id = req_user.get('employee_id')
+        if not item.get('is_prep'):
+            return jsonify({'status': 'not_prep_item', 'message': 'Non-prep items do not have recipe-based cost'}), 400
 
-        cursor = get_db_cursor()
-        cursor.execute(
-            """
-            INSERT INTO print_logs (employee_id, item_id, item_name, barcode, printed_at)
-            VALUES (%s, %s, %s, %s, NOW())
-            """,
-            (employee_id, item_id, name, barcode)
-        )
-        cursor.connection.commit()
-    except Exception as e:
-        print(f"Failed to log print action: {e}")
+        unit = item.get('yield_unit')
+        if not unit:
+            return jsonify({'error': 'missing_yield_unit', 'message': 'Item missing yield_unit'}), 400
+
+        result = resolve_item_cost(item_id, unit, 1)
+        if result.get('status') == 'ok':
+            cost_per_unit = result.get('cost_per_unit')
+            c = get_db_cursor()
+            try:
+                c.execute("UPDATE items SET cost = %s WHERE item_id = %s", (cost_per_unit, item_id))
+                c.connection.commit()
+            finally:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit})
+        else:
+            return jsonify(result), 200
+
     finally:
         try:
             cursor.close()
         except Exception:
             pass
 
-    # Bubble up the Pi’s response for easier troubleshooting during POC
+
+@app.route('/api/items/recalculate_all', methods=['POST'])
+def recalculate_all_items():
+    """Recalculate costs for all prep items. Returns summary of successes and failures."""
+    cursor = get_db_cursor()
     try:
-        pi_json = resp.json()
-    except Exception:
-        pi_json = {'raw': resp.text}
+        cursor.execute("SELECT item_id, yield_unit FROM items WHERE is_prep = TRUE AND (archived IS NULL OR archived = FALSE)")
+        items = cursor.fetchall()
+        summary = {'updated': [], 'errors': []}
+        for it in items:
+            item_id = it.get('item_id')
+            unit = it.get('yield_unit')
+            if not unit:
+                summary['errors'].append({'item_id': item_id, 'issue': 'missing_yield_unit'})
+                continue
+            try:
+                res = resolve_item_cost(item_id, unit, 1)
+                if res.get('status') == 'ok':
+                    c = get_db_cursor()
+                    try:
+                        c.execute("UPDATE items SET cost = %s WHERE item_id = %s", (res.get('cost_per_unit'), item_id))
+                        c.connection.commit()
+                        summary['updated'].append(item_id)
+                    finally:
+                        try:
+                            c.close()
+                        except Exception:
+                            pass
+                else:
+                    summary['errors'].append({'item_id': item_id, 'issue': res})
+            except Exception as e:
+                summary['errors'].append({'item_id': item_id, 'issue': str(e)})
+        return jsonify(summary)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
-    return jsonify({'status': 'print_sent', 'rpi': pi_json})
 
+@app.route('/api/items/margins', methods=['GET'])
+def get_item_margins():
+    """Return margin information for items. If item_id supplied, return that item only."""
+    item_id = request.args.get('item_id', type=int)
+    cursor = get_db_cursor()
+    try:
+        if item_id:
+            cursor.execute("SELECT * FROM items WHERE item_id = %s", (item_id,))
+            items = [cursor.fetchone()]
+        else:
+            cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = FALSE")
+            items = cursor.fetchall()
+
+        results = []
+        for it in items:
+            if not it:
+                continue
+            item_id = it.get('item_id')
+            price = it.get('price')
+            cost = it.get('cost')
+            if cost is None:
+                # attempt to compute on the fly if prep
+                if it.get('is_prep') and it.get('yield_unit'):
+                    res = resolve_item_cost(item_id, it.get('yield_unit'), 1)
+                    if res.get('status') == 'ok':
+                        cost = res.get('cost_per_unit')
+            margin = None
+            margin_pct = None
+            if price is not None and cost is not None:
+                try:
+                    margin = float(price) - float(cost)
+                    margin_pct = (margin / float(price)) * 100 if float(price) != 0 else None
+                except Exception:
+                    pass
+            results.append({
+                'item_id': item_id,
+                'name': it.get('name'),
+                'price': price,
+                'cost': cost,
+                'margin': margin,
+                'margin_pct': round(margin_pct, 2) if margin_pct is not None else None
+            })
+        return jsonify(results)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@app.route('/api/recipes/missing_conversions', methods=['GET'])
+def get_missing_recipe_conversions():
+    """Scan prep items and report missing conversions encountered during cost resolution."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT item_id, name, yield_unit FROM items WHERE is_prep = TRUE AND (archived IS NULL OR archived = FALSE)")
+        items = cursor.fetchall()
+        missing = []
+        for it in items:
+            item_id = it.get('item_id')
+            unit = it.get('yield_unit') or ''
+            try:
+                res = resolve_item_cost(item_id, unit, 1)
+                if isinstance(res, dict) and res.get('status') != 'ok':
+                    # collect missing_conversion issues specifically and nested issues
+                    def walk_issues(obj):
+                        if not obj:
+                            return []
+                        if isinstance(obj, dict):
+                            if obj.get('issue') == 'missing_conversion' or obj.get('issue') == 'child_resolution_error':
+                                return [obj]
+                            # nested details
+                            items = []
+                            for v in obj.values():
+                                items.extend(walk_issues(v))
+                            return items
+                        if isinstance(obj, list):
+                            out = []
+                            for v in obj:
+                                out.extend(walk_issues(v))
+                            return out
+                        return []
+
+                    issues = walk_issues(res)
+                    if issues:
+                        missing.append({'item_id': item_id, 'name': it.get('name'), 'issues': issues})
+            except Exception as e:
+                missing.append({'item_id': item_id, 'name': it.get('name'), 'error': str(e)})
+        return jsonify(missing)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():
