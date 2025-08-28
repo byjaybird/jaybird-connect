@@ -798,14 +798,35 @@ def get_item_margins():
             if not it:
                 continue
             item_id = it.get('item_id')
+
+            # Safely coerce numeric fields to native floats so JSON contains numbers (not Decimal/strings)
             price = it.get('price')
             cost = it.get('cost')
+            try:
+                price = float(price) if price is not None else None
+            except Exception:
+                try:
+                    price = float(str(price))
+                except Exception:
+                    price = None
+            try:
+                cost = float(cost) if cost is not None else None
+            except Exception:
+                try:
+                    cost = float(str(cost))
+                except Exception:
+                    cost = None
+
+            # attempt to compute on the fly if prep and cost is missing
             if cost is None:
-                # attempt to compute on the fly if prep
                 if it.get('is_prep') and it.get('yield_unit'):
                     res = resolve_item_cost(item_id, it.get('yield_unit'), 1)
                     if res.get('status') == 'ok':
-                        cost = res.get('cost_per_unit')
+                        try:
+                            cost = float(res.get('cost_per_unit')) if res.get('cost_per_unit') is not None else None
+                        except Exception:
+                            cost = None
+
             margin = None
             margin_pct = None
             if price is not None and cost is not None:
@@ -813,7 +834,9 @@ def get_item_margins():
                     margin = float(price) - float(cost)
                     margin_pct = (margin / float(price)) * 100 if float(price) != 0 else None
                 except Exception:
-                    pass
+                    margin = None
+                    margin_pct = None
+
             results.append({
                 'item_id': item_id,
                 'name': it.get('name'),
