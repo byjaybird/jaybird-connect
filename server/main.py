@@ -25,6 +25,7 @@ import logging
 # Configure basic logging to stdout for debugging update failures
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 from .role_permissions import role_permissions_bp
+from .prices_routes import prices_bp
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
 CORS(app, 
@@ -174,13 +175,13 @@ def after_request(response):
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
 app.register_blueprint(tasks_bp, url_prefix='/api')
-# Register auth blueprint twice to handle both URL patterns
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='')  # This will handle /auth/check
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(shift_bp, url_prefix='/api')
 app.register_blueprint(departments_bp, url_prefix='/api')
 app.register_blueprint(role_permissions_bp, url_prefix='/api')
+app.register_blueprint(prices_bp)
 
 try:
     test_conn = psycopg2.connect(
