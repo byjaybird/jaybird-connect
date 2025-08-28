@@ -129,7 +129,7 @@ function EditItem() {
     e.preventDefault();
     if (!allowedEdit) return alert('You do not have permission to edit this item');
     try {
-      const res = await api.put(`/api/items/${id}`, {
+      await api.put(`/api/items/${id}`, {
         name: formData.name,
         category: formData.category,
         is_prep: formData.is_prep,
@@ -148,20 +148,52 @@ function EditItem() {
       return;
     }
 
-    await api.delete(`/api/recipes/${id}`);
+    // Normalize recipe entries to the API shape and filter invalid/duplicate rows
     const seen = new Set();
-    const cleaned = recipe.filter(r => {
-      if (!r.source_type || !r.source_id || r.quantity === '' || r.unit.trim() === '') return false;
-      const key = `${r.source_type}:${r.source_id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const cleaned = recipe
+      .map((r) => {
+        // support legacy shapes (ingredient_id / item_id) and current (source_type/source_id)
+        const source_type = r.source_type || (r.ingredient_id ? 'ingredient' : (r.item_id ? 'item' : ''));
+        const source_id = r.source_id || r.ingredient_id || r.item_id;
+        return {
+          source_type,
+          source_id: source_id !== undefined && source_id !== '' ? parseInt(source_id) : null,
+          quantity: r.quantity,
+          unit: (r.unit || '').trim(),
+          instructions: r.instructions || null
+        };
+      })
+      .filter((r) => {
+        if (!r.source_type || !r.source_id) return false;
+        if (r.quantity === '' || r.quantity === null || r.quantity === undefined) return false;
+        if (!r.unit) return false;
+        const key = `${r.source_type}:${r.source_id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-    await api.post(`/api/recipes`, {
-      item_id: parseInt(id),
-      recipe: cleaned
-    });
+    try {
+      await api.delete(`/api/recipes/${id}`);
+    } catch (err) {
+      console.error('Failed to delete existing recipe', err);
+      alert('Failed to clear existing recipe. Please try again.');
+      return;
+    }
+
+    try {
+      if (cleaned.length > 0) {
+        await api.post(`/api/recipes`, {
+          item_id: parseInt(id),
+          recipe: cleaned
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save recipe', err);
+      const error = err.response?.data || {};
+      alert(error.error || 'Failed to save recipe. Please try again.');
+      return;
+    }
 
     navigate(`/item/${id}`);
   };
@@ -169,13 +201,19 @@ function EditItem() {
   const handleAddNewIngredient = async () => {
     if (!allowedEdit) return alert('You do not have permission to create ingredients');
     if (!newIngredientName.trim()) return;
-    const res = await api.post('/api/ingredients', { name: newIngredientName, category: '', notes: '', unit: '' });
-    const data = res.data;
-    if (res.status === 200 || res.status === 201) {
-      const newList = [...ingredients, data].sort((a, b) => a.name.localeCompare(b.name));
-      setIngredients(newList);
-      setRecipe([...recipe, { ingredient_id: data.ingredient_id, quantity: '', unit: '' }]);
-      setNewIngredientName('');
+    try {
+      const res = await api.post('/api/ingredients', { name: newIngredientName, category: '', notes: '', unit: '' });
+      const data = res.data;
+      if (res.status === 200 || res.status === 201) {
+        const newList = [...ingredients, data].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setIngredients(newList);
+        // add to recipe using the API shape (source_type / source_id)
+        setRecipe((prev) => ([...prev, { source_type: 'ingredient', source_id: data.ingredient_id, quantity: '', unit: '', instructions: '' }]));
+        setNewIngredientName('');
+      }
+    } catch (err) {
+      console.error('Failed to create ingredient', err);
+      alert('Failed to create ingredient');
     }
   };
 

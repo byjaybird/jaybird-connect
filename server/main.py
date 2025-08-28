@@ -328,6 +328,7 @@ def items():
         # parse optional yield fields
         yield_qty = parse_float(data.get('yield_qty'))
         yield_unit = data.get('yield_unit')
+        price = parse_float(data.get('price'))
         cursor.execute("""
             INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes, yield_qty, yield_unit)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -336,7 +337,7 @@ def items():
             data.get('category'),
             data.get('is_prep', False),
             data.get('is_for_sale', True),
-            data.get('price'),
+            price,
             data.get('description'),
             data.get('process_notes'),
             yield_qty,
