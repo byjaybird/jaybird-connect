@@ -576,14 +576,50 @@ def add_recipe():
         if not item_id or not isinstance(recipe_rows, list):
             return jsonify({'error': 'Invalid input format'}), 400
 
-        # Remove existing recipe entries for the item
-        cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
+        # Validate required fields and collect referenced IDs before making any DB changes
+        ingredient_ids = set()
+        item_source_ids = set()
 
-        # Insert the new recipe rows
         for row in recipe_rows:
             if not all(k in row for k in ['source_type', 'source_id', 'quantity', 'unit']):
                 return jsonify({'error': f'Missing required fields in recipe row: {row}'}), 400
 
+            source_type = row['source_type']
+            source_id = row['source_id']
+
+            # collect referenced ids for validation
+            if source_type == 'ingredient':
+                try:
+                    ingredient_ids.add(int(source_id))
+                except Exception:
+                    return jsonify({'error': f'Invalid ingredient id in row: {row}'}), 400
+            elif source_type == 'item':
+                try:
+                    item_source_ids.add(int(source_id))
+                except Exception:
+                    return jsonify({'error': f'Invalid item id in row: {row}'}), 400
+
+        # Verify referenced ingredients exist
+        missing = {'ingredients': [], 'items': []}
+        if ingredient_ids:
+            cursor.execute("SELECT ingredient_id FROM ingredients WHERE ingredient_id = ANY(%s)", (list(ingredient_ids),))
+            found = {r['ingredient_id'] for r in cursor.fetchall()}
+            missing_ings = [i for i in ingredient_ids if i not in found]
+            if missing_ings:
+                return jsonify({'error': 'Missing referenced ingredients', 'missing_ingredients': missing_ings}), 400
+
+        # Verify referenced items exist
+        if item_source_ids:
+            cursor.execute("SELECT item_id FROM items WHERE item_id = ANY(%s)", (list(item_source_ids),))
+            found_items = {r['item_id'] for r in cursor.fetchall()}
+            missing_items = [i for i in item_source_ids if i not in found_items]
+            if missing_items:
+                return jsonify({'error': 'Missing referenced items', 'missing_items': missing_items}), 400
+
+        # All references validated; proceed to replace recipe rows
+        cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
+
+        for row in recipe_rows:
             cursor.execute("""
                 INSERT INTO recipes (item_id, source_type, source_id, quantity, unit)
                 VALUES (%s, %s, %s, %s, %s)

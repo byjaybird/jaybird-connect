@@ -128,20 +128,22 @@ function EditItem() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!allowedEdit) return alert('You do not have permission to edit this item');
-    const res = await api.put(`/api/items/${id}`, {
-      name: formData.name,
-      category: formData.category,
-      is_prep: formData.is_prep,
-      is_for_sale: formData.is_for_sale,
-      price: formData.price === '' ? null : parseFloat(formData.price),
-      description: formData.description,
-      process_notes: formData.notes,
-      is_archived: formData.is_archived,
-      yield_qty: formData.is_prep ? formData.yield_qty : null,
-      yield_unit: formData.is_prep ? formData.yield_unit : null
-    });
-    if (!res.ok) {
-      const error = res.data || {};
+    try {
+      const res = await api.put(`/api/items/${id}`, {
+        name: formData.name,
+        category: formData.category,
+        is_prep: formData.is_prep,
+        is_for_sale: formData.is_for_sale,
+        price: formData.price === '' ? null : parseFloat(formData.price),
+        description: formData.description,
+        process_notes: formData.notes,
+        is_archived: formData.is_archived,
+        yield_qty: formData.is_prep ? formData.yield_qty : null,
+        yield_unit: formData.is_prep ? formData.yield_unit : null
+      });
+      // axios throws for non-2xx responses, so if we reach here the update succeeded
+    } catch (err) {
+      const error = err.response?.data || {};
       alert(error.error || 'Failed to update item');
       return;
     }
