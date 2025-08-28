@@ -125,35 +125,34 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         # Fetch the item details
         cursor.execute("SELECT * FROM items WHERE item_id = %s", (item_id,))
         item = cursor.fetchone()
-        if not item or not item.get("is_prep"):
+        if not item:
             return {
                 "status": "error",
-                "issue": "not_prep_item",
+                "issue": "item_not_found",
                 "item_id": item_id
             }
 
-        # Validate yield
+        # Validate yield (but allow missing yield for non-prep items by falling back)
+        recipe_unit_norm = (recipe_unit or "").strip().lower()
         try:
-            yield_qty = float(item.get("yield_qty"))
-            yield_unit = (item.get("yield_unit") or "").strip().lower()
+            raw_yield_qty = item.get("yield_qty")
+            yield_qty = float(raw_yield_qty) if raw_yield_qty is not None else None
         except Exception:
-            return {
-                "status": "error",
-                "issue": "missing_or_invalid_yield",
-                "item_id": item_id
-            }
-
-        if yield_qty == 0:
-            return {
-                "status": "error",
-                "issue": "zero_yield",
-                "message": "Item has zero yield",
-                "item_id": item_id
-            }
+            yield_qty = None
+        yield_unit = (item.get("yield_unit") or "").strip().lower() or None
 
         # Fetch recipe components
         cursor.execute("SELECT * FROM recipes WHERE item_id = %s", (item_id,))
         components = cursor.fetchall()
+
+        if not components:
+            # No recipe rows to compute cost from
+            return {
+                "status": "error",
+                "issue": "no_recipe",
+                "message": "No recipe components available to resolve item cost",
+                "item_id": item_id
+            }
 
         total_cost = 0.0
         issues = []
@@ -184,8 +183,20 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
                 "details": issues
             }
 
+        # If yield info missing, fall back to treating recipe_unit as the yield unit with qty=1
+        if yield_qty is None or not yield_unit:
+            if recipe_unit_norm:
+                yield_qty = 1.0
+                yield_unit = recipe_unit_norm
+            else:
+                return {
+                    "status": "error",
+                    "issue": "missing_or_invalid_yield",
+                    "message": "Item yield_unit/qty missing and no recipe unit supplied",
+                    "item_id": item_id
+                }
+
         # Unit conversion if needed (look up global conversions)
-        recipe_unit_norm = (recipe_unit or "").strip().lower()
         if yield_unit != recipe_unit_norm:
             cursor.execute("""
                 SELECT factor FROM ingredient_conversions

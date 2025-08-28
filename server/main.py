@@ -378,6 +378,7 @@ def update_item(item_id):
     is_prep = data.get('is_prep', False)
     is_for_sale = data.get('is_for_sale', True)
     price = parse_float(data.get('price'))
+    cost = parse_float(data.get('cost'))
     description = data.get('description', '')
     process_notes = data.get('process_notes', '')
     archived = data.get('archived', data.get('is_archived', False))
@@ -392,6 +393,7 @@ def update_item(item_id):
                 is_prep = %s,
                 is_for_sale = %s,
                 price = %s,
+                cost = %s,
                 description = %s,
                 process_notes = %s,
                 archived = %s,
@@ -404,6 +406,7 @@ def update_item(item_id):
             is_prep,
             is_for_sale,
             price,
+            cost,
             description,
             process_notes,
             archived,
@@ -422,17 +425,13 @@ def update_item(item_id):
         try:
             cursor.connection.commit()
         except Exception:
-            # Some DB cursors are created with autocommit; swallow commit errors but log
             logging.debug("Commit failed or not required for item_id=%s", item_id)
 
         # Recalculate and persist cost if this is a prep item
         try:
             if is_prep:
-                # Use the updated yield_unit if present, fallback to DB
                 recalc_unit = (yield_unit or '').strip() if yield_unit else None
                 recalc_qty = yield_qty or 1
-
-                # Fetch item yield if not provided in payload
                 if not recalc_unit:
                     tmpc = get_db_cursor()
                     tmpc.execute("SELECT yield_unit, yield_qty FROM items WHERE item_id = %s", (item_id,))
@@ -441,7 +440,6 @@ def update_item(item_id):
                     if db_item:
                         recalc_unit = db_item.get('yield_unit')
                         recalc_qty = db_item.get('yield_qty') or recalc_qty
-
                 if recalc_unit:
                     calc = resolve_item_cost(item_id, recalc_unit, 1)
                     if isinstance(calc, dict) and calc.get('status') == 'ok':
@@ -463,7 +461,6 @@ def update_item(item_id):
         return jsonify({'status': 'Item updated'})
 
     except Exception as e:
-        # Log full stack trace for debugging
         logging.exception("Failed to update item %s", item_id)
         try:
             cursor.connection.rollback()
@@ -515,6 +512,8 @@ def create_item():
     is_prep = bool(data.get('is_prep', False))
     is_for_sale = bool(data.get('is_for_sale', True))
     price = parse_float(data.get('price'))
+    # Allow incoming explicit cost (for non-prep or manual overrides)
+    cost = parse_float(data.get('cost'))
     description = data.get('description', '').strip()
     process_notes = data.get('process_notes', '').strip()
     archived = bool(data.get('archived', data.get('is_archived', False)))
@@ -524,13 +523,13 @@ def create_item():
     try:
         cursor.execute("""
             INSERT INTO items (
-                name, category, is_prep, is_for_sale, price, description,
+                name, category, is_prep, is_for_sale, price, cost, description,
                 process_notes, archived, yield_qty, yield_unit
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING item_id
         """, (
-            name, category, is_prep, is_for_sale, price,
+            name, category, is_prep, is_for_sale, price, cost,
             description, process_notes, archived, yield_qty, yield_unit
         ))
 
@@ -541,6 +540,27 @@ def create_item():
 
         new_id = row['item_id']
         cursor.connection.commit()
+        # If this is a prep item, attempt to compute recipe-based cost and persist it (overrides provided cost)
+        try:
+            if is_prep and yield_unit:
+                calc = resolve_item_cost(new_id, yield_unit, 1)
+                if isinstance(calc, dict) and calc.get('status') == 'ok':
+                    try:
+                        c2 = get_db_cursor()
+                        c2.execute("UPDATE items SET cost = %s WHERE item_id = %s", (calc.get('cost_per_unit'), new_id))
+                        c2.connection.commit()
+                    except Exception:
+                        try:
+                            c2.connection.rollback()
+                        except Exception:
+                            pass
+                    finally:
+                        try:
+                            c2.close()
+                        except Exception:
+                            pass
+        except Exception as e:
+            print(f"Auto-recalculate failed for created item {new_id}: {e}")
         return jsonify({'status': 'Item created', 'item_id': new_id})
 
     except Exception as e:
