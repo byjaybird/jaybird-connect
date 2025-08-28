@@ -21,6 +21,9 @@ from .services.shift_api import ShiftAPI
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
+import logging
+# Configure basic logging to stdout for debugging update failures
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 from .role_permissions import role_permissions_bp
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
@@ -322,9 +325,12 @@ def items():
     cursor = get_db_cursor()
     if request.method == 'POST':
         data = request.get_json()
+        # parse optional yield fields
+        yield_qty = parse_float(data.get('yield_qty'))
+        yield_unit = data.get('yield_unit')
         cursor.execute("""
-            INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes, yield_qty, yield_unit)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             data['name'],
             data.get('category'),
@@ -332,7 +338,9 @@ def items():
             data.get('is_for_sale', True),
             data.get('price'),
             data.get('description'),
-            data.get('process_notes')
+            data.get('process_notes'),
+            yield_qty,
+            yield_unit
         ))
         cursor.connection.commit()
         cursor.connection.close()
@@ -362,6 +370,7 @@ def update_item(item_id):
     data = request.get_json()
     cursor = get_db_cursor()
 
+    # Safely parse and coerce incoming fields
     name = data.get('name', '')
     category = data.get('category')
     is_prep = data.get('is_prep', False)
@@ -373,36 +382,63 @@ def update_item(item_id):
     yield_qty = parse_float(data.get('yield_qty'))
     yield_unit = data.get('yield_unit')
 
-    cursor.execute("""
-        UPDATE items
-        SET name = %s,
-            category = %s,
-            is_prep = %s,
-            is_for_sale = %s,
-            price = %s,
-            description = %s,
-            process_notes = %s,
-            archived = %s,
-            yield_qty = %s,
-            yield_unit = %s
-        WHERE item_id = %s
-    """, (
-        name,
-        category,
-        is_prep,
-        is_for_sale,
-        price,
-        description,
-        process_notes,
-        archived,
-        yield_qty,
-        yield_unit,
-        item_id
-    ))
+    try:
+        cursor.execute("""
+            UPDATE items
+            SET name = %s,
+                category = %s,
+                is_prep = %s,
+                is_for_sale = %s,
+                price = %s,
+                description = %s,
+                process_notes = %s,
+                archived = %s,
+                yield_qty = %s,
+                yield_unit = %s
+            WHERE item_id = %s
+        """, (
+            name,
+            category,
+            is_prep,
+            is_for_sale,
+            price,
+            description,
+            process_notes,
+            archived,
+            yield_qty,
+            yield_unit,
+            item_id
+        ))
 
-    cursor.connection.commit()
-    cursor.connection.close()
-    return jsonify({'status': 'Item updated'})
+        # If no rows were updated, the item likely doesn't exist
+        if hasattr(cursor, 'rowcount') and cursor.rowcount == 0:
+            cursor.connection.rollback()
+            logging.debug("Update attempted for non-existent item_id=%s", item_id)
+            return jsonify({'error': 'Item not found'}), 404
+
+        # Commit and return success
+        try:
+            cursor.connection.commit()
+        except Exception:
+            # Some DB cursors are created with autocommit; swallow commit errors but log
+            logging.debug("Commit failed or not required for item_id=%s", item_id)
+
+        return jsonify({'status': 'Item updated'})
+
+    except Exception as e:
+        # Log full stack trace for debugging
+        logging.exception("Failed to update item %s", item_id)
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        try:
+            cursor.connection.close()
+        except Exception:
+            pass
 
 @app.route('/api/items/<int:item_id>', methods=['DELETE'])
 def delete_item(item_id):
@@ -579,17 +615,17 @@ def delete_recipes_for_item(item_id):
     cursor.connection.close()
     return jsonify({'status': 'deleted'})
 
+
 @app.route('/api/price_quotes', methods=['POST'])
 def create_price_quote():
     data = request.get_json()
-
     cursor = get_db_cursor()
-
     try:
         cursor.execute("""
             INSERT INTO price_quotes (
                 ingredient_id, source, size_qty, size_unit, price, date_found, notes, is_purchase
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
         """, (
             data['ingredient_id'],
             data['source'],
@@ -600,8 +636,49 @@ def create_price_quote():
             data.get('notes', ''),
             data.get('is_purchase', False)
         ))
+        new_quote = cursor.fetchone()
         cursor.connection.commit()
-        return jsonify({'status': 'Price quote added'}), 201
+        return jsonify(new_quote), 201
+    except Exception as e:
+        cursor.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.connection.close()
+
+
+@app.route('/api/price_quotes/<int:quote_id>', methods=['PUT'])
+def update_price_quote(quote_id):
+    data = request.get_json()
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("""
+            UPDATE price_quotes
+            SET ingredient_id = %s,
+                source = %s,
+                size_qty = %s,
+                size_unit = %s,
+                price = %s,
+                date_found = %s,
+                notes = %s,
+                is_purchase = %s
+            WHERE id = %s
+            RETURNING *
+        """, (
+            data['ingredient_id'],
+            data['source'],
+            float(data['size_qty']),
+            data['size_unit'],
+            float(data['price']),
+            data.get('date_found', datetime.today().date()),
+            data.get('notes', ''),
+            data.get('is_purchase', False),
+            quote_id
+        ))
+        updated_quote = cursor.fetchone()
+        cursor.connection.commit()
+        if not updated_quote:
+            return jsonify({'error': 'Price quote not found'}), 404
+        return jsonify(updated_quote)
     except Exception as e:
         cursor.connection.rollback()
         return jsonify({'error': str(e)}), 500

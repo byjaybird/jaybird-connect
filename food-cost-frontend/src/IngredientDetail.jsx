@@ -18,6 +18,19 @@ function IngredientDetail() {
 
   const [priceQuotes, setPriceQuotes] = useState([]);
 
+  // New state for price quote form
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [quoteDate, setQuoteDate] = useState('');
+  const [quoteSource, setQuoteSource] = useState('');
+  const [quoteSizeQty, setQuoteSizeQty] = useState('');
+  const [quoteSizeUnit, setQuoteSizeUnit] = useState('');
+  const [quotePrice, setQuotePrice] = useState('');
+  const [quoteNotes, setQuoteNotes] = useState('');
+  const [submittingQuote, setSubmittingQuote] = useState(false);
+
+  const [editingQuoteIdx, setEditingQuoteIdx] = useState(null);
+  const [editQuote, setEditQuote] = useState(null);
+
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -65,6 +78,86 @@ function IngredientDetail() {
     }
   };
 
+  const handleSubmitQuote = async (e) => {
+    e.preventDefault();
+    if (submittingQuote) return;
+    // Basic validation
+    if (!quoteSource || !quoteSizeQty || !quoteSizeUnit || !quotePrice) {
+      setError('Please complete source, size and price fields for the quote.');
+      return;
+    }
+
+    const payload = {
+      ingredient_id: parseInt(id, 10),
+      date_found: quoteDate ? new Date(quoteDate).toISOString() : new Date().toISOString(),
+      source: quoteSource.trim(),
+      size_qty: parseFloat(quoteSizeQty),
+      size_unit: quoteSizeUnit.trim(),
+      price: parseFloat(quotePrice),
+      notes: quoteNotes ? quoteNotes.trim() : ''
+    };
+
+    try {
+      setSubmittingQuote(true);
+      const res = await api.post('/api/price_quotes', payload);
+      const newQuote = res.data;
+      // Prepend the new quote so it's visible immediately
+      setPriceQuotes([newQuote, ...(priceQuotes || [])]);
+      // reset form
+      setShowQuoteForm(false);
+      setQuoteDate('');
+      setQuoteSource('');
+      setQuoteSizeQty('');
+      setQuoteSizeUnit('');
+      setQuotePrice('');
+      setQuoteNotes('');
+      setError(null);
+    } catch (err) {
+      console.error('Failed to save price quote:', err.response || err);
+      setError('Failed to save price quote.');
+    } finally {
+      setSubmittingQuote(false);
+    }
+  };
+
+  const startEditQuote = (idx) => {
+    setEditingQuoteIdx(idx);
+    setEditQuote({ ...priceQuotes[idx] });
+  };
+
+  const cancelEditQuote = () => {
+    setEditingQuoteIdx(null);
+    setEditQuote(null);
+  };
+
+  const saveEditQuote = async () => {
+    if (!editQuote) return;
+    try {
+      const payload = {
+        ingredient_id: editQuote.ingredient_id,
+        source: editQuote.source,
+        size_qty: parseFloat(editQuote.size_qty),
+        size_unit: editQuote.size_unit,
+        price: parseFloat(editQuote.price),
+        date_found: editQuote.date_found,
+        notes: editQuote.notes,
+        is_purchase: !!editQuote.is_purchase
+      };
+      const res = await api.put(`/api/price_quotes/${editQuote.id}`, payload);
+      if (res.data && res.status === 200) {
+        const updated = [...priceQuotes];
+        updated[editingQuoteIdx] = res.data;
+        setPriceQuotes(updated);
+        setEditingQuoteIdx(null);
+        setEditQuote(null);
+      } else {
+        alert('Failed to save price quote');
+      }
+    } catch (err) {
+      alert('Failed to save price quote');
+    }
+  };
+
   if (error) {
     return <div className="p-4 text-red-600 font-semibold">{error}</div>;
   }
@@ -96,12 +189,93 @@ function IngredientDetail() {
         )}
       </div>
 
-       <div className="mb-8">
+      <div className="mb-8">
         <h3 className="text-xl font-semibold mb-2">Recent Price Quotes</h3>
+
+        {/* Add Price Quote UI */}
+        <div className="mt-2 border-t pt-3">
+          <button
+            onClick={() => setShowQuoteForm(!showQuoteForm)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showQuoteForm ? 'Cancel' : '➕ Add Price Quote'}
+          </button>
+
+          {showQuoteForm && (
+            <form onSubmit={handleSubmitQuote} className="mt-3 space-y-2">
+              <div className="flex gap-2 items-center">
+                <label className="text-sm text-gray-700">Date</label>
+                <input
+                  type="date"
+                  value={quoteDate}
+                  onChange={(e) => setQuoteDate(e.target.value)}
+                  className="border rounded px-2 py-1 text-sm"
+                />
+
+                <label className="text-sm text-gray-700">Source</label>
+                <input
+                  type="text"
+                  value={quoteSource}
+                  onChange={(e) => setQuoteSource(e.target.value)}
+                  placeholder="e.g. Vendor name"
+                  className="border rounded px-2 py-1 text-sm"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  value={quoteSizeQty}
+                  onChange={(e) => setQuoteSizeQty(e.target.value)}
+                  placeholder="Size qty"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  step="any"
+                  required
+                />
+                <input
+                  type="text"
+                  value={quoteSizeUnit}
+                  onChange={(e) => setQuoteSizeUnit(e.target.value)}
+                  placeholder="unit"
+                  className="border rounded px-2 py-1 text-sm w-24"
+                  required
+                />
+
+                <input
+                  type="number"
+                  value={quotePrice}
+                  onChange={(e) => setQuotePrice(e.target.value)}
+                  placeholder="Price"
+                  className="border rounded px-2 py-1 text-sm w-28"
+                  step="any"
+                  required
+                />
+
+                <input
+                  type="text"
+                  value={quoteNotes}
+                  onChange={(e) => setQuoteNotes(e.target.value)}
+                  placeholder="Notes (optional)"
+                  className="border rounded px-2 py-1 text-sm flex-1"
+                />
+
+                <button
+                  type="submit"
+                  disabled={submittingQuote}
+                  className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+                >
+                  {submittingQuote ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
         {priceQuotes.length === 0 ? (
           <p className="text-gray-600">No recent price quotes available.</p>
         ) : (
-          <table className="w-full border text-sm text-left">
+          <table className="w-full border text-sm text-left mt-4">
             <thead className="bg-gray-100 text-xs uppercase text-gray-700">
               <tr>
                 <th className="border px-3 py-2">Date</th>
@@ -110,17 +284,50 @@ function IngredientDetail() {
                 <th className="border px-3 py-2">Size Unit</th>
                 <th className="border px-3 py-2">Price</th>
                 <th className="border px-3 py-2">Notes</th>
+                <th className="border px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {priceQuotes.map((quote, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
-                  <td className="border px-3 py-2">{new Date(quote.date_found).toLocaleDateString()}</td>
-                  <td className="border px-3 py-2">{quote.source}</td>
-                  <td className="border px-3 py-2">{quote.size_qty}</td>
-                  <td className="border px-3 py-2">{quote.size_unit}</td>
-                  <td className="border px-3 py-2">${quote.price.toFixed(2)}</td>
-                  <td className="border px-3 py-2">{quote.notes}</td>
+                  {editingQuoteIdx === idx ? (
+                    <>
+                      <td className="border px-3 py-2">
+                        <input type="date" value={editQuote.date_found?.slice(0,10) || ''} onChange={e => setEditQuote(q => ({ ...q, date_found: e.target.value }))} className="border rounded px-2 py-1 text-sm w-32" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <input type="text" value={editQuote.source} onChange={e => setEditQuote(q => ({ ...q, source: e.target.value }))} className="border rounded px-2 py-1 text-sm w-32" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <input type="number" value={editQuote.size_qty} onChange={e => setEditQuote(q => ({ ...q, size_qty: e.target.value }))} className="border rounded px-2 py-1 text-sm w-20" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <input type="text" value={editQuote.size_unit} onChange={e => setEditQuote(q => ({ ...q, size_unit: e.target.value }))} className="border rounded px-2 py-1 text-sm w-20" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <input type="number" value={editQuote.price} onChange={e => setEditQuote(q => ({ ...q, price: e.target.value }))} className="border rounded px-2 py-1 text-sm w-20" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <input type="text" value={editQuote.notes} onChange={e => setEditQuote(q => ({ ...q, notes: e.target.value }))} className="border rounded px-2 py-1 text-sm w-32" />
+                      </td>
+                      <td className="border px-3 py-2">
+                        <button onClick={saveEditQuote} className="text-green-600 mr-2">Save</button>
+                        <button onClick={cancelEditQuote} className="text-gray-500">Cancel</button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="border px-3 py-2">{new Date(quote.date_found).toLocaleDateString()}</td>
+                      <td className="border px-3 py-2">{quote.source}</td>
+                      <td className="border px-3 py-2">{quote.size_qty}</td>
+                      <td className="border px-3 py-2">{quote.size_unit}</td>
+                      <td className="border px-3 py-2">${quote.price.toFixed(2)}</td>
+                      <td className="border px-3 py-2">{quote.notes}</td>
+                      <td className="border px-3 py-2">
+                        <button onClick={() => startEditQuote(idx)} className="text-blue-600 mr-2">Edit</button>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

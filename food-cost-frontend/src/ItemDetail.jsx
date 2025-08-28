@@ -24,6 +24,9 @@ function ItemDetail() {
   const [fixData, setFixData] = useState(null);
   const [user, setUser] = useState(getLocalUser());
   const [allowedEdit, setAllowedEdit] = useState(false);
+  const [editingYield, setEditingYield] = useState(false);
+  const [yieldQtyEdit, setYieldQtyEdit] = useState('');
+  const [yieldUnitEdit, setYieldUnitEdit] = useState('');
 
   useEffect(() => {
     setAllowedEdit(canEdit(user, 'items'));
@@ -68,12 +71,84 @@ function ItemDetail() {
     }
   };
 
+  const startEditYield = () => {
+    setYieldQtyEdit(item?.yield_qty ?? '');
+    setYieldUnitEdit(item?.yield_unit ?? '');
+    setEditingYield(true);
+  };
+
+  const cancelEditYield = () => {
+    setEditingYield(false);
+  };
+
+  const saveYield = async () => {
+    try {
+      const payload = {
+        name: item.name,
+        category: item.category,
+        is_prep: item.is_prep,
+        is_for_sale: item.is_for_sale,
+        price: item.price,
+        description: item.description,
+        process_notes: item.process_notes,
+        archived: item.archived ?? item.is_archived ?? false,
+        yield_qty: yieldQtyEdit === '' || yieldQtyEdit === null ? null : parseFloat(yieldQtyEdit),
+        yield_unit: yieldUnitEdit || null
+      };
+
+      const res = await api.put(`/api/items/${id}`, payload);
+      if (!res.ok && res.status !== 200) {
+        console.error('Failed saving yield', res);
+        alert('Failed to save yield');
+        return;
+      }
+
+      // Update local state
+      setItem(prev => ({ ...prev, yield_qty: payload.yield_qty, yield_unit: payload.yield_unit }));
+      setEditingYield(false);
+    } catch (err) {
+      console.error('Error saving yield', err);
+      alert('Failed to save yield');
+    }
+  };
+
   if (!item) return <div className="p-4">Loading item...</div>;
 
   return (
     <div className="max-w-2xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">{item.name}</h1>
+        <div>
+          <h1 className="text-2xl font-bold">{item.name}</h1>
+          <div className="text-sm text-gray-600">
+            <strong>Yield:</strong>{' '}
+            {!editingYield ? (
+              <span>
+                {item?.yield_qty ? `${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : '—'}
+                {allowedEdit && (
+                  <button onClick={startEditYield} className="ml-2 text-blue-600">✏️</button>
+                )}
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <input
+                  type="number"
+                  step="any"
+                  value={yieldQtyEdit}
+                  onChange={(e) => setYieldQtyEdit(e.target.value)}
+                  className="border p-1 rounded w-24"
+                />
+                <input
+                  value={yieldUnitEdit}
+                  onChange={(e) => setYieldUnitEdit(e.target.value)}
+                  placeholder="unit (e.g., each, liter)"
+                  className="border p-1 rounded w-36"
+                />
+                <button onClick={saveYield} className="text-green-600">Save</button>
+                <button onClick={cancelEditYield} className="text-gray-500">Cancel</button>
+              </span>
+            )}
+          </div>
+        </div>
         <div className="flex space-x-2">
           {allowedEdit && (
             <Link to={`/item/${id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">

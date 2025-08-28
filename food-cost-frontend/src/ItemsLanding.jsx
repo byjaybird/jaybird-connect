@@ -75,7 +75,7 @@ function ItemsLanding() {
                     to={`/item/${item.item_id}`}
                     className="text-blue-600 hover:underline"
                   >
-                    {item.name}
+                    {item.name} {item.yield_qty ? `— ${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : ''}
                   </Link>
                   <Link
                     to={`/item/${item.item_id}/edit`}
