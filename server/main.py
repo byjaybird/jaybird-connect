@@ -749,7 +749,14 @@ def add_recipe():
 
 @app.route('/api/items/<int:item_id>/recalculate_cost', methods=['POST'])
 def recalculate_item_cost(item_id):
-    """Recalculate cost for a single item and persist to items.cost if successful."""
+    """Recalculate cost for a single item and persist to items.cost if successful.
+
+    This endpoint now allows recalculation for any item. If no explicit unit is
+    provided (?unit=...), it will prefer the item's yield_unit, then fall back
+    to the first recipe component unit. If no unit can be determined the
+    request will fail and ask the caller to provide a unit or set the item's
+    yield_unit.
+    """
     cursor = get_db_cursor()
     try:
         cursor.execute("SELECT yield_unit, yield_qty, is_prep FROM items WHERE item_id = %s", (item_id,))
@@ -757,14 +764,29 @@ def recalculate_item_cost(item_id):
         if not item:
             return jsonify({'error': 'Item not found'}), 404
 
-        if not item.get('is_prep'):
-            return jsonify({'status': 'not_prep_item', 'message': 'Non-prep items do not have recipe-based cost'}), 400
+        # Determine unit to calculate in: query param wins, then item's yield_unit,
+        # then first recipe row unit if available.
+        unit_param = request.args.get('unit')
+        effective_unit = (unit_param or item.get('yield_unit') or '').strip() or None
 
-        unit = item.get('yield_unit')
-        if not unit:
-            return jsonify({'error': 'missing_yield_unit', 'message': 'Item missing yield_unit'}), 400
+        if not effective_unit:
+            # Try to find a unit used in the item's recipe
+            tmpc = get_db_cursor()
+            try:
+                tmpc.execute("SELECT unit FROM recipes WHERE item_id = %s AND unit IS NOT NULL AND unit <> '' LIMIT 1", (item_id,))
+                rr = tmpc.fetchone()
+                if rr and rr.get('unit'):
+                    effective_unit = rr.get('unit')
+            finally:
+                try:
+                    tmpc.close()
+                except Exception:
+                    pass
 
-        result = resolve_item_cost(item_id, unit, 1)
+        if not effective_unit:
+            return jsonify({'error': 'missing_unit', 'message': 'No yield_unit on item and no unit specified. Provide ?unit=<unit> or set item.yield_unit'}), 400
+
+        result = resolve_item_cost(item_id, effective_unit, 1)
         if result.get('status') == 'ok':
             cost_per_unit = result.get('cost_per_unit')
             c = get_db_cursor()
@@ -776,7 +798,7 @@ def recalculate_item_cost(item_id):
                     c.close()
                 except Exception:
                     pass
-            return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit})
+            return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit, 'unit': effective_unit})
         else:
             return jsonify(result), 200
 
