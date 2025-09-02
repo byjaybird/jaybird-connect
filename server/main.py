@@ -26,6 +26,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 from .role_permissions import role_permissions_bp
 from .prices_routes import prices_bp
+from .conversions_routes import conversions_bp
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
 CORS(app, 
@@ -182,6 +183,7 @@ app.register_blueprint(shift_bp, url_prefix='/api')
 app.register_blueprint(departments_bp, url_prefix='/api')
 app.register_blueprint(role_permissions_bp, url_prefix='/api')
 app.register_blueprint(prices_bp)
+app.register_blueprint(conversions_bp, url_prefix='/api')
 
 try:
     test_conn = psycopg2.connect(
