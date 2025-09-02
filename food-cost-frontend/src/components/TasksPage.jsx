@@ -1,8 +1,9 @@
 // Updated TasksPage.jsx
+
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { checkAuthStatus, api } from '../utils/auth';
-import { canEdit } from '../utils/permissions';
+import { canEdit, hasPageAccess } from '../utils/permissions';
 
 const DAYS_OF_WEEK = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
@@ -28,8 +29,8 @@ function TasksPage({ user }) {
   const [departments, setDepartments] = useState([]);
   const [error, setError] = useState(null);
 
-  const allowedTasksEdit = canEdit(localUser, 'tasks');
-  const allowedPatternEdit = canEdit(localUser, 'shift_patterns');
+  const allowedTasksEdit = hasPageAccess(localUser, 'tasks');
+  const allowedPatternEdit = hasPageAccess(localUser, 'shift_patterns');
 
   useEffect(() => {
     const fetchData = async () => {

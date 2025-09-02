@@ -1,10 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function ItemsLanding() {
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [user] = useState(getLocalUser());
+  const [allowedEdit, setAllowedEdit] = useState(false);
+
+  useEffect(() => {
+    setAllowedEdit(canEdit(user, 'items'));
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,12 +94,14 @@ function ItemsLanding() {
                   >
                     {item.name} {item.yield_qty ? `— ${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : ''}
                   </Link>
-                  <Link
-                    to={`/item/${item.item_id}/edit`}
-                    className="text-sm text-gray-500 hover:text-black ml-4"
-                  >
-                    ✏️ Edit
-                  </Link>
+                  {allowedEdit && (
+                    <Link
+                      to={`/item/${item.item_id}/edit`}
+                      className="text-sm text-gray-500 hover:text-black ml-4"
+                    >
+                      ✏️ Edit
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

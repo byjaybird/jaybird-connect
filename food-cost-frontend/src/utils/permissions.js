@@ -40,10 +40,13 @@ export const hasPageAccess = (user, pageKey) => {
 // Check whether user can edit a resource. Resource examples: 'items', 'ingredients'
 export const canEdit = (user, resourceKey) => {
   if (!user) return false;
-  const perms = readPermissions();
-  if (!perms) return false;
   const role = (user.role || 'Employee').toString();
+  // Always allow Admins to edit, even if permissions haven't loaded yet
   if (role.toLowerCase() === 'admin') return true;
+
+  const perms = readPermissions();
+  if (!perms) return false; // keep fallback deny for non-admin if no explicit permissions
+
   const roleMap = perms[role] || {};
   // prefer explicit edit permission (e.g., 'items_edit'), fall back to general view permission
   if (typeof roleMap[`${resourceKey}_edit`] !== 'undefined') {

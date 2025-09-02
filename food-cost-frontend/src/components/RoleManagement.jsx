@@ -3,7 +3,11 @@ import { api } from '../utils/auth';
 
 const AVAILABLE_PAGES = [
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'menu', label: 'Menu / Items' },
+  { key: 'menu', label: 'Menu' },
+  { key: 'items', label: 'Items (view)' },
+  { key: 'ingredients', label: 'Ingredients (view)' },
+  { key: 'items_edit', label: 'Items: Edit' },
+  { key: 'ingredients_edit', label: 'Ingredients: Edit' },
   { key: 'prices', label: 'Prices' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'users', label: 'User Management' },
@@ -19,14 +23,40 @@ const AVAILABLE_PAGES = [
 const DEFAULT_PERMISSIONS = {
   Admin: AVAILABLE_PAGES.reduce((acc, p) => ({ ...acc, [p.key]: true }), {}),
   Manager: {
-    dashboard: true, menu: true, prices: true, inventory: true, users: false,
-    shifts: true, shift_patterns: false, shift_manager: true, tasks: true,
-    receiving: true, inventory_scanner: false, roles: false
+    dashboard: true,
+    menu: true,
+    items: true,
+    ingredients: true,
+    items_edit: false,
+    ingredients_edit: false,
+    prices: true,
+    inventory: true,
+    users: false,
+    shifts: true,
+    shift_patterns: false,
+    shift_manager: true,
+    tasks: true,
+    receiving: true,
+    inventory_scanner: false,
+    roles: false
   },
   Employee: {
-    dashboard: true, menu: true, prices: false, inventory: false, users: false,
-    shifts: true, shift_patterns: false, shift_manager: false, tasks: false,
-    receiving: false, inventory_scanner: false, roles: false
+    dashboard: true,
+    menu: true,
+    items: true,
+    ingredients: true,
+    items_edit: false,
+    ingredients_edit: false,
+    prices: false,
+    inventory: false,
+    users: false,
+    shifts: true,
+    shift_patterns: false,
+    shift_manager: false,
+    tasks: false,
+    receiving: false,
+    inventory_scanner: false,
+    roles: false
   }
 };
 
