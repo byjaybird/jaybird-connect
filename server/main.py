@@ -597,6 +597,30 @@ def get_recipe(item_id):
     cursor.connection.close()
     return jsonify(rows)
 
+
+@app.route('/api/recipes/<int:item_id>', methods=['DELETE'])
+def delete_recipe_rows(item_id):
+    """Delete all recipe rows for a given item_id. This mirrors the frontend's
+    expectation when it calls DELETE /api/recipes/<item_id> before re-saving
+    the full recipe.
+    """
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("DELETE FROM recipes WHERE item_id = %s", (item_id,))
+        cursor.connection.commit()
+        return jsonify({'status': 'Recipes deleted'})
+    except Exception as e:
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
 @app.route('/api/recipes/<int:recipe_id>', methods=['PUT'])
 def update_recipe(recipe_id):
     data = request.get_json()
