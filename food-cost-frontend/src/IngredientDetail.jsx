@@ -45,10 +45,44 @@ function IngredientDetail() {
         if (!Array.isArray(ingrData.recipes)) ingrData.recipes = [];
         setIngredient(ingrData);
 
-        const conversionsData = convRes.data.filter(conv => conv.ingredient_id !== null);
-        setConversions(conversionsData);
+        // Normalize conversions -> always an array
+        let convData = [];
+        if (Array.isArray(convRes.data)) {
+          convData = convRes.data;
+        } else if (Array.isArray(convRes.data.conversions)) {
+          convData = convRes.data.conversions;
+        } else if (Array.isArray(convRes.data.ingredient_conversions)) {
+          convData = convRes.data.ingredient_conversions;
+        } else {
+          // fallback: if it looks like a single conversion object, wrap it
+          if (convRes.data && typeof convRes.data === 'object' && convRes.data.id) {
+            convData = [convRes.data];
+          } else {
+            convData = [];
+          }
+        }
+        setConversions((convData || []).filter(conv => conv && conv.ingredient_id !== null));
 
-        setPriceQuotes(quotesRes.data || []);
+        // Normalize price quotes -> always an array
+        let quotes = [];
+        if (Array.isArray(quotesRes.data)) {
+          quotes = quotesRes.data;
+        } else if (Array.isArray(quotesRes.data.price_quotes)) {
+          quotes = quotesRes.data.price_quotes;
+        } else if (Array.isArray(quotesRes.data.quotes)) {
+          quotes = quotesRes.data.quotes;
+        } else if (Array.isArray(quotesRes.data.data)) {
+          quotes = quotesRes.data.data;
+        } else {
+          // single object fallback
+          if (quotesRes.data && typeof quotesRes.data === 'object' && quotesRes.data.id) {
+            quotes = [quotesRes.data];
+          } else {
+            quotes = [];
+          }
+        }
+        setPriceQuotes(quotes || []);
+
       } catch (err) {
         console.error('Load error:', err.response || err);
         setError('Could not load ingredient data.');
