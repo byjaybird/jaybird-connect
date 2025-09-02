@@ -27,6 +27,10 @@ function ItemDetail() {
   const [editingYield, setEditingYield] = useState(false);
   const [yieldQtyEdit, setYieldQtyEdit] = useState('');
   const [yieldUnitEdit, setYieldUnitEdit] = useState('');
+  const [itemCost, setItemCost] = useState(null);
+  const [itemTotalCost, setItemTotalCost] = useState(null);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcMessage, setRecalcMessage] = useState(null);
 
   useEffect(() => {
     setAllowedEdit(canEdit(user, 'items'));
@@ -43,6 +47,23 @@ function ItemDetail() {
         if (!mounted) return;
         setItem(itemRes.data);
         setRecipe(recipeRes.data || []);
+
+        // Try to fetch computed cost for this item (if available)
+        try {
+          const unit = itemRes.data?.yield_unit || '';
+          // fetch cost per unit
+          const costRes = await api.get(`/api/item_cost/${id}?unit=${encodeURIComponent(unit)}&qty=1`);
+          if (mounted) setItemCost(costRes.data);
+
+          // If item has a yield quantity, fetch total cost for the full yield
+          if (itemRes.data?.yield_qty) {
+            const totalRes = await api.get(`/api/item_cost/${id}?unit=${encodeURIComponent(unit)}&qty=${encodeURIComponent(itemRes.data.yield_qty)}`);
+            if (mounted) setItemTotalCost(totalRes.data);
+          }
+        } catch (e) {
+          // non-fatal
+          console.warn('Failed to fetch item cost', e?.response || e);
+        }
       } catch (err) {
         console.error('Failed to load item/recipe', err.response || err);
       }
@@ -112,6 +133,44 @@ function ItemDetail() {
     }
   };
 
+  const handleRecalculate = async () => {
+    if (!item) return;
+    setRecalcLoading(true);
+    setRecalcMessage(null);
+    try {
+      const res = await api.post(`/api/items/${id}/recalculate_cost`);
+      const data = res.data || {};
+      if (data.status === 'ok' && data.cost_per_unit !== undefined) {
+        // Update stored cost locally
+        setItem(prev => ({ ...prev, cost: data.cost_per_unit }));
+        setRecalcMessage('Recalculation succeeded');
+      } else if (data.status === 'not_prep_item') {
+        setRecalcMessage(data.message || 'Item is not a prep item');
+      } else {
+        // Server may return detailed error structure
+        setRecalcMessage(JSON.stringify(data));
+      }
+
+      // Refresh computed cost display if possible
+      try {
+        const unit = item?.yield_unit || '';
+        const costRes = await api.get(`/api/item_cost/${id}?unit=${encodeURIComponent(unit)}&qty=1`);
+        setItemCost(costRes.data);
+        if (item?.yield_qty) {
+          const totalRes = await api.get(`/api/item_cost/${id}?unit=${encodeURIComponent(unit)}&qty=${encodeURIComponent(item.yield_qty)}`);
+          setItemTotalCost(totalRes.data);
+        }
+      } catch (e) {
+        console.warn('Failed to refresh item cost after recalc', e?.response || e);
+      }
+    } catch (err) {
+      console.error('Recalc failed', err?.response || err);
+      setRecalcMessage(err.response?.data || err.message || 'Recalc failed');
+    } finally {
+      setRecalcLoading(false);
+    }
+  };
+
   if (!item) return <div className="p-4">Loading item...</div>;
 
   return (
@@ -175,6 +234,31 @@ function ItemDetail() {
       <p className="mb-2"><strong>Description:</strong> {item.description}</p>
       <p className="mb-2"><strong>Notes:</strong> {item.process_notes}</p>
       <p className="mb-2"><strong>Price:</strong> ${item.price?.toFixed(2) ?? 'N/A'}</p>
+      <p className="mb-2"><strong>Stored Cost:</strong> {item.cost !== undefined && item.cost !== null ? (
+        <span>${Number(item.cost).toFixed(4)}</span>
+      ) : (
+        <span className="text-gray-500">—</span>
+      )}
+        <button
+          onClick={handleRecalculate}
+          disabled={recalcLoading}
+          className="ml-3 bg-yellow-500 text-white px-2 py-1 rounded text-sm hover:bg-yellow-600"
+        >{recalcLoading ? 'Recalculating…' : 'Recalculate'}</button>
+      </p>
+
+      <p className="mb-2"><strong>Computed Cost:</strong> {itemCost ? (
+        itemCost.status === 'ok' ? (
+          <span>${Number(itemCost.cost_per_unit).toFixed(4)} per {item?.yield_unit || itemCost.recipe_unit || 'unit'}</span>
+        ) : (
+          <span className="text-red-600">{itemCost.message || itemCost.issue || 'Unable to compute cost'}</span>
+        )
+      ) : '—'}</p>
+      {itemTotalCost && itemTotalCost.status === 'ok' && (
+        <p className="mb-2"><strong>Total Cost for Yield ({item.yield_qty} {item.yield_unit}):</strong> ${Number(itemTotalCost.total_cost).toFixed(4)}</p>
+      )}
+      {recalcMessage && (
+        <p className="text-sm text-gray-700">{typeof recalcMessage === 'string' ? recalcMessage : JSON.stringify(recalcMessage)}</p>
+      )}
       <p className="mb-2">
         <strong>Flags:</strong>{' '}
         {item.is_prep ? 'Prep' : ''}{' '}

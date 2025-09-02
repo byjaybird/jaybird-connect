@@ -25,6 +25,7 @@ function EditItem() {
     is_prep: false,
     is_for_sale: false,
     price: '',
+    cost: '',
     description: '',
     notes: '',
     is_archived: false,
@@ -71,6 +72,7 @@ function EditItem() {
             is_prep: !!data.is_prep,
             is_for_sale: !!data.is_for_sale,
             price: data.price ?? '',
+            cost: data.cost ?? '',
             description: data.description || '',
             notes: data.process_notes || '',
             is_archived: !!data.archived,
@@ -135,6 +137,7 @@ function EditItem() {
         is_prep: formData.is_prep,
         is_for_sale: formData.is_for_sale,
         price: formData.price === '' ? null : parseFloat(formData.price),
+        cost: formData.cost === '' ? null : parseFloat(formData.cost),
         description: formData.description,
         process_notes: formData.notes,
         is_archived: formData.is_archived,
@@ -231,7 +234,8 @@ function EditItem() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <input name="name" value={formData.name} onChange={handleChange} placeholder="Name" className="w-full border p-2 rounded" required />
         <input name="category" value={formData.category} onChange={handleChange} placeholder="Category" className="w-full border p-2 rounded" />
-        <input name="price" value={formData.price} onChange={handleChange} placeholder="Price" type="number" step="0.01" className="w-full border p-2 rounded" />
+        <input name="price" value={formData.price} onChange={handleChange} placeholder="Price" type="number" step="0.01" className="w-full border p-2 rounded" autocomplete="off" />
+        <input name="cost" value={formData.cost} onChange={handleChange} placeholder="Cost (stored)" type="number" step="0.0001" className="w-full border p-2 rounded" autocomplete="off" />
         <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Description" className="w-full border p-2 rounded" />
         <textarea name="notes" value={formData.notes} onChange={handleChange} placeholder="Notes" className="w-full border p-2 rounded" />
         <div className="flex gap-4">

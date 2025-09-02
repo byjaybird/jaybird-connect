@@ -22,6 +22,7 @@ function NewItemForm() {
   const [isPrep, setIsPrep] = useState(false);
   const [isForSale, setIsForSale] = useState(true);
   const [price, setPrice] = useState('');
+  const [cost, setCost] = useState('');
   const [description, setDescription] = useState('');
   const [processNotes, setProcessNotes] = useState('');
   const [ingredients, setIngredients] = useState([]);
@@ -41,7 +42,7 @@ function NewItemForm() {
   }, [user]);
 
   useEffect(() => {
-    api.get('/ingredients')
+    api.get('/api/ingredients')
       .then(res => {
         const data = res.data;
         console.log('Ingredients:', data); // Inspect to ensure names are present
@@ -50,7 +51,7 @@ function NewItemForm() {
         setIngredients(sorted); // Keep the directory-based method for consistent data structuring
       });
 
-    api.get('/items')
+    api.get('/api/items')
       .then(res => {
         const data = res.data;
         const preps = data.filter(i => i.is_prep && !i.is_archived);
@@ -70,10 +71,10 @@ function NewItemForm() {
       return;
     }
 
-    api.post('/ingredients', { name: newIngredientName })
+    api.post('/api/ingredients', { name: newIngredientName })
       .then(() => {
         setNewIngredientName('');
-        return api.get('/ingredients');
+        return api.get('/api/ingredients');
       })
       .then(res => {
         const data = res.data;
@@ -87,12 +88,13 @@ function NewItemForm() {
     e.preventDefault();
     if (!allowedCreate) return alert('You do not have permission to create items');
 
-    const res = await api.post('/items/new', {
+    const res = await api.post('/api/items/new', {
       name,
       category,
       is_prep: isPrep,
       is_for_sale: isForSale,
       price: price === '' ? null : parseFloat(price),
+      cost: cost === '' ? null : parseFloat(cost),
       description,
       process_notes: processNotes,
       yield_qty: isPrep ? yieldQty : null,
@@ -115,20 +117,15 @@ function NewItemForm() {
       return true;
     });
 
-    for (let r of cleaned) {
-      const response = await api.post('/recipes', {
-        item_id: itemId,
-        source_type: r.source_type,
-        source_id: r.source_id,
-        quantity: r.quantity,
-        unit: r.unit,
-        instructions: r.instructions || ''
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Failed to save recipe line:', error);
-        alert(`Failed to save recipe line for ${r.source_type}:${r.source_id}`);
+    if (cleaned.length > 0) {
+      try {
+        await api.post('/api/recipes', {
+          item_id: itemId,
+          recipe: cleaned
+        });
+      } catch (err) {
+        console.error('Failed to save recipe', err);
+        alert('Failed to save recipe. Please try again.');
       }
     }
 
@@ -140,11 +137,12 @@ function NewItemForm() {
       <h1 className="text-2xl font-bold mb-4">Create New Item</h1>
       {!allowedCreate && <div className="mb-4 text-yellow-700">You can view items but you do not have permission to create or modify them.</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required />
-        <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className="w-full border p-2 rounded" />
-        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" className="w-full border p-2 rounded" type="number" step="0.01" />
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full border p-2 rounded" />
-        <textarea value={processNotes} onChange={(e) => setProcessNotes(e.target.value)} placeholder="Process Notes" className="w-full border p-2 rounded" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required autocomplete="name" />
+        <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className="w-full border p-2 rounded" autocomplete="off" />
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" className="w-full border p-2 rounded" type="number" step="0.01" autocomplete="off" />
+        <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="Cost (stored)" className="w-full border p-2 rounded" type="number" step="0.0001" autocomplete="off" />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full border p-2 rounded" autocomplete="off" />
+        <textarea value={processNotes} onChange={(e) => setProcessNotes(e.target.value)} placeholder="Process Notes" className="w-full border p-2 rounded" autocomplete="off" />
 
         <div className="flex gap-4">
           <label><input type="checkbox" checked={isPrep} onChange={() => setIsPrep(!isPrep)} /> Is Prep</label>
