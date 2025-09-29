@@ -528,7 +528,7 @@ def create_item():
                 name, category, is_prep, is_for_sale, price, cost, description,
                 process_notes, archived, yield_qty, yield_unit
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING item_id
         """, (
             name, category, is_prep, is_for_sale, price, cost,

@@ -1,6 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from './utils/auth';
+import { canEdit } from './utils/permissions';
+
+function getLocalUser() {
+  try {
+    const raw = localStorage.getItem('appUser');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
 function IngredientsPage() {
   const [ingredients, setIngredients] = useState([]);
@@ -8,7 +19,14 @@ function IngredientsPage() {
   const [error, setError] = useState(null);
   const [sortField, setSortField] = useState('name');
   const [filterText, setFilterText] = useState('');
+  const [newIngredientName, setNewIngredientName] = useState('');
+  const [user, setUser] = useState(getLocalUser());
+  const [allowedCreate, setAllowedCreate] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setAllowedCreate(canEdit(user, 'ingredients'));
+  }, [user]);
 
   const fetchIngredients = async () => {
     try {
@@ -49,6 +67,20 @@ function IngredientsPage() {
     }
   };
 
+  const handleCreateIngredient = async () => {
+    if (!allowedCreate) return alert('You do not have permission to create ingredients');
+    if (!newIngredientName || !newIngredientName.trim()) return;
+
+    try {
+      await api.post('/api/ingredients', { name: newIngredientName.trim() });
+      setNewIngredientName('');
+      fetchIngredients();
+    } catch (err) {
+      console.error('Failed to create ingredient', err.response || err);
+      setError('Failed to create ingredient');
+    }
+  };
+
   const sortedFilteredIngredients = ingredients
     .filter((i) => i.name && i.name.toLowerCase().includes(filterText.toLowerCase()))
     .sort((a, b) => {
@@ -84,6 +116,25 @@ function IngredientsPage() {
     <div className="p-4">
       <h1 className="text-3xl font-bold mb-6">Ingredients</h1>
       <div className="mb-4 flex gap-4">
+        <input
+          type="text"
+          id="newIngredient"
+          name="newIngredient"
+          placeholder="New ingredient name..."
+          value={newIngredientName}
+          onChange={(e) => setNewIngredientName(e.target.value)}
+          className="border px-2 py-1 rounded"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={handleCreateIngredient}
+          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          disabled={!allowedCreate || newIngredientName.trim() === ''}
+        >
+          + Create Ingredient
+        </button>
+
         <input
           type="text"
           id="ingredientFilter"
