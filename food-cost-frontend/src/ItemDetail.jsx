@@ -31,6 +31,9 @@ function ItemDetail() {
   const [itemTotalCost, setItemTotalCost] = useState(null);
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [recalcMessage, setRecalcMessage] = useState(null);
+  const [recalcDebug, setRecalcDebug] = useState(null);
+  const [recalcShowDebug, setRecalcShowDebug] = useState(false);
+  const [showCostDebug, setShowCostDebug] = useState(false);
 
   useEffect(() => {
     setAllowedEdit(canEdit(user, 'items'));
@@ -147,8 +150,12 @@ function ItemDetail() {
       } else if (data.status === 'not_prep_item') {
         setRecalcMessage(data.message || 'Item is not a prep item');
       } else {
-        // Server may return detailed error structure
-        setRecalcMessage(JSON.stringify(data));
+        // Server may return detailed error structure — show a friendly message and keep debug data hidden by default
+        const debug = data.debug || data;
+        const friendly = data.message || friendlyCostMessage(debug);
+        setRecalcMessage(friendly);
+        setRecalcDebug(debug);
+        setRecalcShowDebug(false);
       }
 
       // Refresh computed cost display if possible
@@ -250,14 +257,27 @@ function ItemDetail() {
         itemCost.status === 'ok' ? (
           <span>${Number(itemCost.cost_per_unit).toFixed(4)} per {item?.yield_unit || itemCost.recipe_unit || 'unit'}</span>
         ) : (
-          <span className="text-red-600">{itemCost.message || itemCost.issue || 'Unable to compute cost'}</span>
+          <span className="text-gray-700">{friendlyCostMessage(itemCost)}{' '}
+            <button onClick={() => setShowCostDebug(s => !s)} className="ml-2 text-xs text-blue-600 underline">{showCostDebug ? 'Hide details' : 'Show details'}</button>
+          </span>
         )
       ) : '—'}</p>
+      {showCostDebug && itemCost && (
+        <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">{JSON.stringify(itemCost, null, 2)}</pre>
+      )}
       {itemTotalCost && itemTotalCost.status === 'ok' && (
         <p className="mb-2"><strong>Total Cost for Yield ({item.yield_qty} {item.yield_unit}):</strong> ${Number(itemTotalCost.total_cost).toFixed(4)}</p>
       )}
       {recalcMessage && (
-        <p className="text-sm text-gray-700">{typeof recalcMessage === 'string' ? recalcMessage : JSON.stringify(recalcMessage)}</p>
+        <div className="mb-2">
+          <p className="text-sm text-gray-700 inline">{recalcMessage}</p>
+          {recalcDebug && (
+            <button onClick={() => setRecalcShowDebug(s => !s)} className="ml-3 text-xs text-blue-600 underline">{recalcShowDebug ? 'Hide details' : 'Show details'}</button>
+          )}
+          {recalcShowDebug && recalcDebug && (
+            <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto mt-2">{JSON.stringify(recalcDebug, null, 2)}</pre>
+          )}
+        </div>
       )}
       <p className="mb-2">
         <strong>Flags:</strong>{' '}
@@ -303,6 +323,31 @@ function ItemDetail() {
       </div>
     </div>
   );
+}
+
+// Helper to map technical resolver responses to friendly messages
+function friendlyCostMessage(res) {
+  if (!res) return 'Computed cost not available.';
+  if (res.message) return res.message;
+  const issue = res.issue || res?.debug?.issue;
+  switch (issue) {
+    case 'missing_conversion':
+      return "Computed cost can't be calculated because a unit conversion is missing for one or more components.";
+    case 'missing_price':
+      return "Computed cost can't be calculated because a price quote is missing for one or more ingredients.";
+    case 'child_resolution_error':
+      return "Computed cost can't be calculated due to an error resolving child components. Please check the recipe and conversions.";
+    case 'invalid_quote_format':
+    case 'invalid_quote_quantity':
+      return "Computed cost can't be calculated because a price quote is invalid or incomplete.";
+    case 'no_recipe':
+      return "No recipe components found for this item; computed cost cannot be calculated.";
+    case 'missing_or_invalid_yield':
+    case 'zero_yield':
+      return "This item has invalid or missing yield information needed to compute cost.";
+    default:
+      return res.issue || 'Computed cost not available.';
+  }
 }
 
 export default ItemDetail;

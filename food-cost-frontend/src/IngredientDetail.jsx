@@ -18,6 +18,10 @@ function IngredientDetail() {
 
   const [priceQuotes, setPriceQuotes] = useState([]);
 
+  // Track items that are reported as missing conversions involving this ingredient
+  const [missingConversions, setMissingConversions] = useState([]);
+  const [missingConvLoading, setMissingConvLoading] = useState(false);
+
   // New state for price quote form
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteDate, setQuoteDate] = useState('');
@@ -89,6 +93,73 @@ function IngredientDetail() {
       }
     }
     load();
+
+    // also load missing conversions (separate call)
+    async function loadMissingConversions() {
+      setMissingConvLoading(true);
+      try {
+        const res = await api.get('/api/recipes/missing_conversions');
+        const data = res.data || [];
+        // Filter entries that reference this ingredient id in any reported issue
+        const matches = [];
+
+        function walkIssues(obj, parentItem) {
+          if (!obj) return;
+          if (Array.isArray(obj)) {
+            obj.forEach(o => walkIssues(o, parentItem));
+            return;
+          }
+          if (typeof obj !== 'object') return;
+          // If this looks like a missing_conversion issue with a missing.ingredient_id
+          if (obj.issue === 'missing_conversion' && obj.missing) {
+            if (obj.missing.ingredient_id == id || obj.missing.ingredient_id == Number(id)) {
+              matches.push({
+                item_id: parentItem.item_id,
+                name: parentItem.name,
+                from_unit: obj.missing.from_unit,
+                to_unit: obj.missing.to_unit,
+                issue: obj
+              });
+            }
+          }
+          // If the object has a component with source_id matching this ingredient and a nested result
+          if (obj.component && obj.component.source_type === 'ingredient' && (obj.component.source_id == id || obj.component.source_id == Number(id))) {
+            if (obj.result && obj.result.issue === 'missing_conversion' && obj.result.missing) {
+              matches.push({
+                item_id: parentItem.item_id,
+                name: parentItem.name,
+                from_unit: obj.result.missing.from_unit,
+                to_unit: obj.result.missing.to_unit,
+                recipe_row: obj.component.recipe_row,
+                issue: obj.result
+              });
+            }
+          }
+
+          // Recurse into nested details / result / issues
+          for (const k of Object.keys(obj)) {
+            if (obj[k] && typeof obj[k] === 'object') walkIssues(obj[k], parentItem);
+          }
+        }
+
+        data.forEach(entry => {
+          try {
+            walkIssues(entry.issues || entry, entry);
+          } catch (e) {
+            // ignore parse errors for individual entries
+          }
+        });
+
+        setMissingConversions(matches);
+      } catch (e) {
+        console.warn('Failed to load missing conversions', e?.response || e);
+      } finally {
+        setMissingConvLoading(false);
+      }
+    }
+
+    loadMissingConversions();
+
     return () => { mounted = false; };
   }, [id]);
 
@@ -369,6 +440,45 @@ function IngredientDetail() {
         )}
       </div>
 
+      {/* Items that need conversions for this ingredient */}
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-2">Items Needing Conversions</h3>
+        {missingConvLoading ? (
+          <p className="text-gray-600">Checking for missing conversions…</p>
+        ) : missingConversions.length === 0 ? (
+          <p className="text-gray-600">No missing conversions detected for this ingredient.</p>
+        ) : (
+          <ul className="list-disc ml-6 space-y-2">
+            {missingConversions.map((m, idx) => (
+              <li key={idx} className="flex items-center justify-between">
+                <div>
+                  <Link to={`/item/${m.item_id}`} className="text-blue-600 hover:underline mr-2">{m.name || ('Item ' + m.item_id)}</Link>
+                  <span className="text-sm text-gray-700">needs conversion <strong>{m.from_unit}</strong> → <strong>{m.to_unit}</strong>{m.recipe_row ? ` (recipe row ${m.recipe_row})` : ''}</span>
+                </div>
+                <div>
+                  <button
+                    onClick={() => {
+                      // open the add conversion form pre-filled
+                      setShowForm(true);
+                      setFromUnit((m.from_unit || '').toLowerCase());
+                      setToUnit((m.to_unit || '').toLowerCase());
+                      setFromAmount('1');
+                      setToAmount('');
+                      // scroll to form (best-effort)
+                      setTimeout(() => {
+                        const el = document.querySelector('#add-conversion-form');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 50);
+                    }}
+                    className="text-sm bg-blue-500 text-white px-3 py-1 rounded"
+                  >Add conversion</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <div className="mb-10">
         <h3 className="text-xl font-semibold mb-2">Conversions</h3>
         {conversions.length === 0 ? (
@@ -407,7 +517,7 @@ function IngredientDetail() {
         )}
 
         {/* Add Conversion Form */}
-        <div className="mt-4 border-t pt-4">
+        <div className="mt-4 border-t pt-4" id="add-conversion-form">
           <button
             onClick={() => setShowForm(!showForm)}
             className="text-sm text-blue-600 hover:underline"

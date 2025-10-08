@@ -800,7 +800,24 @@ def recalculate_item_cost(item_id):
                     pass
             return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit, 'unit': effective_unit})
         else:
-            return jsonify(result), 200
+            # Provide a user-friendly message for the UI while keeping technical details
+            issue = result.get('issue') if isinstance(result, dict) else None
+            user_message = "Computed cost is not available. Please ensure price quotes and unit conversions exist for all components."
+            if issue == 'missing_conversion':
+                user_message = "Computed cost can't be calculated because a unit conversion is missing for one or more components."
+            elif issue == 'missing_price':
+                user_message = "Computed cost can't be calculated because a price quote is missing for one or more ingredients."
+            elif issue == 'child_resolution_error':
+                user_message = "Computed cost can't be calculated due to an error resolving one or more child components. Please check recipe components and conversions."
+
+            return jsonify({
+                'status': 'error',
+                'issue': issue,
+                'message': user_message,
+                'computed_cost': None,
+                'unit': effective_unit,
+                'debug': result
+            }), 200
 
     finally:
         try:
