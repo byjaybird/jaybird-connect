@@ -157,29 +157,42 @@ def resolve_item_cost(item_id, recipe_unit, quantity=1, visited=None):
         total_cost = 0.0
         issues = []
 
-        for c in components:
+        for idx, c in enumerate(components):
+            # Provide context for each recipe row so callers can trace failures
+            comp_info = {
+                "recipe_row": c.get("recipe_id") or idx,
+                "source_type": c.get("source_type"),
+                "source_id": c.get("source_id"),
+                "unit": c.get("unit"),
+                "quantity": c.get("quantity")
+            }
+
             if c.get("source_type") == "ingredient":
                 cost = resolve_ingredient_cost(c.get("source_id"), c.get("unit"), c.get("quantity"))
             elif c.get("source_type") == "item":
                 # Pass a copy of visited to child to avoid cross-branch pollution
                 cost = resolve_item_cost(c.get("source_id"), c.get("unit"), c.get("quantity"), visited=set(visited))
             else:
-                issues.append({"error": "unknown_source_type", "data": c})
+                issues.append({"component": comp_info, "error": "unknown_source_type"})
                 continue
 
-            if cost.get("status") != "ok":
-                issues.append(cost)
-            else:
-                # Expect child total_cost to be numeric
-                try:
-                    total_cost += float(cost.get("total_cost", 0))
-                except Exception:
-                    issues.append({"error": "invalid_child_cost", "child": cost})
+            # Normalize unexpected returns and attach component context to errors
+            if not isinstance(cost, dict) or cost.get("status") != "ok":
+                issues.append({"component": comp_info, "result": cost})
+                continue
+
+            # Expect child total_cost to be numeric
+            try:
+                child_cost = float(cost.get("total_cost", 0))
+                total_cost += child_cost
+            except Exception:
+                issues.append({"component": comp_info, "error": "invalid_child_cost", "child": cost})
 
         if issues:
             return {
                 "status": "error",
                 "issue": "child_resolution_error",
+                "item_id": item_id,
                 "details": issues
             }
 
