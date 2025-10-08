@@ -33,7 +33,7 @@ import Dashboard from './Dashboard.jsx';
 import RoleManagement from './components/RoleManagement';
 import CostDashboard from './components/CostDashboard';
 import { api } from './utils/auth';
-import { API_URL } from './config';
+import { API_URL, DEPLOY_TIME } from './config';
 
 // Page keys available for role permissions
 const AVAILABLE_PAGES = [
@@ -267,6 +267,19 @@ function App() {
         <Route path="/inventory-scanner" element={<PrivateRoute user={user}><InventoryScanner /></PrivateRoute>} />
         <Route path="/receiving/new" element={<PrivateRoute user={user}><NewReceivingForm /></PrivateRoute>} />
       </Routes>
+
+      {/* Footer with last deployment timestamp */}
+      <footer className="bg-white border-t mt-6 py-4">
+        <div className="max-w-6xl mx-auto px-6 text-sm text-gray-600 flex justify-between items-center">
+          <div>
+            <span>Jaybird Connect</span>
+          </div>
+          <div>
+            <span>Last deployment: </span>
+            <time dateTime={DEPLOY_TIME}>{new Date(DEPLOY_TIME).toLocaleString()}</time>
+          </div>
+        </div>
+      </footer>
     </Router>
   );
 }

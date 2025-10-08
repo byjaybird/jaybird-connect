@@ -263,7 +263,9 @@ function ItemDetail() {
         )
       ) : '—'}</p>
       {showCostDebug && itemCost && (
-        <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">{JSON.stringify(itemCost, null, 2)}</pre>
+        <div className="bg-gray-50 border rounded p-3 mt-2 text-sm">
+          {renderResolverIssues(itemCost)}
+        </div>
       )}
       {itemTotalCost && itemTotalCost.status === 'ok' && (
         <p className="mb-2"><strong>Total Cost for Yield ({item.yield_qty} {item.yield_unit}):</strong> ${Number(itemTotalCost.total_cost).toFixed(4)}</p>
@@ -275,7 +277,10 @@ function ItemDetail() {
             <button onClick={() => setRecalcShowDebug(s => !s)} className="ml-3 text-xs text-blue-600 underline">{recalcShowDebug ? 'Hide details' : 'Show details'}</button>
           )}
           {recalcShowDebug && recalcDebug && (
-            <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto mt-2">{JSON.stringify(recalcDebug, null, 2)}</pre>
+            <div className="bg-gray-50 border rounded p-3 mt-2 text-sm">
+              <h4 className="font-semibold mb-2">Details</h4>
+              {renderResolverIssues(recalcDebug)}
+            </div>
           )}
         </div>
       )}
@@ -323,6 +328,61 @@ function ItemDetail() {
       </div>
     </div>
   );
+}
+
+// Render nested resolver issues into readable list
+function renderResolverIssues(obj) {
+  if (!obj) return <div>No details available.</div>;
+
+  // If this is a top-level resolver response with debug.details array, show the details
+  const details = obj.details || obj.debug?.details || (Array.isArray(obj) ? obj : null);
+  if (Array.isArray(details)) {
+    return (
+      <div>
+        {details.map((d, idx) => (
+          <div key={idx} className="mb-2">
+            <div className="font-semibold">Component: {d.component ? `${d.component.source_type} ${d.component.source_id}` : 'Unknown'}</div>
+            <div className="text-sm text-gray-700">Unit: {d.component?.unit || '—'} • Quantity: {d.component?.quantity ?? '—'}</div>
+            <div className="mt-1 text-sm">
+              {d.result ? renderSingleIssue(d.result) : renderSingleIssue(d)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Fallback: show raw JSON
+  return <pre className="text-xs">{JSON.stringify(obj, null, 2)}</pre>;
+}
+
+function renderSingleIssue(issue) {
+  if (!issue) return <div className="text-sm">Unknown issue</div>;
+  const issueType = issue.issue || issue.status || 'error';
+
+  switch (issueType) {
+    case 'missing_conversion':
+      return (
+        <div className="text-sm text-yellow-700">
+          Missing conversion: {issue.message || ''}
+          {issue.missing ? (
+            <div className="mt-1"><strong>From:</strong> {issue.missing.from_unit} <strong>To:</strong> {issue.missing.to_unit}</div>
+          ) : null}
+        </div>
+      );
+    case 'missing_price':
+      return (
+        <div className="text-sm text-red-700">
+          Missing price: {issue.message || 'No price quote found'}
+          {issue.ingredient_id ? <div className="mt-1">Ingredient ID: {issue.ingredient_id}</div> : null}
+        </div>
+      );
+    case 'invalid_quote_format':
+    case 'invalid_quote_quantity':
+      return <div className="text-sm text-red-700">Invalid price quote data: {issue.message}</div>;
+    default:
+      return <pre className="text-xs">{JSON.stringify(issue, null, 2)}</pre>;
+  }
 }
 
 // Helper to map technical resolver responses to friendly messages
