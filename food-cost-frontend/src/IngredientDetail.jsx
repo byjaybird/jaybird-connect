@@ -94,60 +94,49 @@ function IngredientDetail() {
     }
     load();
 
-    // also load missing conversions (separate call)
+    // Load missing conversions specifically for this ingredient
     async function loadMissingConversions() {
       setMissingConvLoading(true);
       try {
-        const res = await api.get('/api/recipes/missing_conversions');
+        const res = await api.get(`/api/ingredients/${id}/missing_conversions`);
         const data = res.data || [];
-        // Filter entries that reference this ingredient id in any reported issue
         const matches = [];
 
-        function walkIssues(obj, parentItem) {
-          if (!obj) return;
-          if (Array.isArray(obj)) {
-            obj.forEach(o => walkIssues(o, parentItem));
-            return;
+        function extractMissingConversionsFromIssue(issue, parent) {
+          if (!issue) return [];
+          const out = [];
+          if (Array.isArray(issue)) {
+            issue.forEach(i => out.push(...extractMissingConversionsFromIssue(i, parent)));
+            return out;
           }
-          if (typeof obj !== 'object') return;
-          // If this looks like a missing_conversion issue with a missing.ingredient_id
-          if (obj.issue === 'missing_conversion' && obj.missing) {
-            if (obj.missing.ingredient_id == id || obj.missing.ingredient_id == Number(id)) {
-              matches.push({
-                item_id: parentItem.item_id,
-                name: parentItem.name,
-                from_unit: obj.missing.from_unit,
-                to_unit: obj.missing.to_unit,
-                issue: obj
-              });
-            }
-          }
-          // If the object has a component with source_id matching this ingredient and a nested result
-          if (obj.component && obj.component.source_type === 'ingredient' && (obj.component.source_id == id || obj.component.source_id == Number(id))) {
-            if (obj.result && obj.result.issue === 'missing_conversion' && obj.result.missing) {
-              matches.push({
-                item_id: parentItem.item_id,
-                name: parentItem.name,
-                from_unit: obj.result.missing.from_unit,
-                to_unit: obj.result.missing.to_unit,
-                recipe_row: obj.component.recipe_row,
-                issue: obj.result
-              });
-            }
+          if (issue.issue === 'missing_conversion' && issue.missing) {
+            out.push({
+              item_id: parent.item_id,
+              name: parent.name,
+              from_unit: issue.missing.from_unit,
+              to_unit: issue.missing.to_unit,
+              recipe_row: issue.get && issue.get('recipe_row') ? issue.get('recipe_row') : undefined,
+              raw: issue
+            });
           }
 
-          // Recurse into nested details / result / issues
-          for (const k of Object.keys(obj)) {
-            if (obj[k] && typeof obj[k] === 'object') walkIssues(obj[k], parentItem);
+          // If this issue has nested details or components, walk them
+          for (const k of Object.keys(issue)) {
+            const v = issue[k];
+            if (v && typeof v === 'object') {
+              out.push(...extractMissingConversionsFromIssue(v, parent));
+            }
           }
+          return out;
         }
 
         data.forEach(entry => {
-          try {
-            walkIssues(entry.issues || entry, entry);
-          } catch (e) {
-            // ignore parse errors for individual entries
-          }
+          const parent = { item_id: entry.item_id, name: entry.name };
+          const issues = entry.issues || [];
+          issues.forEach(iss => {
+            const found = extractMissingConversionsFromIssue(iss, parent);
+            found.forEach(f => matches.push(f));
+          });
         });
 
         setMissingConversions(matches);

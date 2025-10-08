@@ -983,6 +983,79 @@ def get_missing_recipe_conversions():
         except Exception:
             pass
 
+
+# New endpoint: return missing conversion issues only for a specific ingredient
+@app.route('/api/ingredients/<int:ingredient_id>/missing_conversions', methods=['GET'])
+def get_ingredient_missing_conversions(ingredient_id):
+    """Return missing conversion issues for prep items that reference the given ingredient.
+
+    This is a targeted version of the existing scanner that only checks items that
+    include the specified ingredient in their recipe, so it's much cheaper than
+    scanning every prep item.
+    """
+    cursor = get_db_cursor()
+    try:
+        # Find distinct items that reference this ingredient in recipes
+        cursor.execute("""
+            SELECT DISTINCT item_id
+            FROM recipes
+            WHERE source_type = 'ingredient' AND source_id = %s
+            AND (archived IS NULL OR archived = FALSE)
+        """, (ingredient_id,))
+        rows = cursor.fetchall()
+        item_ids = [r.get('item_id') for r in rows] if rows else []
+
+        missing = []
+        for item_id in item_ids:
+            try:
+                tmpc = get_db_cursor()
+                tmpc.execute("SELECT name, yield_unit FROM items WHERE item_id = %s", (item_id,))
+                it = tmpc.fetchone()
+                tmpc.close()
+
+                if not it:
+                    continue
+
+                unit = it.get('yield_unit') or ''
+                res = resolve_item_cost(item_id, unit, 1)
+                if isinstance(res, dict) and res.get('status') != 'ok':
+                    # walk issues and pick matching missing_conversion entries
+                    def walk_issues(obj):
+                        if not obj:
+                            return []
+                        if isinstance(obj, dict):
+                            out = []
+                            # direct missing_conversion
+                            if obj.get('issue') == 'missing_conversion' and obj.get('missing'):
+                                # some missing objects include ingredient_id
+                                m = obj.get('missing')
+                                if m.get('ingredient_id') in (None, ingredient_id, str(ingredient_id), int(ingredient_id)):
+                                    out.append(obj)
+                            # or child_resolution_error - include for context
+                            if obj.get('issue') == 'child_resolution_error':
+                                out.append(obj)
+                            for v in obj.values():
+                                out.extend(walk_issues(v))
+                            return out
+                        if isinstance(obj, list):
+                            out = []
+                            for v in obj:
+                                out.extend(walk_issues(v))
+                            return out
+                        return []
+
+                    issues = walk_issues(res)
+                    if issues:
+                        missing.append({'item_id': item_id, 'name': it.get('name'), 'issues': issues})
+            except Exception as e:
+                missing.append({'item_id': item_id, 'error': str(e)})
+        return jsonify(missing)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
 print("=== ROUTES REGISTERED ===")
 for rule in app.url_map.iter_rules():
     print(rule)
