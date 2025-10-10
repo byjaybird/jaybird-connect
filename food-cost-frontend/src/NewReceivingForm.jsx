@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api, checkAuthStatus } from './utils/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Use the shared `api` axios instance which injects auth headers and base URL
 
 
 const NewReceivingForm = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [receiveDate, setReceiveDate] = useState('');
     const [supplier, setSupplier] = useState('');
     const [items, setItems] = useState([{ ingredientId: '', units: '', unitType: '', pricePerUnit: '' }]);
@@ -23,7 +24,7 @@ const NewReceivingForm = () => {
             } catch (err) {
                 // checkAuthStatus will clear token on 401; navigate to login
                 console.warn('Not authenticated, redirecting to login', err);
-                navigate('/login');
+                navigate('/login', { state: { from: location.pathname } });
                 return;
             }
 
@@ -39,7 +40,7 @@ const NewReceivingForm = () => {
             } catch (error) {
                 console.error("Error fetching ingredients", error);
                 if (error?.response?.status === 401) {
-                    navigate('/login');
+                    navigate('/login', { state: { from: location.pathname } });
                     return;
                 }
                 setError("Failed to load ingredients. Please refresh the page.");

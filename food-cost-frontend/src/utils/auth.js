@@ -25,12 +25,14 @@ api.interceptors.request.use(
     const url = config?.url || '';
 
     // Public endpoints that do NOT require an auth token
+    // Note: '/auth/check' must NOT be listed here because we use it to verify
+    // the token. Keeping it here prevented the token from being attached to
+    // the request and caused valid sessions to appear unauthenticated.
     const publicPaths = [
       '/auth/login',
       '/auth/register',
       '/auth/forgot-password',
-      '/auth/reset-password',
-      '/auth/check'
+      '/auth/reset-password'
     ];
 
     if (publicPaths.some((p) => url.includes(p))) {
@@ -86,7 +88,13 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       console.log('Auth error detected, clearing token and redirecting to login');
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Preserve the current path so after login we can return the user where they were
+      try {
+        const from = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?from=${from}`;
+      } catch (e) {
+        window.location.href = '/login';
+      }
       return Promise.reject('Authentication failed');
     }
     return Promise.reject(error);

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../utils/auth';
 
 const Login = ({ setUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');const navigate = useNavigate();
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location?.state?.from || '/';
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,9 +25,8 @@ const Login = ({ setUser }) => {
       setUser(data.employee);
       // Persist a minimal user object for component-level permission checks
       try { localStorage.setItem('appUser', JSON.stringify(data.employee)); } catch(e) { console.warn('Failed to persist appUser', e); }
-      // Keep the dashboard navigation - we'll build this page later
-      // Route for the Dashboard is mounted at '/', so navigate there
-      navigate('/');
+      // Navigate back to where the user came from (if provided), otherwise to '/'
+      navigate(returnTo);
     } else {
       console.warn('❌ Login failed:', data);
 

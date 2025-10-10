@@ -200,7 +200,7 @@ function Header({ user, onLogout }) {
 function PrivateRoute({ children, user }) {
   const token = localStorage.getItem('token');
   const location = useLocation();
-  if (!token) return <Navigate to="/login" />;
+  if (!token) return <Navigate to="/login" state={{ from: location.pathname }} />;
   // If user not yet loaded, allow; auth check in App will load user
   if (!user) return children;
   const page = pageKeyFromPath(location.pathname);
