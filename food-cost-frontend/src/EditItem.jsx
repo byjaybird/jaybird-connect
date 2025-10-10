@@ -225,6 +225,18 @@ function EditItem() {
     setRecipe(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleArchive = async () => {
+    if (!allowedEdit) return alert('You do not have permission to archive this item');
+    if (!window.confirm('Are you sure you want to archive this item? This will hide it from lists.')) return;
+    try {
+      await api.delete(`/api/items/${id}`);
+      navigate('/items');
+    } catch (err) {
+      console.error('Failed to archive item', err);
+      alert('Failed to archive item');
+    }
+  };
+
   if (!item) return <div className="p-4">Loading...</div>;
 
   return (
@@ -389,7 +401,14 @@ function EditItem() {
             >+ Create & Add</button>
           </div>
         </div>
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={!allowedEdit}>Save Changes</button>
+        <div className="flex gap-2">
+          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={!allowedEdit}>Save Changes</button>
+          {!formData.is_archived ? (
+            <button type="button" className="bg-red-600 text-white px-4 py-2 rounded" onClick={handleArchive} disabled={!allowedEdit}>Archive Item</button>
+          ) : (
+            <button type="button" className="bg-gray-400 text-white px-4 py-2 rounded" disabled>Archived</button>
+          )}
+        </div>
       </form>
     </div>
   );

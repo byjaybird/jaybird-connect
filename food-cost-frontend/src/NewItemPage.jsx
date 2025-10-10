@@ -102,8 +102,17 @@ function NewItemForm() {
     });
 
     const result = res.data;
-    if (!res.ok) {
-      alert(result.error || 'Failed to create item');
+    // axios responses don't have an `ok` property (that's from fetch). `res.ok` was always falsy,
+    // causing successful creates to be treated as failures. Check HTTP status and returned data instead.
+    if (res.status && (res.status < 200 || res.status >= 300)) {
+      alert(result?.error || result?.message || 'Failed to create item');
+      return;
+    }
+
+    // Also ensure we received an item_id in the response body
+    if (!result || !result.item_id) {
+      console.warn('Unexpected response creating item:', res);
+      alert(result?.error || result?.message || 'Failed to create item');
       return;
     }
 

@@ -102,6 +102,7 @@ function IngredientDetail() {
         const data = res.data || [];
         const matches = [];
 
+        const targetIngredientId = parseInt(id, 10);
         function extractMissingConversionsFromIssue(issue, parent) {
           if (!issue) return [];
           const out = [];
@@ -109,18 +110,30 @@ function IngredientDetail() {
             issue.forEach(i => out.push(...extractMissingConversionsFromIssue(i, parent)));
             return out;
           }
+
+          // Only collect missing_conversion entries that explicitly reference this ingredient
           if (issue.issue === 'missing_conversion' && issue.missing) {
-            out.push({
-              item_id: parent.item_id,
-              name: parent.name,
-              from_unit: issue.missing.from_unit,
-              to_unit: issue.missing.to_unit,
-              recipe_row: issue.get && issue.get('recipe_row') ? issue.get('recipe_row') : undefined,
-              raw: issue
-            });
+            const missing = issue.missing || {};
+            // Some server responses include an ingredient_id on the missing object. Only include
+            // entries that match the ingredient we're viewing.
+            if (missing.ingredient_id !== undefined && missing.ingredient_id !== null) {
+              if (String(missing.ingredient_id) === String(targetIngredientId)) {
+                out.push({
+                  item_id: parent.item_id,
+                  name: parent.name,
+                  from_unit: missing.from_unit,
+                  to_unit: missing.to_unit,
+                  recipe_row: missing.recipe_row,
+                  raw: issue
+                });
+              }
+            } else {
+              // If the missing entry does not include an ingredient_id, we skip it to avoid
+              // showing unrelated missing conversions for other ingredients.
+            }
           }
 
-          // If this issue has nested details or components, walk them
+          // Walk nested objects to find deeper missing_conversion entries that may reference this ingredient
           for (const k of Object.keys(issue)) {
             const v = issue[k];
             if (v && typeof v === 'object') {
