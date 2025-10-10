@@ -3,6 +3,7 @@ import { api } from './utils/auth';
 
 function NewPriceQuoteForm() {
   const [ingredients, setIngredients] = useState([]);
+  const [filterText, setFilterText] = useState('');
   const [form, setForm] = useState({
     ingredient_id: '',
     source: '',
@@ -21,7 +22,9 @@ function NewPriceQuoteForm() {
         const res = await api.get('/api/ingredients');
         const data = res.data;
         if (mounted) {
-          setIngredients(data);
+          // sort alphabetically by name before storing
+          const sorted = (data || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          setIngredients(sorted);
         }
       } catch (err) {
         console.error('Failed to load ingredients', err);
@@ -79,13 +82,23 @@ function NewPriceQuoteForm() {
 
       <label className="block">
         Ingredient:
-        <select name="ingredient_id" value={form.ingredient_id} onChange={handleChange} required className="w-full border p-2">
+        <input
+          type="text"
+          placeholder="Filter ingredients..."
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          className="w-full border p-2 mb-2"
+          autoComplete="off"
+        />
+        <select name="ingredient_id" value={form.ingredient_id} onChange={handleChange} required className="w-full border p-2" aria-label="Ingredient selector">
           <option value="">Select one</option>
-          {ingredients.map(ing => (
-            <option key={ing.ingredient_id} value={ing.ingredient_id}>
-              {ing.name}
-            </option>
-          ))}
+          {ingredients
+            .filter(ing => (ing.name || '').toLowerCase().includes(filterText.trim().toLowerCase()))
+            .map(ing => (
+              <option key={ing.ingredient_id} value={ing.ingredient_id}>
+                {ing.name}
+              </option>
+            ))}
         </select>
       </label>
 

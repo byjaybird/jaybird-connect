@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from './utils/auth';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = 'https://jaybird-connect.ue.r.appspot.com/api';
+// Use the shared `api` axios instance which injects auth headers and base URL
+
 
 const NewReceivingForm = () => {
     const navigate = useNavigate();
@@ -17,7 +18,7 @@ const NewReceivingForm = () => {
     useEffect(() => {
         const fetchIngredients = async () => {
             try {
-                const response = await axios.get(`${API_URL}/ingredients`);
+                const response = await api.get('/api/ingredients');
                 if (Array.isArray(response.data)) {
                     setIngredients(response.data.filter(ingredient => !ingredient.archived));
                 } else {
@@ -58,7 +59,7 @@ const NewReceivingForm = () => {
         setSuccess('');
 
         try {
-            const response = await axios.post(`${API_URL}/receiving`, {
+            const response = await api.post('/api/receiving', {
                 receiveDate,
                 supplier,
                 items
