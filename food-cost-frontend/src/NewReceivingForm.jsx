@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from './utils/auth';
+import { api, checkAuthStatus } from './utils/auth';
 import { useNavigate } from 'react-router-dom';
 
 // Use the shared `api` axios instance which injects auth headers and base URL
@@ -16,9 +16,20 @@ const NewReceivingForm = () => {
     const [success, setSuccess] = useState('');
 
     useEffect(() => {
-        const fetchIngredients = async () => {
+        let mounted = true;
+        async function init() {
+            try {
+                await checkAuthStatus();
+            } catch (err) {
+                // checkAuthStatus will clear token on 401; navigate to login
+                console.warn('Not authenticated, redirecting to login', err);
+                navigate('/login');
+                return;
+            }
+
             try {
                 const response = await api.get('/api/ingredients');
+                if (!mounted) return;
                 if (Array.isArray(response.data)) {
                     setIngredients(response.data.filter(ingredient => !ingredient.archived));
                 } else {
@@ -27,13 +38,18 @@ const NewReceivingForm = () => {
                 }
             } catch (error) {
                 console.error("Error fetching ingredients", error);
+                if (error?.response?.status === 401) {
+                    navigate('/login');
+                    return;
+                }
                 setError("Failed to load ingredients. Please refresh the page.");
                 setIngredients([]);
             }
-        };
+        }
 
-        fetchIngredients();
-    }, []);
+        init();
+        return () => { mounted = false; };
+    }, [navigate]);
 
     const handleChange = (index, event) => {
         const newItems = [...items];
@@ -107,6 +123,7 @@ const NewReceivingForm = () => {
                             onChange={e => setReceiveDate(e.target.value)}
                             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                             required
+                            autoComplete="on"
                         />
                     </div>
                     <div>
@@ -120,6 +137,7 @@ const NewReceivingForm = () => {
                             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                             placeholder="Enter supplier name"
                             required
+                            autoComplete="organization"
                         />
                     </div>
                 </div>
@@ -152,6 +170,7 @@ const NewReceivingForm = () => {
                                         onChange={e => handleChange(index, e)}
                                         className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                         required
+                                        aria-label="Ingredient"
                                     >
                                         <option value="">Select Ingredient</option>
                                         {ingredients.map(ingredient => (
@@ -173,6 +192,7 @@ const NewReceivingForm = () => {
                                         className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                         placeholder="Enter quantity"
                                         required
+                                        autoComplete="off"
                                     />
                                 </div>
                                 <div>
@@ -187,6 +207,7 @@ const NewReceivingForm = () => {
                                         className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                         placeholder="e.g., lbs, kg, cases"
                                         required
+                                        autoComplete="off"
                                     />
                                 </div>
                                 <div>
@@ -204,6 +225,7 @@ const NewReceivingForm = () => {
                                             className="shadow appearance-none border rounded w-full py-2 pl-8 pr-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                             placeholder="0.00"
                                             required
+                                            autoComplete="off"
                                         />
                                     </div>
                                 </div>
