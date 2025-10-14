@@ -235,10 +235,17 @@ def ingredients():
 def get_ingredient_detail(ingredient_id):
     cursor = get_db_cursor()
 
-    cursor.execute("""
-        SELECT * FROM ingredients
-        WHERE ingredient_id = %s AND (archived IS NULL OR archived = FALSE)
-    """, (ingredient_id,))
+    # Allow callers to request archived ingredients explicitly: ?include_archived=true
+    include_archived = request.args.get('include_archived', 'false').lower() in ('1', 'true', 'yes')
+
+    if include_archived:
+        cursor.execute("SELECT * FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+    else:
+        cursor.execute("""
+            SELECT * FROM ingredients
+            WHERE ingredient_id = %s AND (archived IS NULL OR archived = FALSE)
+        """, (ingredient_id,))
+
     ingredient = cursor.fetchone()
 
     if not ingredient:
@@ -259,7 +266,8 @@ def get_ingredient_detail(ingredient_id):
     return jsonify({
         'ingredient_id': ingredient['ingredient_id'],
         'name': ingredient['name'],
-        'recipes': recipes
+        'recipes': recipes,
+        'archived': ingredient.get('archived')
     })
 
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['PUT'])
@@ -281,7 +289,7 @@ def update_ingredient(ingredient_id):
         data.get('category'),
         data.get('unit'),
         data.get('notes'),
-        data.get('is_archived', False),
+        data.get('archived', data.get('is_archived', False)),
         ingredient_id
     ))
 

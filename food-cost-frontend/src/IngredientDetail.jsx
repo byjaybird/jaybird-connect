@@ -7,6 +7,8 @@ function IngredientDetail() {
   const navigate = useNavigate();
 
   const [ingredient, setIngredient] = useState(null);
+  const [isArchived, setIsArchived] = useState(false);
+  const [savingArchive, setSavingArchive] = useState(false);
   const [conversions, setConversions] = useState([]);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -39,7 +41,8 @@ function IngredientDetail() {
     let mounted = true;
     async function load() {
       try {
-        const ingrRes = await api.get(`/api/ingredients/${id}`);
+        // Request ingredient and include archived so we can show/unarchive it from the UI when necessary
+        const ingrRes = await api.get(`/api/ingredients/${id}?include_archived=true`);
         const convRes = await api.get(`/api/ingredient_conversions?ingredient_id=${id}`);
         const quotesRes = await api.get(`/api/price_quotes?ingredient_id=${id}&limit=10`);
 
@@ -48,6 +51,10 @@ function IngredientDetail() {
         if (!ingrData || ingrData.error) throw new Error('Invalid ingredient response');
         if (!Array.isArray(ingrData.recipes)) ingrData.recipes = [];
         setIngredient(ingrData);
+        // Normalize archived value coming from server (could be boolean or string)
+        const arch = ingrData.archived;
+        const isArch = arch === true || arch === 'true' || arch === 't' || arch === 1 || arch === '1';
+        setIsArchived(Boolean(isArch));
 
         // Normalize conversions -> always an array
         let convData = [];
@@ -177,11 +184,30 @@ function IngredientDetail() {
 
   const handleArchive = async () => {
     try {
+      setSavingArchive(true);
       await api.put(`/api/ingredients/${id}`, { archived: true });
+      setIsArchived(true);
+      // Redirect back to ingredients list after archiving
       navigate('/ingredients');
     } catch (err) {
       console.error('Archive error:', err.response || err);
       setError('Failed to archive ingredient.');
+    } finally {
+      setSavingArchive(false);
+    }
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      setSavingArchive(true);
+      await api.put(`/api/ingredients/${id}`, { archived: false });
+      setIsArchived(false);
+      setError(null);
+    } catch (err) {
+      console.error('Unarchive error:', err.response || err);
+      setError('Failed to unarchive ingredient.');
+    } finally {
+      setSavingArchive(false);
     }
   };
 
@@ -271,8 +297,20 @@ function IngredientDetail() {
 
   if (!ingredient) return <div className="p-4">Loading...</div>;
 
+  // Render archived alert when applicable
+  const archivedAlert = isArchived ? (
+    <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded">
+      <strong>Archived:</strong> This ingredient is archived and hidden from most lists. You can unarchive it to make it visible again.
+      <div className="mt-2">
+        <button onClick={handleUnarchive} disabled={savingArchive} className="bg-white text-red-700 border border-red-700 px-3 py-1 rounded mr-2">Unarchive</button>
+        <button onClick={() => navigate('/ingredients')} className="px-3 py-1 border rounded">Back to list</button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="p-4 max-w-3xl mx-auto">
+      {archivedAlert}
       <h2 className="text-3xl font-bold mb-2">{ingredient.name}</h2>
       <p className="text-sm text-gray-500 mb-6">Category: {ingredient.category}</p>
 
