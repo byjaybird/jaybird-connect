@@ -275,28 +275,66 @@ def update_ingredient(ingredient_id):
     data = request.get_json()
     cursor = get_db_cursor()
 
-    # Build a flexible SQL update
-    cursor.execute("""
-        UPDATE ingredients
-        SET name = %s,
-            category = %s,
-            unit = %s,
-            notes = %s,
-            archived = %s
-        WHERE ingredient_id = %s
-    """, (
-        data.get('name'),
-        data.get('category'),
-        data.get('unit'),
-        data.get('notes'),
-        data.get('archived', data.get('is_archived', False)),
-        ingredient_id
-    ))
+    # Log incoming payload for debugging archive/unarchive issues
+    try:
+        logging.debug("update_ingredient called for id=%s payload=%s", ingredient_id, data)
+    except Exception:
+        pass
 
-    cursor.connection.commit()
-    cursor.connection.close()
+    # Build a flexible SQL update. Accept either 'archived' or legacy 'is_archived'.
+    archived_val = data.get('archived', data.get('is_archived', False))
 
-    return jsonify({'status': 'Ingredient updated'})
+    try:
+        cursor.execute("""
+            UPDATE ingredients
+            SET name = %s,
+                category = %s,
+                unit = %s,
+                notes = %s,
+                archived = %s
+            WHERE ingredient_id = %s
+        """, (
+            data.get('name'),
+            data.get('category'),
+            data.get('unit'),
+            data.get('notes'),
+            archived_val,
+            ingredient_id
+        ))
+
+        # Commit the change
+        try:
+            cursor.connection.commit()
+        except Exception:
+            try:
+                cursor.connection.rollback()
+            except Exception:
+                pass
+
+        # Fetch updated row to confirm
+        try:
+            cursor.execute("SELECT ingredient_id, name, archived FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+            updated = cursor.fetchone()
+        except Exception:
+            updated = None
+
+        cursor.close()
+        if updated:
+            return jsonify({'status': 'Ingredient updated', 'ingredient': updated})
+        else:
+            return jsonify({'status': 'Ingredient updated'})
+
+    except Exception as e:
+        logging.exception("Failed to update ingredient %s", ingredient_id)
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/ingredients/merge', methods=['POST'])
 def merge_ingredients():
