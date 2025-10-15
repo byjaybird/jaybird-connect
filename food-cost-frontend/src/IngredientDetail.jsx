@@ -185,13 +185,17 @@ function IngredientDetail() {
   const handleArchive = async () => {
     try {
       setSavingArchive(true);
-      await api.put(`/api/ingredients/${id}`, { archived: true });
-      setIsArchived(true);
+      const res = await api.put(`/api/ingredients/${id}`, { archived: true });
+      // verify the update by re-fetching the ingredient (include archived to be safe)
+      const check = await api.get(`/api/ingredients/${id}?include_archived=true`);
+      setIsArchived(Boolean(check.data?.archived));
       // Redirect back to ingredients list after archiving
       navigate('/ingredients');
     } catch (err) {
       console.error('Archive error:', err.response || err);
-      setError('Failed to archive ingredient.');
+      // surface server-provided message when available
+      const msg = err?.response?.data?.error || err?.response?.data || err.message;
+      setError(`Failed to archive ingredient: ${msg}`);
     } finally {
       setSavingArchive(false);
     }
@@ -200,12 +204,22 @@ function IngredientDetail() {
   const handleUnarchive = async () => {
     try {
       setSavingArchive(true);
-      await api.put(`/api/ingredients/${id}`, { archived: false });
-      setIsArchived(false);
+      const res = await api.put(`/api/ingredients/${id}`, { archived: false });
+      // Re-fetch to confirm change persisted
+      const check = await api.get(`/api/ingredients/${id}?include_archived=true`);
+      if (!check.data || check.data.error) {
+        setError('Unarchive request completed but could not verify updated ingredient. Check server logs.');
+        return;
+      }
+      setIngredient(check.data);
+      const arch = check.data.archived;
+      const isArch = arch === true || arch === 'true' || arch === 't' || arch === 1 || arch === '1';
+      setIsArchived(Boolean(isArch));
       setError(null);
     } catch (err) {
       console.error('Unarchive error:', err.response || err);
-      setError('Failed to unarchive ingredient.');
+      const msg = err?.response?.data?.error || err?.response?.data || err.message;
+      setError(`Failed to unarchive ingredient: ${msg}`);
     } finally {
       setSavingArchive(false);
     }
