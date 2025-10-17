@@ -272,7 +272,14 @@ def get_ingredient_detail(ingredient_id):
 
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['PUT'])
 def update_ingredient(ingredient_id):
-    data = request.get_json()
+    """Perform a safe, partial-friendly update of an ingredient.
+
+    If the client sends only a subset of fields (for example only `archived`),
+    we preserve the existing values for fields that are not supplied instead of
+    overwriting them with NULL. This avoids accidental data loss when the UI
+    sends partial payloads.
+    """
+    data = request.get_json() or {}
     cursor = get_db_cursor()
 
     # Log incoming payload for debugging archive/unarchive issues
@@ -281,10 +288,25 @@ def update_ingredient(ingredient_id):
     except Exception:
         pass
 
-    # Build a flexible SQL update. Accept either 'archived' or legacy 'is_archived'.
-    archived_val = data.get('archived', data.get('is_archived', False))
-
     try:
+        # Fetch existing row so we can merge values
+        cursor.execute("SELECT * FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            cursor.close()
+            return jsonify({'error': 'Ingredient not found'}), 404
+
+        # Helper: if key present in payload use it (even if null/false), otherwise keep existing
+        def pick(key):
+            return data[key] if key in data else existing.get(key)
+
+        name = pick('name')
+        category = pick('category')
+        unit = pick('unit')
+        notes = pick('notes')
+        # Support both 'archived' and legacy 'is_archived' keys; if neither present keep existing
+        archived_val = data.get('archived', data.get('is_archived', existing.get('archived', False)))
+
         cursor.execute("""
             UPDATE ingredients
             SET name = %s,
@@ -294,10 +316,10 @@ def update_ingredient(ingredient_id):
                 archived = %s
             WHERE ingredient_id = %s
         """, (
-            data.get('name'),
-            data.get('category'),
-            data.get('unit'),
-            data.get('notes'),
+            name,
+            category,
+            unit,
+            notes,
             archived_val,
             ingredient_id
         ))

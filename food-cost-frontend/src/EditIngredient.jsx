@@ -29,7 +29,7 @@ function EditIngredient() {
     let mounted = true;
     async function load() {
       try {
-        const res = await api.get(`/api/ingredients/${id}`);
+        const res = await api.get(`/api/ingredients/${id}?include_archived=true`);
         if (!mounted) return;
         if (res.data.error) throw new Error(res.data.error);
         setIngredient(res.data);
@@ -94,6 +94,7 @@ function EditIngredient() {
           className="w-full border p-2 rounded"
           placeholder="Name"
           required
+          autoComplete="off"
         />
         <input
           name="category"
@@ -101,6 +102,7 @@ function EditIngredient() {
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Category"
+          autoComplete="off"
         />
         <input
           name="unit"
@@ -108,6 +110,7 @@ function EditIngredient() {
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Unit (e.g. oz, lb, tsp)"
+          autoComplete="off"
         />
         <textarea
           name="notes"
@@ -115,6 +118,7 @@ function EditIngredient() {
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Notes"
+          autoComplete="off"
         />
         <div className="flex space-x-4">
           <button

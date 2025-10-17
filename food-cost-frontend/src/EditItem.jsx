@@ -300,7 +300,7 @@ function EditItem() {
                   {
                     label: '🧂 Ingredients',
                     options: ingredients
-                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .filter((i) => (i.name || '').toLowerCase().includes(filterText.toLowerCase()))
                       .map((i) => ({
                         value: `ingredient:${i.ingredient_id}`,
                         label: `🧂 ${i.name || 'Unnamed Ingredient'}`
@@ -309,7 +309,7 @@ function EditItem() {
                   {
                     label: '🛠️ Prep Items',
                     options: prepItems
-                      .filter((i) => i.name.toLowerCase().includes(filterText.toLowerCase()))
+                      .filter((i) => (i.name || '').toLowerCase().includes(filterText.toLowerCase()))
                       .map((i) => ({
                         value: `item:${i.item_id}`,
                         label: `🛠️ ${i.name || 'Unnamed Prep Item'}`
