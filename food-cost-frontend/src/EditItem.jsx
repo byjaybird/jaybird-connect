@@ -47,10 +47,12 @@ function EditItem() {
   const mapRecipeToOptions = (r) => {
     if (r.source_type === 'ingredient') {
       const ingredient = ingredients.find(i => i.ingredient_id === r.source_id);
-      return ingredient ? { value: `ingredient:${ingredient.ingredient_id}`, label: `🧂 ${ingredient.name || 'Unnamed Ingredient'}` } : null;
+      const labelName = ingredient ? ingredient.name : (r.source_name || 'Unnamed Ingredient');
+      return { value: `ingredient:${r.source_id}`, label: `🧂 ${labelName || 'Unnamed Ingredient'}` };
     } else {
       const item = prepItems.find(i => i.item_id === r.source_id);
-      return item ? { value: `item:${item.item_id}`, label: `🛠️ ${item.name || 'Unnamed Prep Item'}` } : null;
+      const labelName = item ? item.name : (r.source_name || 'Unnamed Prep Item');
+      return { value: `item:${r.source_id}`, label: `🛠️ ${labelName || 'Unnamed Prep Item'}` };
     }
   };
 

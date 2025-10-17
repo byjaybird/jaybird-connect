@@ -179,11 +179,11 @@ function NewItemForm() {
             <div key={index} className="mb-2 flex gap-2 items-center">
               <Select
                 value={{
-                  value: `${r.source_type}:${r.source_id}`,
-                  label:
-                    r.source_type === 'ingredient'
-                      ? `🧂 ${ingredients.find(i => i.ingredient_id === r.source_id)?.name || 'Unnamed Ingredient'}`
-                      : `🛠️ ${prepItems.find(i => i.item_id === r.source_id)?.name || 'Unnamed Prep Item'}`
+                                  value: `${r.source_type}:${r.source_id}`,
+                label:
+                  r.source_type === 'ingredient'
+                    ? `🧂 ${ingredients.find(i => i.ingredient_id === r.source_id)?.name || r.source_name || 'Unnamed Ingredient'}`
+                    : `🛠️ ${prepItems.find(i => i.item_id === r.source_id)?.name || r.source_name || 'Unnamed Prep Item'}`
                 }}
                 onChange={(selectedOption) => {
                   if (!allowedCreate) return alert('You do not have permission to modify the recipe');
