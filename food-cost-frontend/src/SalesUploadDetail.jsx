@@ -1,0 +1,127 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { api } from './utils/auth';
+
+export default function SalesUploadDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [lines, setLines] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState({});
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const [lres, ires] = await Promise.all([
+          api.get('/api/sales/lines', { params: { upload_id: id, limit: 2000 } }),
+          api.get('/api/items')
+        ]);
+        if (!mounted) return;
+        setLines(Array.isArray(lres.data) ? lres.data : []);
+        setItems(Array.isArray(ires.data) ? ires.data : []);
+      } catch (err) {
+        console.error('Failed to load lines/items', err);
+        setError('Failed to load upload details');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [id]);
+
+  const handleChange = (lineId, value) => {
+    setLines(lines.map(l => (l.id === lineId ? { ...l, item_id: value } : l)));
+  };
+
+  const saveLine = async (line) => {
+    setSaving(prev => ({ ...prev, [line.id]: true }));
+    try {
+      await api.put(`/api/sales/lines/${line.id}`, { item_id: line.item_id });
+    } catch (err) {
+      console.error('Failed to save line mapping', err);
+      alert('Save failed');
+    } finally {
+      setSaving(prev => ({ ...prev, [line.id]: false }));
+    }
+  };
+
+  const saveAll = async () => {
+    setSaving({ all: true });
+    try {
+      for (const l of lines) {
+        try {
+          await api.put(`/api/sales/lines/${l.id}`, { item_id: l.item_id });
+        } catch (e) {
+          console.warn('Failed to save line', l.id, e);
+        }
+      }
+      alert('Saved all mappings (best-effort)');
+      // reload
+      const res = await api.get('/api/sales/lines', { params: { upload_id: id, limit: 2000 } });
+      setLines(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Save all failed', err);
+      alert('Save all failed');
+    } finally {
+      setSaving({});
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Sales Upload Details</h1>
+          <p className="text-gray-600">Upload ID: {id}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => navigate('/sales')} className="bg-gray-200 px-3 py-1 rounded">Back</button>
+          <button onClick={saveAll} disabled={saving.all} className="bg-blue-600 text-white px-3 py-1 rounded">Save All</button>
+        </div>
+      </div>
+
+      {loading ? <div>Loading...</div> : error ? <div className="text-red-600">{error}</div> : (
+        <div className="bg-white shadow rounded">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left">
+                <th className="p-2">Row</th>
+                <th className="p-2">Item Name</th>
+                <th className="p-2">Qty</th>
+                <th className="p-2">Net</th>
+                <th className="p-2">Mapped Item</th>
+                <th className="p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, idx) => (
+                <tr key={l.id} className="border-t">
+                  <td className="p-2">{idx + 1}</td>
+                  <td className="p-2">{l.item_name}</td>
+                  <td className="p-2">{l.item_qty}</td>
+                  <td className="p-2">{l.net_sales != null ? `$${Number(l.net_sales).toFixed(2)}` : '—'}</td>
+                  <td className="p-2">
+                    <select value={l.item_id || ''} onChange={e => handleChange(l.id, e.target.value)} className="border rounded px-2 py-1">
+                      <option value="">-- map to item --</option>
+                      {items.map(it => (
+                        <option key={it.item_id} value={it.item_id}>{it.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-2">
+                    <button onClick={() => saveLine(l)} disabled={saving[l.id]} className="bg-green-600 text-white px-2 py-1 rounded">{saving[l.id] ? 'Saving...' : 'Save'}</button>
+                  </td>
+                </tr>
+              ))}
+              {lines.length === 0 && <tr><td colSpan={6} className="p-4 text-gray-600">No lines found for this upload</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

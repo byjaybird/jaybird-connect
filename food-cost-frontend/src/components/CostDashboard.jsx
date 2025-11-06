@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from '../config';
 import { api } from '../utils/auth';
+import PurchasesVsSalesCard from './PurchasesVsSalesCard';
 
 function MissingConversionsCard() {
   const [missing, setMissing] = useState([]);
@@ -106,6 +107,9 @@ export default function CostDashboard() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <MissingConversionsCard />
       <MarginsCard />
+      <div className="lg:col-span-2">
+        <PurchasesVsSalesCard />
+      </div>
     </div>
   );
 }

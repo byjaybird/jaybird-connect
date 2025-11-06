@@ -12,12 +12,14 @@ from .utils.cost_resolver import resolve_item_cost
 from .utils.db import get_db_cursor
 from .inventory_routes import inventory_bp
 from .receiving_routes import receiving_bp
+from .sales_routes import sales_bp
 from .tasks_routes import tasks_bp
 from .auth_routes import auth_bp
 from .user_routes import user_bp
 from .shift_routes import shift_routes as shift_bp
 from .departments_routes import departments_bp
 from .services.shift_api import ShiftAPI
+from .reports_routes import reports_bp
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
@@ -27,6 +29,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(mes
 from .role_permissions import role_permissions_bp
 from .prices_routes import prices_bp
 from .conversions_routes import conversions_bp
+from .sales_mappings_routes import sales_mappings_bp
 
 app = Flask(__name__)# Configure CORS with a more precise configuration
 CORS(app, 
@@ -175,6 +178,7 @@ def after_request(response):
 
 app.register_blueprint(inventory_bp)
 app.register_blueprint(receiving_bp)
+app.register_blueprint(sales_bp)
 app.register_blueprint(tasks_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='')  # This will handle /auth/check
@@ -184,6 +188,8 @@ app.register_blueprint(departments_bp, url_prefix='/api')
 app.register_blueprint(role_permissions_bp, url_prefix='/api')
 app.register_blueprint(prices_bp)
 app.register_blueprint(conversions_bp, url_prefix='/api')
+app.register_blueprint(sales_mappings_bp)
+app.register_blueprint(reports_bp)
 
 try:
     test_conn = psycopg2.connect(

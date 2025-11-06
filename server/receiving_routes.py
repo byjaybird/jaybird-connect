@@ -49,3 +49,57 @@ def submit_receiving():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@receiving_bp.route('/purchases/daily_agg', methods=['GET'])
+def purchases_daily_agg():
+    """Return aggregated purchases for a given receive_date grouped by ingredient."""
+    receive_date = request.args.get('receive_date')
+    if not receive_date:
+        return jsonify({'error': 'receive_date required'}), 400
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT rg.ingredient_id,
+                   COALESCE(i.name, '') AS ingredient_name,
+                   SUM(rg.units) AS total_units,
+                   SUM(COALESCE(rg.units, 0) * COALESCE(rg.price_per_unit, 0)) AS total_cost
+            FROM received_goods rg
+            LEFT JOIN ingredients i ON rg.ingredient_id = i.ingredient_id
+            WHERE rg.receive_date = %s
+            GROUP BY rg.ingredient_id, i.name
+            ORDER BY total_cost DESC
+            """,
+            (receive_date,)
+        )
+        rows = cursor.fetchall()
+        return jsonify(rows)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@receiving_bp.route('/purchases/recent', methods=['GET'])
+def purchases_recent():
+    """Return recent received goods rows (with ingredient name)"""
+    limit = int(request.args.get('limit', 50))
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT rg.*, COALESCE(i.name, '') AS ingredient_name
+            FROM received_goods rg
+            LEFT JOIN ingredients i ON rg.ingredient_id = i.ingredient_id
+            ORDER BY rg.receive_date DESC, rg.id DESC
+            LIMIT %s
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        return jsonify(rows)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass

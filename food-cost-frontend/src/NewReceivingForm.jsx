@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, checkAuthStatus } from './utils/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
+import Select from 'react-select';
 
 // Use the shared `api` axios instance which injects auth headers and base URL
 
@@ -55,6 +56,12 @@ const NewReceivingForm = () => {
     const handleChange = (index, event) => {
         const newItems = [...items];
         newItems[index][event.target.name] = event.target.value;
+        setItems(newItems);
+    };
+
+    const handleSelectChange = (index, selectedOption) => {
+        const newItems = [...items];
+        newItems[index].ingredientId = selectedOption ? selectedOption.value : '';
         setItems(newItems);
     };
 
@@ -165,21 +172,16 @@ const NewReceivingForm = () => {
                                     <label className="block text-gray-700 text-sm font-bold mb-2">
                                         Ingredient
                                     </label>
-                                    <select
+                                    <Select
                                         name="ingredientId"
-                                        value={item.ingredientId}
-                                        onChange={e => handleChange(index, e)}
-                                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                        required
+                                        value={item.ingredientId ? { value: item.ingredientId, label: (ingredients.find(i => i.ingredient_id === item.ingredientId) || {}).name } : null}
+                                        onChange={(selected) => handleSelectChange(index, selected)}
+                                        options={ingredients.map(ingredient => ({ value: ingredient.ingredient_id, label: ingredient.name }))}
+                                        className="shadow border rounded w-full"
+                                        placeholder="Select Ingredient"
+                                        isClearable
                                         aria-label="Ingredient"
-                                    >
-                                        <option value="">Select Ingredient</option>
-                                        {ingredients.map(ingredient => (
-                                            <option key={ingredient.ingredient_id} value={ingredient.ingredient_id}>
-                                                {ingredient.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-gray-700 text-sm font-bold mb-2">

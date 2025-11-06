@@ -32,12 +32,16 @@ import ShiftManager from './components/ShiftManager';
 import Dashboard from './Dashboard.jsx';
 import RoleManagement from './components/RoleManagement';
 import CostDashboard from './components/CostDashboard';
+import SalesMappingManager from './components/SalesMappingManager';
+import SalesUpload from './SalesUpload';
+import SalesUploadsPage from './SalesUploadsPage';
+import SalesUploadDetail from './SalesUploadDetail';
 import { api } from './utils/auth';
 import { API_URL, DEPLOY_TIME } from './config';
 
 // Page keys available for role permissions
 const AVAILABLE_PAGES = [
-  'dashboard', 'menu', 'prices', 'inventory', 'users', 'shifts', 'shift_patterns', 'shift_manager', 'tasks', 'items', 'ingredients', 'receiving', 'inventory_scanner', 'roles'
+  'dashboard', 'menu', 'prices', 'inventory', 'users', 'shifts', 'shift_patterns', 'shift_manager', 'tasks', 'items', 'ingredients', 'receiving', 'inventory_scanner', 'roles', 'sales'
 ];
 
 const DEFAULT_PERMISSIONS = {
@@ -56,7 +60,8 @@ const DEFAULT_PERMISSIONS = {
     ingredients: true,
     receiving: true,
     inventory_scanner: false,
-    roles: false
+    roles: false,
+    sales: true
   },
   Employee: {
     dashboard: true,
@@ -72,7 +77,8 @@ const DEFAULT_PERMISSIONS = {
     ingredients: true,
     receiving: false,
     inventory_scanner: false,
-    roles: false
+    roles: false,
+    sales: false
   }
 };
 
@@ -170,6 +176,9 @@ function Header({ user, onLogout }) {
           {hasAccess(user, 'tasks') && (
             <Link to="/tasks" className="text-sm font-semibold text-gray-700 hover:text-black">Tasks</Link>
           )}
+          {hasAccess(user, 'sales') && (
+            <Link to="/sales" className="text-sm font-semibold text-gray-700 hover:text-black">Sales</Link>
+          )}
           {hasAccess(user, 'roles') && (
             <Link to="/roles" className="text-sm font-semibold text-gray-700 hover:text-black">Role Management</Link>
           )}
@@ -266,6 +275,10 @@ function App() {
         <Route path="/prices/new" element={<PrivateRoute user={user}><NewPriceQuoteForm /></PrivateRoute>} />
         <Route path="/inventory-scanner" element={<PrivateRoute user={user}><InventoryScanner /></PrivateRoute>} />
         <Route path="/receiving/new" element={<PrivateRoute user={user}><NewReceivingForm /></PrivateRoute>} />
+        <Route path="/sales/upload" element={<PrivateRoute user={user}><SalesUpload /></PrivateRoute>} />
+        <Route path="/sales" element={<PrivateRoute user={user}><SalesUploadsPage /></PrivateRoute>} />
+        <Route path="/sales/:id" element={<PrivateRoute user={user}><SalesUploadDetail /></PrivateRoute>} />
+        <Route path="/mappings/sales" element={<PrivateRoute user={user}><SalesMappingManager /></PrivateRoute>} />
       </Routes>
 
       {/* Footer with last deployment timestamp */}
