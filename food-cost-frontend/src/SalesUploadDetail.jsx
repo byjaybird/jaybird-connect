@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from './utils/auth';
+import Select from 'react-select';
 
 export default function SalesUploadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [lines, setLines] = useState([]);
   const [items, setItems] = useState([]);
+  const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
   const [error, setError] = useState(null);
@@ -15,15 +17,17 @@ export default function SalesUploadDetail() {
     let mounted = true;
     async function load() {
       try {
-        const [lres, ires] = await Promise.all([
+        const [lres, ires, mres] = await Promise.all([
           api.get('/api/sales/lines', { params: { upload_id: id, limit: 2000 } }),
-          api.get('/api/items')
+          api.get('/api/items'),
+          api.get('/api/sales/mappings')
         ]);
         if (!mounted) return;
         setLines(Array.isArray(lres.data) ? lres.data : []);
         setItems(Array.isArray(ires.data) ? ires.data : []);
+        setMappings(Array.isArray(mres.data) ? mres.data : []);
       } catch (err) {
-        console.error('Failed to load lines/items', err);
+        console.error('Failed to load lines/items/mappings', err);
         setError('Failed to load upload details');
       } finally {
         if (mounted) setLoading(false);
@@ -105,12 +109,30 @@ export default function SalesUploadDetail() {
                   <td className="p-2">{l.item_qty}</td>
                   <td className="p-2">{l.net_sales != null ? `$${Number(l.net_sales).toFixed(2)}` : '—'}</td>
                   <td className="p-2">
-                    <select value={l.item_id || ''} onChange={e => handleChange(l.id, e.target.value)} className="border rounded px-2 py-1">
-                      <option value="">-- map to item --</option>
-                      {items.map(it => (
-                        <option key={it.item_id} value={it.item_id}>{it.name}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={(() => {
+                        // Prefer the explicit item_id on the line; otherwise fall back to any mapping for the sales name
+                        const explicitId = l.item_id;
+                        if (explicitId) {
+                          const it = items.find(itm => itm.item_id === explicitId);
+                          return { value: explicitId, label: it ? it.name : String(explicitId) };
+                        }
+                        const normName = (l.item_name || '').trim().toLowerCase();
+                        const map = mappings.find(m => m.normalized === normName);
+                        if (map && map.item_id) {
+                          const it2 = items.find(itm => itm.item_id === map.item_id);
+                          return { value: map.item_id, label: it2 ? it2.name : String(map.item_id) };
+                        }
+                        return null;
+                      })()}
+                      onChange={(selected) => handleChange(l.id, selected ? selected.value : '')}
+                      options={items.map(it => ({ value: it.item_id, label: it.name }))}
+                      className="react-select-container"
+                      classNamePrefix="react-select"
+                      isClearable
+                      placeholder="-- map to item --"
+                      aria-label="Mapped Item"
+                    />
                   </td>
                   <td className="p-2">
                     <button onClick={() => saveLine(l)} disabled={saving[l.id]} className="bg-green-600 text-white px-2 py-1 rounded">{saving[l.id] ? 'Saving...' : 'Save'}</button>
