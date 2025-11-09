@@ -11,6 +11,8 @@ export default function SalesUploadDetail() {
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -75,6 +77,28 @@ export default function SalesUploadDetail() {
     }
   };
 
+  const reconcileUpload = async () => {
+    setReconciling(true);
+    setReconcileResult(null);
+    try {
+      const res = await api.post('/api/sales/reconcile', { upload_id: id });
+      const updated = res?.data?.updated ?? 0;
+      setReconcileResult(updated);
+      // reload lines and mappings
+      const [linesRes, mappingsRes] = await Promise.all([
+        api.get('/api/sales/lines', { params: { upload_id: id, limit: 2000 } }),
+        api.get('/api/sales/mappings')
+      ]);
+      setLines(Array.isArray(linesRes.data) ? linesRes.data : []);
+      setMappings(Array.isArray(mappingsRes.data) ? mappingsRes.data : []);
+    } catch (err) {
+      console.error('Reconcile failed', err);
+      alert('Reconcile failed');
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -85,8 +109,15 @@ export default function SalesUploadDetail() {
         <div className="flex gap-2">
           <button onClick={() => navigate('/sales')} className="bg-gray-200 px-3 py-1 rounded">Back</button>
           <button onClick={saveAll} disabled={saving.all} className="bg-blue-600 text-white px-3 py-1 rounded">Save All</button>
+          <button onClick={reconcileUpload} disabled={reconciling} className="bg-indigo-600 text-white px-3 py-1 rounded">{reconciling ? 'Reconciling...' : 'Reconcile Upload'}</button>
         </div>
       </div>
+
+      {reconcileResult !== null && (
+        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+          Applied mappings to {reconcileResult} rows in this upload.
+        </div>
+      )}
 
       {loading ? <div>Loading...</div> : error ? <div className="text-red-600">{error}</div> : (
         <div className="bg-white shadow rounded">

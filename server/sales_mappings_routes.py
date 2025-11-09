@@ -53,14 +53,30 @@ def delete_mapping(mapping_id):
 @sales_mappings_bp.route('/sales/reconcile', methods=['POST'])
 def reconcile_sales_mappings():
     """Apply mappings to existing sales_daily_lines rows where item_id is NULL.
-    Optional JSON body: { "business_date": "YYYY-MM-DD" }
+    Optional JSON body:
+      { "business_date": "YYYY-MM-DD" }
+      or { "upload_id": <id> }
     Returns number of rows updated.
     """
     data = request.get_json() or {}
     business_date = data.get('business_date')
+    upload_id = data.get('upload_id')
     cursor = get_db_cursor()
     try:
-        if business_date:
+        if upload_id is not None:
+            cursor.execute(
+                """
+                UPDATE sales_daily_lines s
+                SET item_id = m.item_id
+                FROM sales_item_mappings m
+                WHERE s.item_id IS NULL
+                AND lower(trim(s.item_name)) = m.normalized
+                AND s.upload_id = %s
+                RETURNING s.id
+                """,
+                (upload_id,)
+            )
+        elif business_date:
             cursor.execute(
                 """
                 UPDATE sales_daily_lines s
