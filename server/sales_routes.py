@@ -145,6 +145,10 @@ def upload_sales():
             discount_amount = parse_numeric(r.get('Discount Amount') or r.get('DiscountAmount'))
             net_amount = parse_numeric(r.get('Net Amount') or r.get('NetAmount'))
 
+            # Skip rows that were not actually sold (zero quantity). Ignore rows where item_qty == 0.
+            if item_qty is not None and item_qty == 0:
+                continue
+
             # attempt to map menu_item to an internal item_id using sales_item_mappings
             mapped_item_id = None
             try:
