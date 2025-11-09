@@ -46,10 +46,41 @@ export default function SalesUploadDetail() {
   const saveLine = async (line) => {
     setSaving(prev => ({ ...prev, [line.id]: true }));
     try {
-      await api.put(`/api/sales/lines/${line.id}`, { item_id: line.item_id });
+      // If the user mapped this sales name to an item, try to persist a global mapping
+      // first so future uploads will pick it up automatically.
+      if (line.item_id && line.item_name) {
+        const norm = (line.item_name || '').trim().toLowerCase();
+        const itemIdNum = Number(line.item_id);
+        const exists = mappings.find(m => m.normalized === norm && Number(m.item_id) === itemIdNum);
+        if (!exists) {
+          try {
+            const resp = await api.post('/api/sales/mappings', { sales_name: line.item_name, item_id: itemIdNum });
+            if (!(resp && resp.data && resp.data.status === 'ok')) {
+              console.warn('Mapping API returned unexpected response', resp && resp.data);
+              alert('Mapping creation may have failed. See console for details.');
+            }
+            // refresh mappings in state
+            const mres = await api.get('/api/sales/mappings');
+            setMappings(Array.isArray(mres.data) ? mres.data : []);
+          } catch (e) {
+            console.error('Failed to create mapping', e);
+            const msg = e?.response?.data?.error || e.message || 'Failed to create mapping';
+            // Notify the user but continue to save the line-level mapping
+            alert(`Warning: mapping creation failed: ${msg}`);
+          }
+        }
+      }
+
+      // Persist the line-level mapping regardless of mapping creation outcome
+      const putResp = await api.put(`/api/sales/lines/${line.id}`, { item_id: line.item_id });
+      // Optionally refresh the lines to pick up DB-side effects
+      const res = await api.get('/api/sales/lines', { params: { upload_id: id, limit: 2000 } });
+      setLines(Array.isArray(res.data) ? res.data : []);
+
     } catch (err) {
       console.error('Failed to save line mapping', err);
-      alert('Save failed');
+      const msg = err?.response?.data?.error || err.message || 'Save failed';
+      alert(`Save failed: ${msg}`);
     } finally {
       setSaving(prev => ({ ...prev, [line.id]: false }));
     }

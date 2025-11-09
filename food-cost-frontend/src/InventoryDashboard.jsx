@@ -47,12 +47,44 @@ export default function InventoryDashboard() {
           return {
             ...item,
             quantity: latest?.quantity || 0,
+            quantity_base: latest?.quantity_base != null ? latest.quantity_base : null,
+            base_unit: latest?.base_unit || null,
             unit: latest?.unit || item.unit || '-',
             location: latest?.location || '-',
             created_at: latest?.created_at || null,
             user_id: latest?.user_id || '-'
           };
         });
+
+        // Fetch expected quantities for ingredients based on received goods + adjustments
+        try {
+          const ingredientItems = allVisible.filter(i => i.source_type === 'ingredient').map(i => ({ source_type: 'ingredient', source_id: i.source_id }));
+          if (ingredientItems.length > 0) {
+            const expRes = await api.post('/api/inventory/expected/batch', { items: ingredientItems });
+            const expList = expRes.data && expRes.data.results ? expRes.data.results : [];
+            const expLookup = {};
+            expList.forEach(e => {
+              if (e && e.source_type && (e.source_id !== undefined && e.source_id !== null)) {
+                expLookup[`${e.source_type}-${e.source_id}`] = e.data || null;
+              }
+            });
+
+            // Attach expected fields to enriched
+            for (let ev of enriched) {
+              if (ev.source_type === 'ingredient') {
+                const k = `${ev.source_type}-${ev.source_id}`;
+                const d = expLookup[k];
+                ev.expected_quantity_base = d ? d.quantity_base : null;
+                ev.expected_base_unit = d ? d.base_unit : null;
+              } else {
+                ev.expected_quantity_base = null;
+                ev.expected_base_unit = null;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch expected inventory', e);
+        }
 
         const groupedByCategory = enriched.reduce((acc, item) => {
           const category = item.category || 'Uncategorized';
@@ -124,6 +156,8 @@ export default function InventoryDashboard() {
                   <th className="text-left px-3 py-2 border">Type</th>
                   <th className="text-right px-3 py-2 border">Qty</th>
                   <th className="text-left px-3 py-2 border">Unit</th>
+                  <th className="text-right px-3 py-2 border">Expected</th>
+                  <th className="text-right px-3 py-2 border">Variance</th>
                   <th className="text-left px-3 py-2 border">Location</th>
                   <th className="text-left px-3 py-2 border">Last Updated</th>
                   <th className="text-left px-3 py-2 border">User</th>
@@ -136,6 +170,21 @@ export default function InventoryDashboard() {
                     <td className="px-3 py-2 border">{item.source_type}</td>
                     <td className="px-3 py-2 text-right border">{item.quantity}</td>
                     <td className="px-3 py-2 border">{item.unit}</td>
+
+                    <td className="px-3 py-2 text-right border">
+                      {item.expected_quantity_base != null ?
+                        `${Number(item.expected_quantity_base).toFixed(2)} ${item.expected_base_unit || item.base_unit || ''}` :
+                        '-'
+                      }
+                    </td>
+
+                    <td className="px-3 py-2 text-right border">
+                      { (item.expected_quantity_base != null && item.quantity_base != null) ?
+                        `${(Number(item.quantity_base) - Number(item.expected_quantity_base)).toFixed(2)} ${item.base_unit || item.expected_base_unit || ''}` :
+                        '-'
+                      }
+                    </td>
+
                     <td className="px-3 py-2 border">{item.location}</td>
                     <td className="px-3 py-2 border">{item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</td>
                     <td className="px-3 py-2 border">{item.user_id}</td>

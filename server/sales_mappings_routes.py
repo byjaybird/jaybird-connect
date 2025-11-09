@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from .utils.db import get_db_cursor
+import logging
 
 sales_mappings_bp = Blueprint('sales_mappings', __name__, url_prefix='/api')
 
@@ -27,9 +28,37 @@ def create_mapping():
     cursor = get_db_cursor()
     try:
         norm = sales_name.strip().lower()
-        cursor.execute("INSERT INTO sales_item_mappings (sales_name, normalized, item_id) VALUES (%s, %s, %s) RETURNING mapping_id", (sales_name, norm, item_id))
-        row = cursor.fetchone()
-        return jsonify({'status': 'ok', 'mapping_id': row.get('mapping_id')})
+        try:
+            # Check if a mapping already exists for this normalized name
+            cursor.execute("SELECT mapping_id, item_id FROM sales_item_mappings WHERE normalized = %s LIMIT 1", (norm,))
+            existing = cursor.fetchone()
+            if existing:
+                # Update existing mapping
+                cursor.execute(
+                    "UPDATE sales_item_mappings SET sales_name = %s, item_id = %s, updated_at = now() WHERE mapping_id = %s RETURNING mapping_id",
+                    (sales_name, item_id, existing.get('mapping_id'))
+                )
+                row = cursor.fetchone()
+            else:
+                cursor.execute(
+                    "INSERT INTO sales_item_mappings (sales_name, normalized, item_id) VALUES (%s, %s, %s) RETURNING mapping_id",
+                    (sales_name, norm, item_id)
+                )
+                row = cursor.fetchone()
+
+            try:
+                cursor.connection.commit()
+            except Exception:
+                pass
+            logging.info("Saved sales mapping: %s -> %s", norm, item_id)
+            return jsonify({'status': 'ok', 'mapping_id': row.get('mapping_id')})
+        except Exception as e:
+            try:
+                cursor.connection.rollback()
+            except Exception:
+                pass
+            logging.exception("Failed to create/update sales mapping for %s -> %s", sales_name, item_id)
+            return jsonify({'error': str(e)}), 500
     finally:
         try:
             cursor.close()
