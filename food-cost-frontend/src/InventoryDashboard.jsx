@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from './utils/auth';
+import ManualInventoryAdd from './ManualInventoryAdd';
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [reload, setReload] = useState(0);
 
   // Pagination state per category: { [category]: { page: number, pageSize: number } }
   const DEFAULT_PAGE_SIZE = 50;
@@ -111,14 +114,33 @@ export default function InventoryDashboard() {
       }
     };
     fetchInventory();
-  }, []);
+  }, [reload]);
   
   if (loading) return <div className="p-4">Loading inventory...</div>;
   if (error) return <div className="p-4 text-red-500">{error}</div>;
   
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Inventory Dashboard</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
+        <div>
+          <button onClick={() => setShowManualModal(true)} className="bg-blue-600 text-white px-3 py-1 rounded">Add Inventory (Manual)</button>
+        </div>
+      </div>
+
+      {showManualModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded shadow-lg w-full max-w-3xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-bold">Add Inventory (Manual)</h3>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => { setShowManualModal(false); }} className="px-3 py-1 border rounded">Close</button>
+              </div>
+            </div>
+            <ManualInventoryAdd onSaved={(count) => { setShowManualModal(false); setReload(r => r + 1); }} />
+          </div>
+        </div>
+      )}
       {Object.entries(inventory).map(([category, items]) => {
         const total = items.length;
         const { page = 1, pageSize = DEFAULT_PAGE_SIZE } = pagination[category] || {};

@@ -7,29 +7,40 @@ inventory_bp = Blueprint('inventory', __name__)
 
 @inventory_bp.route('/api/inventory/upload-scan', methods=['POST'])
 def upload_scan():
-    scans = request.json
-    unresolved_barcodes = []
+    """Accepts a list of scan objects similar to the scanner flow.
+    Each scan may include: barcode (optional), quantity, unit (optional), source_type, source_id, location (optional)
+    This will convert quantity to base units (if possible) and insert into inventory_count_entries.
+    """
+    scans = request.json or []
 
     cursor = get_db_cursor()
     try:
         for scan in scans:
-            barcode = scan.get('barcode')
+            barcode = scan.get('barcode') or None
             quantity = scan.get('quantity')
             source_type = scan.get('source_type')
             source_id = scan.get('source_id')
+            unit = scan.get('unit') or 'unit_from_scan'
+            location = scan.get('location') or 'location_from_request'
 
             try:
-                quantity_base, base_unit = convert_to_base(source_id, source_type, 'unit_from_scan', quantity)
+                quantity_base, base_unit = convert_to_base(source_id, source_type, unit, quantity)
             except Exception as e:
                 print(f"Conversion error: {e}")  # Debug log
                 quantity_base = quantity
-                base_unit = 'unit_from_scan'
+                base_unit = unit or 'unit_from_scan'
+
+            user_id = getattr(request, 'user', None)
+            if user_id and getattr(user_id, 'id', None):
+                uid = request.user.id
+            else:
+                uid = 1
 
             cursor.execute('''
                 INSERT INTO inventory_count_entries
                 (source_type, source_id, quantity, unit, quantity_base, base_unit, barcode, location, created_at, user_id)
-                VALUES (%s, %s, %s, 'unit_from_scan', %s, %s, %s, 'location_from_request', NOW(), %s)
-            ''', (source_type, source_id, quantity, quantity_base, base_unit, barcode, 1))  # Default user_id to 1 for now
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            ''', (source_type, source_id, quantity, unit, quantity_base, base_unit, barcode, location, uid))
 
         cursor.connection.commit()
     finally:
