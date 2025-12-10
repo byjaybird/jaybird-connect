@@ -184,8 +184,12 @@ def adjustment():
 
 @inventory_bp.route('/api/inventory/current', methods=['GET'])
 def current_inventory():
+    """Return inventory_count_entries filtered by optional query params.
+    Supports: location, source_type, source_id.
+    """
     location = request.args.get('location')
     source_type = request.args.get('source_type')
+    source_id = request.args.get('source_id')
 
     cursor = get_db_cursor()
     conditions = []
@@ -197,6 +201,10 @@ def current_inventory():
     if source_type:
         conditions.append('source_type = %s')
         params.append(source_type)
+    if source_id is not None and source_id != '':
+        # allow numeric or string ids; pass through as-is for parameterized query
+        conditions.append('source_id = %s')
+        params.append(source_id)
 
     query = 'SELECT * FROM inventory_count_entries'
     if conditions:
