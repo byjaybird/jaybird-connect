@@ -102,13 +102,16 @@ def upload_sales():
     reader = csv.DictReader(io.StringIO(text))
     rows = list(reader)
 
-    # filter rows where Menu Item is present
+    # filter rows where an item name is present (supports legacy 'Menu Item' and new 'Item' header)
     filtered = []
     for r in rows:
-        menu_item = r.get('Menu Item') or r.get('MenuItem') or r.get('Menu_Item')
-        if menu_item is None:
+        item_field = (
+            r.get('Item') or r.get('item') or r.get('Item Name') or
+            r.get('Menu Item') or r.get('MenuItem') or r.get('Menu_Item')
+        )
+        if item_field is None:
             continue
-        if str(menu_item).strip() == '':
+        if str(item_field).strip() == '':
             continue
         filtered.append(r)
 
@@ -131,19 +134,63 @@ def upload_sales():
         rn = 0
         for r in filtered:
             rn += 1
-            master_id = normalize_id(r.get('Master ID') or r.get('MasterID') or r.get('master_id'))
-            item_id_text = normalize_id(r.get('Item ID') or r.get('ItemID') or r.get('item_id'))
-            parent_id = normalize_id(r.get('Parent ID') or r.get('ParentID') or r.get('parent_id'))
+            # IDs: support legacy and new header names
+            master_id = normalize_id(
+                r.get('Master ID') or r.get('MasterID') or r.get('master_id') or r.get('masterId')
+            )
+            item_id_text = normalize_id(
+                r.get('Item ID') or r.get('ItemID') or r.get('item_id') or r.get('itemGuid') or r.get('item_guid') or r.get('Item GUID')
+            )
+            parent_id = normalize_id(
+                r.get('Parent ID') or r.get('ParentID') or r.get('parent_id') or r.get('parentId')
+            )
+
+            # Category / name fields
             menu_name = r.get('Menu Name') or r.get('MenuName')
-            menu_group = r.get('Menu Group') or r.get('MenuGroup')
+            menu_group = (
+                r.get('Sales Category') or r.get('SalesCategory') or r.get('Menu Group') or r.get('MenuGroup') or None
+            )
             subgroup = r.get('Subgroup')
-            menu_item = r.get('Menu Item')
-            avg_price = parse_numeric(r.get('Avg Price') or r.get('AvgPrice'))
-            item_qty = parse_numeric(r.get('Item Qty') or r.get('ItemQty') or r.get('Item_Qty'))
-            gross_amount = parse_numeric(r.get('Gross Amount') or r.get('GrossAmount'))
-            void_qty = parse_numeric(r.get('Void Qty') or r.get('VoidQty'))
-            discount_amount = parse_numeric(r.get('Discount Amount') or r.get('DiscountAmount'))
-            net_amount = parse_numeric(r.get('Net Amount') or r.get('NetAmount'))
+            menu_item = (
+                r.get('Item') or r.get('item') or r.get('Item Name') or
+                r.get('Menu Item') or r.get('MenuItem') or r.get('Menu_Item')
+            )
+
+            # Numeric fields (support multiple header variants). We parse them so the upload is ready
+            avg_price = parse_numeric(
+                r.get('Avg. price') or r.get('Avg Price') or r.get('AvgPrice')
+            )
+            avg_item_price = parse_numeric(
+                r.get('Avg. item price (not incl. mods)') or r.get('Avg Item Price') or r.get('AvgItemPrice')
+            )
+            item_cogs = parse_numeric(
+                r.get('Item COGS') or r.get('Item Cogs') or r.get('ItemCOGS')
+            )
+            # Qty: prefer 'Qty sold', fallback to legacy 'Item Qty' or 'Item qty incl. voids'
+            item_qty = parse_numeric(
+                r.get('Qty sold') or r.get('Qty Sold') or r.get('Item Qty') or r.get('ItemQty') or r.get('Item_Qty') or r.get('Item qty incl. voids') or r.get('Item qty incl voids')
+            )
+            gross_amount = parse_numeric(
+                r.get('Gross sales') or r.get('Gross Sales') or r.get('Gross Amount') or r.get('GrossAmount') or r.get('Gross amount incl. voids')
+            )
+            void_qty = parse_numeric(
+                r.get('Voided qty sold') or r.get('Voided Qty Sold') or r.get('Void Qty') or r.get('VoidQty') or r.get('Voided qty sold')
+            )
+            discount_amount = parse_numeric(
+                r.get('Discount amount') or r.get('Discount Amount') or r.get('DiscountAmount')
+            )
+            refund_amount = parse_numeric(
+                r.get('Refund amount') or r.get('Refund Amount') or r.get('RefundAmount')
+            )
+            void_amount = parse_numeric(
+                r.get('Void amount') or r.get('Void Amount') or r.get('VoidAmount')
+            )
+            net_amount = parse_numeric(
+                r.get('Net sales') or r.get('Net Sales') or r.get('Net Amount') or r.get('NetAmount')
+            )
+            tax_amount = parse_numeric(
+                r.get('Tax') or r.get('Tax Amount') or r.get('TaxAmount')
+            )
 
             # Skip rows that were not actually sold (zero quantity). Ignore rows where item_qty == 0.
             if item_qty is not None and item_qty == 0:
