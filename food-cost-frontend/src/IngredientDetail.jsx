@@ -24,6 +24,11 @@ function IngredientDetail() {
   const [missingConversions, setMissingConversions] = useState([]);
   const [missingConvLoading, setMissingConvLoading] = useState(false);
 
+  // Inventory entries (from the inventory management side)
+  const [inventoryEntries, setInventoryEntries] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState(null);
+
   // New state for price quote form
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteDate, setQuoteDate] = useState('');
@@ -93,6 +98,14 @@ function IngredientDetail() {
           }
         }
         setPriceQuotes(quotes || []);
+
+        // Try to fetch latest inventory entries for this ingredient
+        try {
+          const invRes = await api.get(`/api/inventory/current?source_type=ingredient&source_id=${id}`);
+          if (mounted) setInventoryEntries(Array.isArray(invRes.data) ? invRes.data : (invRes.data ? [invRes.data] : []));
+        } catch (e) {
+          console.warn('Failed to load inventory entries', e?.response || e);
+        }
 
       } catch (err) {
         console.error('Load error:', err.response || err);
@@ -487,6 +500,40 @@ function IngredientDetail() {
                       </td>
                     </>
                   )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-2">Inventory Entries</h3>
+        {inventoryLoading ? (
+          <p className="text-gray-600">Loading inventory…</p>
+        ) : inventoryEntries.length === 0 ? (
+          <p className="text-gray-600">No inventory entries found.</p>
+        ) : (
+          <table className="w-full border text-sm text-left mb-4">
+            <thead className="bg-gray-100 text-xs uppercase text-gray-700">
+              <tr>
+                <th className="border px-3 py-2">Quantity</th>
+                <th className="border px-3 py-2">Unit</th>
+                <th className="border px-3 py-2">Base Qty</th>
+                <th className="border px-3 py-2">Base Unit</th>
+                <th className="border px-3 py-2">Location</th>
+                <th className="border px-3 py-2">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventoryEntries.map((ie, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border px-3 py-2">{ie.quantity}</td>
+                  <td className="border px-3 py-2">{ie.unit}</td>
+                  <td className="border px-3 py-2">{ie.quantity_base}</td>
+                  <td className="border px-3 py-2">{ie.base_unit}</td>
+                  <td className="border px-3 py-2">{ie.location}</td>
+                  <td className="border px-3 py-2">{ie.created_at ? new Date(ie.created_at).toLocaleString() : ''}</td>
                 </tr>
               ))}
             </tbody>
