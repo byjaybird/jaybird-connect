@@ -366,36 +366,149 @@ def update_ingredient(ingredient_id):
 
 @app.route('/api/ingredients/merge', methods=['POST'])
 def merge_ingredients():
-    data = request.get_json()
+    data = request.get_json() or {}
     ids = data.get('ids')
 
-    if not ids or len(ids) < 2:
+    if not ids or not isinstance(ids, (list, tuple)):
         return jsonify({'error': 'Must supply at least two ingredient IDs'}), 400
 
-    ids = sorted(ids)
-    keep_id = ids[0]
-    drop_ids = ids[1:]
+    normalized_ids = []
+    for raw in ids:
+        try:
+            normalized_ids.append(int(raw))
+        except (TypeError, ValueError):
+            return jsonify({'error': f'Invalid ingredient id: {raw}'}), 400
+
+    unique_ids = sorted(set(normalized_ids))
+    if len(unique_ids) < 2:
+        return jsonify({'error': 'Must supply at least two unique ingredient IDs'}), 400
+
+    keep_id = unique_ids[0]
+    drop_ids = unique_ids[1:]
 
     cursor = get_db_cursor()
+    try:
+        cursor.execute("""
+            SELECT ingredient_id, name, archived
+            FROM ingredients
+            WHERE ingredient_id = ANY(%s)
+        """, (unique_ids,))
+        rows = cursor.fetchall() or []
+        found = {row['ingredient_id']: row for row in rows}
+        missing = [i for i in unique_ids if i not in found]
+        if missing:
+            return jsonify({'error': 'Some ingredient IDs were not found', 'missing': missing}), 404
 
-    # Reassign all recipes from dropped IDs to the one we're keeping
-    cursor.execute("""
-        UPDATE recipes
-        SET ingredient_id = %s
-        WHERE ingredient_id = ANY(%s)
-    """, (keep_id, drop_ids))
+        def column_exists(table, column):
+            cursor.execute("""
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = %s AND column_name = %s
+                LIMIT 1
+            """, (table, column))
+            return cursor.fetchone() is not None
 
-    # Archive all dropped ingredients
-    cursor.execute("""
-        UPDATE ingredients
-        SET archived = TRUE
-        WHERE ingredient_id = ANY(%s)
-    """, (drop_ids,))
+        has_legacy_recipe_column = column_exists('recipes', 'ingredient_id')
 
-    cursor.connection.commit()
-    cursor.connection.close()
+        updates = {}
 
-    return jsonify({'status': f'Merged {len(ids)} ingredients into ID {keep_id}'})
+        def track(label):
+            updates[label] = cursor.rowcount
+
+        cursor.execute("""
+            UPDATE ingredients
+            SET archived = FALSE
+            WHERE ingredient_id = %s
+        """, (keep_id,))
+        track('ingredients_unarchived')
+
+        cursor.execute("""
+            UPDATE ingredients
+            SET archived = TRUE
+            WHERE ingredient_id = ANY(%s)
+        """, (drop_ids,))
+        track('ingredients_archived')
+
+        cursor.execute("""
+            UPDATE recipes
+            SET source_id = %s
+            WHERE source_type = 'ingredient'
+              AND source_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('recipes_source')
+
+        if has_legacy_recipe_column:
+            cursor.execute("""
+                UPDATE recipes
+                SET ingredient_id = %s
+                WHERE ingredient_id = ANY(%s)
+            """, (keep_id, drop_ids))
+            track('recipes_legacy_column')
+
+        cursor.execute("""
+            UPDATE price_quotes
+            SET ingredient_id = %s
+            WHERE ingredient_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('price_quotes')
+
+        cursor.execute("""
+            UPDATE received_goods
+            SET ingredient_id = %s
+            WHERE ingredient_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('received_goods')
+
+        cursor.execute("""
+            UPDATE ingredient_conversions
+            SET ingredient_id = %s
+            WHERE ingredient_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('ingredient_conversions')
+
+        cursor.execute("""
+            UPDATE inventory_count_entries
+            SET source_id = %s
+            WHERE source_type = 'ingredient'
+              AND source_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('inventory_count_entries')
+
+        cursor.execute("""
+            UPDATE inventory_adjustments
+            SET source_id = %s
+            WHERE source_type = 'ingredient'
+              AND source_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('inventory_adjustments')
+
+        cursor.execute("""
+            UPDATE barcode_map
+            SET source_id = %s
+            WHERE source_type = 'ingredient'
+              AND source_id = ANY(%s)
+        """, (keep_id, drop_ids))
+        track('barcode_map')
+
+        cursor.connection.commit()
+        return jsonify({
+            'status': f'Merged {len(unique_ids)} ingredients into ID {keep_id}',
+            'keep_id': keep_id,
+            'dropped_ids': drop_ids,
+            'updates': updates
+        })
+    except Exception as e:
+        logging.exception("Failed to merge ingredients: %s", ids)
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': 'Failed to merge ingredients', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
 @app.route('/api/items', methods=['GET', 'POST'])
 def items():
@@ -1136,4 +1249,3 @@ for rule in app.url_map.iter_rules():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
