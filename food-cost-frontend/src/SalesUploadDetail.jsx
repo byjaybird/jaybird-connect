@@ -138,7 +138,7 @@ export default function SalesUploadDetail() {
           <p className="text-gray-600">Upload ID: {id}</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => navigate('/sales')} className="bg-gray-200 px-3 py-1 rounded">Back</button>
+          <button onClick={() => navigate('/sales/uploads')} className="bg-gray-200 px-3 py-1 rounded">Back</button>
           <button onClick={saveAll} disabled={saving.all} className="bg-blue-600 text-white px-3 py-1 rounded">Save All</button>
           <button onClick={reconcileUpload} disabled={reconciling} className="bg-indigo-600 text-white px-3 py-1 rounded">{reconciling ? 'Reconciling...' : 'Reconcile Upload'}</button>
         </div>

@@ -61,7 +61,7 @@ function SalesUpload() {
           <div>Upload ID: {result.upload_id}</div>
           <div>Rows parsed: {result.rows}</div>
           <div className="mt-2">
-            <button onClick={() => navigate(`/sales`)} className="text-sm text-blue-600 underline">View uploads</button>
+            <button onClick={() => navigate(`/sales/uploads`)} className="text-sm text-blue-600 underline">View uploads</button>
           </div>
         </div>
       )}

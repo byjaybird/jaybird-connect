@@ -5,11 +5,27 @@ import io
 import re
 import hashlib
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/api')
 
 ID_FIELDS = ['Master ID', 'Item ID', 'Parent ID']
+
+
+def parse_date_arg(value, fallback=None):
+    if not value:
+        return fallback
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date()
+    except Exception:
+        return fallback
+
+
+def daterange(start_day, end_day):
+    current = start_day
+    while current <= end_day:
+        yield current
+        current += timedelta(days=1)
 
 
 def normalize_id(val):
@@ -343,6 +359,237 @@ def daily_agg():
         )
         rows = cursor.fetchall()
         return jsonify(rows)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@sales_bp.route('/sales/daily_summary', methods=['GET'])
+def sales_daily_summary():
+    """Return total sales per day over a requested window for dashboard insights."""
+    today = date.today()
+    end_date = parse_date_arg(request.args.get('end_date'), today)
+    max_window = 180
+
+    days_param = request.args.get('days')
+    try:
+        requested_days = int(days_param) if days_param else 30
+    except ValueError:
+        requested_days = 30
+    requested_days = max(1, min(requested_days, max_window))
+
+    start_date = parse_date_arg(request.args.get('start_date'))
+    if not start_date:
+        start_date = end_date - timedelta(days=requested_days - 1)
+    else:
+        # If the caller provided an explicit range, clamp it to max_window
+        if (end_date - start_date).days + 1 > max_window:
+            start_date = end_date - timedelta(days=max_window - 1)
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                business_date,
+                SUM(COALESCE(item_qty, 0)) AS qty_sold,
+                SUM(COALESCE(net_sales, 0)) AS net_sales,
+                SUM(COALESCE(gross_sales, 0)) AS gross_sales,
+                SUM(COALESCE(discount_amount, 0)) AS discounts,
+                SUM(COALESCE(tax_amount, 0)) AS taxes
+            FROM sales_daily_lines
+            WHERE business_date BETWEEN %s AND %s
+            GROUP BY business_date
+            ORDER BY business_date ASC
+            """,
+            (start_date, end_date)
+        )
+        rows = cursor.fetchall() or []
+        rows_by_day = {row['business_date']: row for row in rows}
+
+        daily = []
+        totals = {'qty_sold': 0.0, 'net_sales': 0.0, 'gross_sales': 0.0, 'discounts': 0.0, 'taxes': 0.0}
+        for day in daterange(start_date, end_date):
+            record = rows_by_day.get(day) or {}
+            qty = float(record.get('qty_sold') or 0)
+            net = float(record.get('net_sales') or 0)
+            gross = float(record.get('gross_sales') or 0)
+            disc = float(record.get('discounts') or 0)
+            tax = float(record.get('taxes') or 0)
+            entry = {
+                'business_date': day.isoformat(),
+                'qty_sold': qty,
+                'net_sales': net,
+                'gross_sales': gross,
+                'discounts': disc,
+                'taxes': tax,
+                'avg_item_price': float(net / qty) if qty else 0.0
+            }
+            daily.append(entry)
+            totals['qty_sold'] += qty
+            totals['net_sales'] += net
+            totals['gross_sales'] += gross
+            totals['discounts'] += disc
+            totals['taxes'] += tax
+
+        span_days = len(daily) if daily else 0
+        totals['avg_qty_per_day'] = totals['qty_sold'] / span_days if span_days else 0.0
+        totals['avg_net_per_day'] = totals['net_sales'] / span_days if span_days else 0.0
+        totals['avg_ticket'] = totals['net_sales'] / totals['qty_sold'] if totals['qty_sold'] else 0.0
+
+        recent_window = min(7, span_days)
+        recent_slice = daily[-recent_window:] if recent_window else []
+        prev_slice = daily[-(recent_window * 2):-recent_window] if span_days >= recent_window * 2 and recent_window else []
+        recent_avg_net = sum(d['net_sales'] for d in recent_slice) / recent_window if recent_slice else None
+        prev_avg_net = sum(d['net_sales'] for d in prev_slice) / len(prev_slice) if prev_slice else None
+        trend_pct = None
+        if recent_avg_net is not None and prev_avg_net is not None and prev_avg_net != 0:
+            trend_pct = ((recent_avg_net - prev_avg_net) / prev_avg_net) * 100
+
+        payload = {
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'days': span_days,
+            'daily': daily,
+            'totals': totals,
+            'trend': {
+                'recent_avg_net': recent_avg_net,
+                'previous_avg_net': prev_avg_net,
+                'trend_pct': trend_pct
+            }
+        }
+        return jsonify(payload)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@sales_bp.route('/sales/items/<int:item_id>/daily', methods=['GET'])
+def item_daily_sales(item_id):
+    """Return sales for an individual item grouped by day to power forecasting."""
+    today = date.today()
+    end_date = parse_date_arg(request.args.get('end_date'), today)
+
+    days_param = request.args.get('days')
+    try:
+        requested_days = int(days_param) if days_param else 60
+    except ValueError:
+        requested_days = 60
+    requested_days = max(7, min(requested_days, 210))
+
+    start_date = parse_date_arg(request.args.get('start_date'))
+    if not start_date:
+        start_date = end_date - timedelta(days=requested_days - 1)
+    else:
+        window = (end_date - start_date).days + 1
+        if window > 210:
+            start_date = end_date - timedelta(days=209)
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT name FROM items WHERE item_id = %s", (item_id,))
+        item_row = cursor.fetchone()
+        item_name = item_row.get('name') if item_row else None
+
+        where_clause = "item_id = %s"
+        params = [item_id]
+        if item_name:
+            where_clause = f"({where_clause} OR (item_id IS NULL AND LOWER(TRIM(item_name)) = LOWER(TRIM(%s))))"
+            params.append(item_name)
+        params.extend([start_date, end_date])
+
+        cursor.execute(
+            f"""
+            SELECT
+                business_date,
+                SUM(COALESCE(item_qty, 0)) AS qty_sold,
+                SUM(COALESCE(net_sales, 0)) AS net_sales,
+                SUM(COALESCE(gross_sales, 0)) AS gross_sales
+            FROM sales_daily_lines
+            WHERE {where_clause}
+              AND business_date BETWEEN %s AND %s
+            GROUP BY business_date
+            ORDER BY business_date ASC
+            """,
+            tuple(params)
+        )
+        rows = cursor.fetchall() or []
+        rows_by_day = {row['business_date']: row for row in rows}
+
+        daily = []
+        total_qty = 0.0
+        total_net = 0.0
+        last_sale_date = None
+        for day in daterange(start_date, end_date):
+            record = rows_by_day.get(day) or {}
+            qty = float(record.get('qty_sold') or 0)
+            net = float(record.get('net_sales') or 0)
+            gross = float(record.get('gross_sales') or 0)
+            entry = {
+                'business_date': day.isoformat(),
+                'qty_sold': qty,
+                'net_sales': net,
+                'gross_sales': gross,
+                'avg_item_price': float(net / qty) if qty else 0.0
+            }
+            if qty > 0:
+                last_sale_date = day.isoformat()
+            daily.append(entry)
+            total_qty += qty
+            total_net += net
+
+        span_days = len(daily) if daily else 0
+        avg_qty_per_day = total_qty / span_days if span_days else 0.0
+        avg_net_per_day = total_net / span_days if span_days else 0.0
+
+        # Recent demand vs previous period for forecasting
+        recent_window = min(7, span_days)
+        recent_slice = daily[-recent_window:] if recent_window else []
+        prev_slice = daily[-(recent_window * 2):-recent_window] if span_days >= recent_window * 2 and recent_window else []
+        recent_avg_qty = sum(d['qty_sold'] for d in recent_slice) / recent_window if recent_slice else None
+        prev_avg_qty = sum(d['qty_sold'] for d in prev_slice) / len(prev_slice) if prev_slice else None
+        qty_trend_pct = None
+        if recent_avg_qty is not None and prev_avg_qty is not None and prev_avg_qty != 0:
+            qty_trend_pct = ((recent_avg_qty - prev_avg_qty) / prev_avg_qty) * 100
+
+        positive_days = [d for d in daily if d['qty_sold'] > 0]
+        best_day = max(positive_days, key=lambda d: d['qty_sold'], default=None)
+        slowest_day = min(positive_days, key=lambda d: d['qty_sold'], default=None)
+
+        forecast_qty = recent_avg_qty * 7 if recent_avg_qty is not None else avg_qty_per_day * 7
+
+        payload = {
+            'item_id': item_id,
+            'item_name': item_name,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'days': span_days,
+            'daily': daily,
+            'summary': {
+                'total_qty': total_qty,
+                'total_net_sales': total_net,
+                'avg_qty_per_day': avg_qty_per_day,
+                'avg_net_per_day': avg_net_per_day,
+                'recent_avg_qty': recent_avg_qty,
+                'previous_avg_qty': prev_avg_qty,
+                'qty_trend_pct': qty_trend_pct,
+                'projected_next_week_qty': forecast_qty,
+                'last_sale_date': last_sale_date,
+                'busiest_day': best_day,
+                'slowest_day': slowest_day
+            }
+        }
+        return jsonify(payload)
     finally:
         try:
             cursor.close()

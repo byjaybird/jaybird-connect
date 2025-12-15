@@ -37,6 +37,7 @@ import SalesMappingManager from './components/SalesMappingManager';
 import SalesUpload from './SalesUpload';
 import SalesUploadsPage from './SalesUploadsPage';
 import SalesUploadDetail from './SalesUploadDetail';
+import SalesDashboard from './SalesDashboard';
 import { api } from './utils/auth';
 import { API_URL, DEPLOY_TIME } from './config';
 
@@ -277,8 +278,9 @@ function App() {
         <Route path="/prices/new" element={<PrivateRoute user={user}><NewPriceQuoteForm /></PrivateRoute>} />
         <Route path="/inventory-scanner" element={<PrivateRoute user={user}><InventoryScanner /></PrivateRoute>} />
         <Route path="/receiving/new" element={<PrivateRoute user={user}><NewReceivingForm /></PrivateRoute>} />
+        <Route path="/sales" element={<PrivateRoute user={user}><SalesDashboard /></PrivateRoute>} />
         <Route path="/sales/upload" element={<PrivateRoute user={user}><SalesUpload /></PrivateRoute>} />
-        <Route path="/sales" element={<PrivateRoute user={user}><SalesUploadsPage /></PrivateRoute>} />
+        <Route path="/sales/uploads" element={<PrivateRoute user={user}><SalesUploadsPage /></PrivateRoute>} />
         <Route path="/sales/:id" element={<PrivateRoute user={user}><SalesUploadDetail /></PrivateRoute>} />
         <Route path="/mappings/sales" element={<PrivateRoute user={user}><SalesMappingManager /></PrivateRoute>} />
       </Routes>
@@ -300,4 +302,3 @@ function App() {
 }
 
 export default App;
-

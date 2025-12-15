@@ -27,12 +27,13 @@ export default function SalesUploadsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Sales Uploads</h1>
-          <p className="text-gray-600">Previously uploaded sales files</p>
+          <p className="text-gray-600">Review and troubleshoot daily Toast exports that power the dashboard.</p>
         </div>
-        <div>
+        <div className="flex gap-2">
+          <Link to="/sales" className="bg-gray-100 text-gray-800 px-4 py-2 rounded border border-gray-200 hover:bg-gray-200">Sales Dashboard</Link>
           <Link to="/sales/upload" className="bg-blue-600 text-white px-4 py-2 rounded">Upload CSV</Link>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { API_URL } from './config';
 import { api } from './utils/auth';
 import { canEdit } from './utils/permissions';
+import SalesSparkline from './components/SalesSparkline';
 
 function getLocalUser() {
   try {
@@ -15,6 +16,23 @@ function getLocalUser() {
     return null;
   }
 }
+
+const SALES_RANGE_OPTIONS = [
+  { label: '30 days', value: 30 },
+  { label: '60 days', value: 60 },
+  { label: '90 days', value: 90 },
+  { label: '120 days', value: 120 }
+];
+
+const formatCurrency = (value, digits = 2) => {
+  const num = Number(value || 0);
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
+
+const formatNumber = (value, digits = 0) => {
+  const num = Number(value || 0);
+  return num.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
 
 function ItemDetail() {
   const { id } = useParams();
@@ -34,6 +52,10 @@ function ItemDetail() {
   const [recalcDebug, setRecalcDebug] = useState(null);
   const [recalcShowDebug, setRecalcShowDebug] = useState(false);
   const [showCostDebug, setShowCostDebug] = useState(false);
+  const [salesRange, setSalesRange] = useState(60);
+  const [salesInsights, setSalesInsights] = useState(null);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesError, setSalesError] = useState(null);
 
   // Inventory entries (from the inventory management side)
   const [inventoryEntries, setInventoryEntries] = useState([]);
@@ -89,6 +111,28 @@ function ItemDetail() {
     load();
     return () => { mounted = false; };
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setSalesLoading(true);
+    setSalesError(null);
+    api.get(`/api/sales/items/${id}/daily`, { params: { days: salesRange } })
+      .then((res) => {
+        if (cancelled) return;
+        setSalesInsights(res.data);
+      })
+      .catch((err) => {
+        console.error('Failed to load item sales', err);
+        if (cancelled) return;
+        setSalesError('Unable to load sales history for this item.');
+        setSalesInsights(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSalesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [id, salesRange]);
 
   const handlePrintLabel = async () => {
     try {
@@ -192,6 +236,11 @@ function ItemDetail() {
       setRecalcLoading(false);
     }
   };
+
+  const salesSummary = salesInsights?.summary || {};
+  const hasSalesHistory = Array.isArray(salesInsights?.daily) && salesInsights.daily.some((d) => (d.qty_sold || d.net_sales));
+  const hasPositiveSales = Boolean(salesSummary?.busiest_day);
+  const avgUnitPrice = salesSummary.avg_qty_per_day ? (salesSummary.avg_net_per_day || 0) / (salesSummary.avg_qty_per_day || 1) : 0;
 
   if (!item) return <div className="p-4">Loading item...</div>;
 
@@ -299,6 +348,107 @@ function ItemDetail() {
           )}
         </div>
       )}
+
+      <div className="mt-6 border rounded p-4 bg-white shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Sales Insights</h2>
+            <p className="text-sm text-gray-600">Use recent sales to plan prep batches and purchasing.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">Window</label>
+            <select
+              value={salesRange}
+              onChange={(e) => setSalesRange(Number(e.target.value))}
+              className="border rounded px-3 py-1 text-sm"
+            >
+              {SALES_RANGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {salesLoading ? (
+          <div className="text-gray-600 mt-4 text-sm">Loading sales history…</div>
+        ) : salesError ? (
+          <div className="text-red-600 mt-4 text-sm">{salesError}</div>
+        ) : !hasSalesHistory ? (
+          <div className="text-gray-600 mt-4 text-sm">No sales history yet for this item. Make sure sales uploads are mapped.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+              <ItemInsightTile
+                label="Units sold"
+                value={formatNumber(salesSummary.total_qty)}
+                sub={`Avg ${formatNumber(salesSummary.avg_qty_per_day, 1)} / day`}
+              />
+              <ItemInsightTile
+                label="Net sales"
+                value={formatCurrency(salesSummary.total_net_sales)}
+                sub={`Avg ${formatCurrency(salesSummary.avg_net_per_day)} / day`}
+              />
+              <ItemInsightTile
+                label="Projected need (7d)"
+                value={`${formatNumber(salesSummary.projected_next_week_qty, 0)} units`}
+                sub="Best estimate for next prep cycle"
+              />
+              <ItemInsightTile
+                label="Trend vs last week"
+                value={
+                  salesSummary.qty_trend_pct != null
+                    ? `${salesSummary.qty_trend_pct >= 0 ? '▲' : '▼'} ${Math.abs(salesSummary.qty_trend_pct).toFixed(1)}%`
+                    : '—'
+                }
+                sub={salesSummary.qty_trend_pct != null ? 'Compared to prior 7 days' : 'Need 14+ days'}
+                highlight={salesSummary.qty_trend_pct != null ? (salesSummary.qty_trend_pct >= 0 ? 'positive' : 'negative') : null}
+              />
+            </div>
+
+            <div className="mt-6">
+              <SalesSparkline data={salesInsights.daily} accessor="qty_sold" height={80} stroke="#16a34a" />
+              <div className="text-xs text-gray-500 mt-2">
+                Last sale: {salesSummary.last_sale_date ? new Date(salesSummary.last_sale_date).toLocaleDateString() : 'no sales yet'} •
+                {' '}Avg price {formatCurrency(avgUnitPrice)}
+              </div>
+            </div>
+
+            {hasPositiveSales && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <SalesHighlightCard title="Busiest day" day={salesSummary.busiest_day} />
+                <SalesHighlightCard title="Slow day" day={salesSummary.slowest_day} />
+              </div>
+            )}
+
+            <div className="mt-6">
+              <h3 className="font-semibold text-lg mb-2">Daily detail</h3>
+              <div className="overflow-auto max-h-64">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-left">
+                    <tr>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2 text-right">Units</th>
+                      <th className="px-3 py-2 text-right">Net Sales</th>
+                      <th className="px-3 py-2 text-right">Avg Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesInsights.daily.map((day) => (
+                      <tr key={day.business_date} className="border-t">
+                        <td className="px-3 py-2">{new Date(day.business_date).toLocaleDateString()}</td>
+                        <td className="px-3 py-2 text-right">{formatNumber(day.qty_sold)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.net_sales)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.avg_item_price)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Inventory Entries</h2>
         {inventoryLoading ? (
@@ -375,6 +525,39 @@ function ItemDetail() {
           <p>No ingredients listed.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function ItemInsightTile({ label, value, sub, highlight }) {
+  const highlightClasses = highlight === 'positive'
+    ? 'text-green-600'
+    : highlight === 'negative'
+      ? 'text-red-600'
+      : 'text-gray-900';
+  return (
+    <div className="border rounded p-3">
+      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className={`text-xl font-semibold ${highlightClasses}`}>{value}</div>
+      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function SalesHighlightCard({ title, day }) {
+  if (!day) {
+    return (
+      <div className="border rounded p-3 text-sm text-gray-500">
+        <div className="font-semibold text-gray-700">{title}</div>
+        <div>No sales yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="border rounded p-3">
+      <div className="text-xs uppercase text-gray-500">{title}</div>
+      <div className="text-lg font-semibold">{new Date(day.business_date).toLocaleDateString()}</div>
+      <div className="text-sm text-gray-600">{formatCurrency(day.net_sales)} • {formatNumber(day.qty_sold)} units</div>
     </div>
   );
 }
@@ -460,4 +643,3 @@ function friendlyCostMessage(res) {
 }
 
 export default ItemDetail;
-

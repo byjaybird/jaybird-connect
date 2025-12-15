@@ -10,7 +10,8 @@ export default function Dashboard() {
     { title: 'Users', href: '/users', icon: '👥' },
     { title: 'Shifts', href: '/shifts/dashboard', icon: '🕒' },
     { title: 'Tasks', href: '/tasks', icon: '✅' },
-    { title: 'Cost Dashboard', href: '/costs', icon: '📊' }
+    { title: 'Cost Dashboard', href: '/costs', icon: '📊' },
+    { title: 'Sales Insights', href: '/sales', icon: '📈' }
   ];
 
   return (
