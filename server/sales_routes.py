@@ -78,6 +78,7 @@ def upload_sales():
     file = None
     notes = request.form.get('notes') if request.form else None
     business_date = request.form.get('business_date') if request.form else None
+    default_sales_category = request.form.get('default_sales_category') if request.form else None
     if 'file' in request.files:
         file = request.files.get('file')
         filename = file.filename
@@ -97,6 +98,7 @@ def upload_sales():
         filename = payload.get('filename', 'upload.csv')
         notes = notes or payload.get('notes')
         business_date = business_date or payload.get('business_date')
+        default_sales_category = default_sales_category or payload.get('default_sales_category')
         if not csv_text:
             return jsonify({'error': 'No file uploaded'}), 400
         text = csv_text
@@ -250,7 +252,7 @@ def upload_sales():
                     rn,
                     row_hash,
                     business_date,
-                    menu_group or menu_name,
+                    menu_group or default_sales_category or menu_name,
                     menu_item,
                     mapped_item_id,
                     float(item_qty) if item_qty is not None else None,
@@ -293,6 +295,46 @@ def list_uploads():
             cursor.execute("SELECT * FROM sales_uploads ORDER BY created_at DESC LIMIT 100")
         rows = cursor.fetchall()
         return jsonify(rows)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@sales_bp.route('/sales/uploads/<int:upload_id>/reverse', methods=['POST'])
+def reverse_upload(upload_id):
+    """Delete all sales data associated with a given upload."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT * FROM sales_uploads WHERE id = %s", (upload_id,))
+        upload = cursor.fetchone()
+        if not upload:
+            return jsonify({'error': 'Upload not found'}), 404
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM sales_daily_lines WHERE upload_id = %s", (upload_id,))
+        line_count_row = cursor.fetchone() or {}
+        expected_lines = int(line_count_row.get('cnt') or 0)
+
+        cursor.execute("DELETE FROM sales_daily_lines WHERE upload_id = %s", (upload_id,))
+        deleted_lines = cursor.rowcount
+
+        cursor.execute("DELETE FROM sales_uploads WHERE id = %s", (upload_id,))
+        deleted_uploads = cursor.rowcount
+
+        return jsonify({
+            'status': 'ok',
+            'upload_id': upload_id,
+            'deleted_lines': deleted_lines,
+            'expected_lines': expected_lines,
+            'deleted_upload_record': bool(deleted_uploads)
+        })
+    except Exception as e:
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': f'Failed to reverse upload: {str(e)}'}), 500
     finally:
         try:
             cursor.close()

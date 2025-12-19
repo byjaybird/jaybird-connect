@@ -6,6 +6,7 @@ function SalesUpload() {
   const [file, setFile] = useState(null);
   // Default to today so users don't have to rename files for dating
   const [businessDate, setBusinessDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [defaultSalesCategory, setDefaultSalesCategory] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -28,6 +29,7 @@ function SalesUpload() {
     const form = new FormData();
     form.append('file', file);
     if (businessDate) form.append('business_date', businessDate);
+    if (defaultSalesCategory) form.append('default_sales_category', defaultSalesCategory);
     if (notes) form.append('notes', notes);
 
     setIsSubmitting(true);
@@ -86,15 +88,29 @@ function SalesUpload() {
             <label className="block text-sm font-semibold text-gray-700 mb-2">Business Date (optional)</label>
             <input
               type="date"
-            value={businessDate}
-            onChange={(e) => setBusinessDate(e.target.value)}
-            className="shadow border rounded w-full py-2 px-3"
-            aria-label="Business date"
-            autoComplete="on"
-            required
-          />
-          <p className="text-xs text-gray-500 mt-1">Required. This is used to group sales for the day; filename date is no longer needed.</p>
-        </div>
+              value={businessDate}
+              onChange={(e) => setBusinessDate(e.target.value)}
+              className="shadow border rounded w-full py-2 px-3"
+              aria-label="Business date"
+              autoComplete="on"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Required. This is used to group sales for the day; filename date is no longer needed.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Default Sales Category (optional)</label>
+            <input
+              type="text"
+              value={defaultSalesCategory}
+              onChange={(e) => setDefaultSalesCategory(e.target.value)}
+              className="shadow border rounded w-full py-2 px-3"
+              aria-label="Default Sales Category"
+              autoComplete="off"
+              placeholder="e.g., Food, Beverage, Retail"
+            />
+            <p className="text-xs text-gray-500 mt-1">If the CSV is missing a sales category, this value will be used.</p>
+          </div>
         </div>
 
         <div className="mb-4">
