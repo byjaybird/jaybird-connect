@@ -107,12 +107,21 @@ def upload_sales():
 
     # try to extract business_date from filename if not supplied
     if not business_date:
-        m = re.search(r"(\d{4}_\d{2}_\d{2})", filename)
+        m = re.search(r"(\d{4}[-_]\d{2}[-_]\d{2})", filename or '')
         if m:
             try:
-                business_date = datetime.strptime(m.group(1), '%Y_%m_%d').date().isoformat()
+                business_date = datetime.strptime(m.group(1).replace('_', '-'), '%Y-%m-%d').date().isoformat()
             except Exception:
                 business_date = None
+
+    # require a valid business_date so we do not hit DB NOT NULL errors later
+    if business_date:
+        try:
+            business_date = datetime.strptime(str(business_date).replace('_', '-'), '%Y-%m-%d').date().isoformat()
+        except Exception:
+            return jsonify({'error': 'business_date must be in YYYY-MM-DD format (e.g., 2024-05-01). Provide it in the form; filename date is optional.'}), 400
+    else:
+        return jsonify({'error': 'business_date is required. Please fill the Business Date field (YYYY-MM-DD). Filename date is optional.'}), 400
 
     # parse CSV
     reader = csv.DictReader(io.StringIO(text))

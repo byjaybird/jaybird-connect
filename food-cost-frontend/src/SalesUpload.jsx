@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 
 function SalesUpload() {
   const [file, setFile] = useState(null);
-  const [businessDate, setBusinessDate] = useState('');
+  // Default to today so users don't have to rename files for dating
+  const [businessDate, setBusinessDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -85,13 +86,15 @@ function SalesUpload() {
             <label className="block text-sm font-semibold text-gray-700 mb-2">Business Date (optional)</label>
             <input
               type="date"
-              value={businessDate}
-              onChange={(e) => setBusinessDate(e.target.value)}
-              className="shadow border rounded w-full py-2 px-3"
-              aria-label="Business date"
-              autoComplete="on"
-            />
-          </div>
+            value={businessDate}
+            onChange={(e) => setBusinessDate(e.target.value)}
+            className="shadow border rounded w-full py-2 px-3"
+            aria-label="Business date"
+            autoComplete="on"
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">Required. This is used to group sales for the day; filename date is no longer needed.</p>
+        </div>
         </div>
 
         <div className="mb-4">
