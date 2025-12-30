@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import datetime, date
 from flask import Blueprint, jsonify, request
 from .utils.db import get_db_cursor
+from psycopg2.extras import Json
 from .utils.cost_resolver import resolve_item_cost
 
 journal_bp = Blueprint('journal', __name__, url_prefix='/api/journal')
@@ -161,8 +162,10 @@ def parse_category_summary(rows):
         )
         if not category:
             continue
+        mapped = normalize_top_category(category)
         entry = {
-            'category': str(category).strip(),
+            'category': mapped or str(category).strip(),
+            'source_category': str(category).strip(),
             'gross_sales': parse_numeric(r.get('Gross Sales') or r.get('Gross sales') or r.get('Gross')),
             'discounts': parse_numeric(r.get('Discounts') or r.get('Discount amount') or r.get('Discount Amount')),
             'net_sales': parse_numeric(r.get('Net Sales') or r.get('Net sales') or r.get('Net Amount') or r.get('Net')),
@@ -348,8 +351,8 @@ def upload(upload_type):
                 filename,
                 file_sha,
                 text,
-                parsed or None,
-                warnings or None,
+                Json(parsed or None),
+                Json(warnings or None),
                 len(rows),
                 notes
             )
@@ -433,6 +436,26 @@ def load_latest_uploads(cursor, business_date):
     return uploads
 
 
+def normalize_top_category(raw):
+    """Map raw category strings into top-level buckets using heuristics."""
+    if not raw:
+        return None
+    norm = str(raw).strip().lower()
+    if norm in CATEGORY_ENUM:
+        return norm
+    if 'beer' in norm:
+        return 'beer'
+    if 'wine' in norm:
+        return 'wine'
+    if 'liquor' in norm or 'spirit' in norm or 'cocktail' in norm:
+        return 'liquor'
+    if 'food' in norm or 'kitchen' in norm or 'entree' in norm or 'app' in norm or 'snack' in norm:
+        return 'food'
+    if 'misc' in norm or 'other' in norm:
+        return 'misc'
+    return None
+
+
 def map_category(raw_category, item_id, category_map, item_map, warnings):
     if item_id and item_id in item_map:
         return item_map[item_id], False
@@ -440,6 +463,9 @@ def map_category(raw_category, item_id, category_map, item_map, warnings):
         norm = str(raw_category).strip().lower()
         if norm in category_map:
             return category_map[norm], False
+        heuristic = normalize_top_category(norm)
+        if heuristic:
+            return heuristic, False
     warnings.append('unmapped')
     return 'misc', True
 
@@ -596,8 +622,15 @@ def compute_journal_packet(business_date):
         if uploaded_rev:
             data = uploaded_rev.get('parsed_json') or []
             for r in data:
-                cat = (r.get('category') or 'misc').strip().lower()
-                revenue_rows.append({'category': cat, 'net_sales': r.get('net_sales'), 'gross_sales': r.get('gross_sales'), 'discounts': r.get('discounts')})
+                raw_cat = r.get('category') or r.get('source_category')
+                mapped_cat = map_category(raw_cat, None, category_map, item_map, warnings)[0]
+                revenue_rows.append({
+                    'category': mapped_cat,
+                    'source_category': raw_cat,
+                    'net_sales': r.get('net_sales'),
+                    'gross_sales': r.get('gross_sales'),
+                    'discounts': r.get('discounts')
+                })
         else:
             revenue_rows, unmapped_count = aggregate_sales_fallback(cursor, business_date, category_map, item_map)
             if unmapped_count:
@@ -750,7 +783,7 @@ def lock_day():
                 warnings = EXCLUDED.warnings,
                 updated_at = now()
             """,
-            (business_date, 'locked', packet, warnings)
+            (business_date, 'locked', Json(packet), Json(warnings))
         )
 
         cursor.execute("DELETE FROM cogs_estimates WHERE business_date = %s", (business_date,))
@@ -772,7 +805,7 @@ def lock_day():
                     c.get('estimated_cogs'),
                     c.get('source'),
                     c.get('calc_method'),
-                    c.get('issues')
+                    Json(c.get('issues'))
                 )
             )
 
