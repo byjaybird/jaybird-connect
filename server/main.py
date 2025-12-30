@@ -20,6 +20,7 @@ from .shift_routes import shift_routes as shift_bp
 from .departments_routes import departments_bp
 from .services.shift_api import ShiftAPI
 from .reports_routes import reports_bp
+from .journal_routes import journal_bp
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
@@ -190,6 +191,7 @@ app.register_blueprint(prices_bp)
 app.register_blueprint(conversions_bp, url_prefix='/api')
 app.register_blueprint(sales_mappings_bp)
 app.register_blueprint(reports_bp)
+app.register_blueprint(journal_bp)
 
 try:
     test_conn = psycopg2.connect(

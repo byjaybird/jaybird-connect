@@ -38,6 +38,7 @@ import SalesUpload from './SalesUpload';
 import SalesUploadsPage from './SalesUploadsPage';
 import SalesUploadDetail from './SalesUploadDetail';
 import SalesDashboard from './SalesDashboard';
+import CloseoutPage from './CloseoutPage';
 import { api } from './utils/auth';
 import { API_URL, DEPLOY_TIME } from './config';
 
@@ -119,6 +120,7 @@ function pageKeyFromPath(path) {
   if (path.startsWith('/roles')) return 'roles';
   if (path.startsWith('/receiving')) return 'receiving';
   if (path.startsWith('/inventory-scanner')) return 'inventory_scanner';
+  if (path.startsWith('/closeout')) return 'sales';
   return 'dashboard';
 }
 
@@ -180,6 +182,9 @@ function Header({ user, onLogout }) {
           )}
           {hasAccess(user, 'sales') && (
             <Link to="/sales" className="text-sm font-semibold text-gray-700 hover:text-black">Sales</Link>
+          )}
+          {hasAccess(user, 'sales') && (
+            <Link to="/closeout" className="text-sm font-semibold text-gray-700 hover:text-black">Closeout</Link>
           )}
           {hasAccess(user, 'roles') && (
             <Link to="/roles" className="text-sm font-semibold text-gray-700 hover:text-black">Role Management</Link>
@@ -283,6 +288,8 @@ function App() {
         <Route path="/sales/uploads" element={<PrivateRoute user={user}><SalesUploadsPage /></PrivateRoute>} />
         <Route path="/sales/:id" element={<PrivateRoute user={user}><SalesUploadDetail /></PrivateRoute>} />
         <Route path="/mappings/sales" element={<PrivateRoute user={user}><SalesMappingManager /></PrivateRoute>} />
+        <Route path="/closeout" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />
+        <Route path="/closeout/:date" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />
       </Routes>
 
       {/* Footer with last deployment timestamp */}

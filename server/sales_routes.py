@@ -302,6 +302,196 @@ def list_uploads():
             pass
 
 
+def _iso(val):
+    if isinstance(val, (date, datetime)):
+        return val.isoformat()
+    return val
+
+
+@sales_bp.route('/sales/uploads/summary', methods=['GET'])
+def uploads_summary():
+    """Summarize what is currently in sales uploads and sales_daily_lines so we know data coverage."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS uploads,
+                COALESCE(SUM(row_count), 0) AS total_rows,
+                MIN(business_date) AS first_date,
+                MAX(business_date) AS last_date,
+                MAX(created_at) AS last_upload_at
+            FROM sales_uploads
+            """
+        )
+        uploads_row = cursor.fetchone() or {}
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS rows,
+                SUM(COALESCE(item_qty, 0)) AS qty,
+                SUM(COALESCE(net_sales, 0)) AS net_sales,
+                SUM(COALESCE(gross_sales, 0)) AS gross_sales,
+                SUM(COALESCE(discount_amount, 0)) AS discounts
+            FROM sales_daily_lines
+            """
+        )
+        totals_row = cursor.fetchone() or {}
+        total_rows = float(totals_row.get('rows') or 0)
+        total_qty = float(totals_row.get('qty') or 0)
+        total_net = float(totals_row.get('net_sales') or 0)
+        total_gross = float(totals_row.get('gross_sales') or 0)
+        total_discounts = float(totals_row.get('discounts') or 0)
+
+        cursor.execute(
+            """
+            SELECT
+                business_date,
+                COUNT(*) AS rows,
+                SUM(COALESCE(item_qty, 0)) AS qty,
+                SUM(COALESCE(net_sales, 0)) AS net_sales,
+                SUM(COALESCE(discount_amount, 0)) AS discounts
+            FROM sales_daily_lines
+            GROUP BY business_date
+            ORDER BY business_date DESC
+            LIMIT 31
+            """
+        )
+        by_day_rows = cursor.fetchall() or []
+        by_day = []
+        for r in by_day_rows:
+            qty_val = float(r.get('qty') or 0)
+            net_val = float(r.get('net_sales') or 0)
+            by_day.append({
+                'business_date': _iso(r.get('business_date')),
+                'rows': int(r.get('rows') or 0),
+                'qty': qty_val,
+                'net_sales': net_val,
+                'discounts': float(r.get('discounts') or 0),
+                'avg_price': net_val / qty_val if qty_val else 0.0
+            })
+
+        cursor.execute(
+            """
+            SELECT
+                SUM(CASE WHEN item_id IS NOT NULL THEN 1 ELSE 0 END) AS mapped_rows,
+                SUM(CASE WHEN item_id IS NULL THEN 1 ELSE 0 END) AS unmapped_rows,
+                COUNT(DISTINCT item_id) FILTER (WHERE item_id IS NOT NULL) AS mapped_items,
+                COUNT(DISTINCT LOWER(TRIM(item_name))) AS distinct_sales_names
+            FROM sales_daily_lines
+            """
+        )
+        mapping_row = cursor.fetchone() or {}
+        mapped_rows = float(mapping_row.get('mapped_rows') or 0)
+
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(i.name, s.item_name) AS name,
+                SUM(COALESCE(s.net_sales, 0)) AS net_sales,
+                SUM(COALESCE(s.item_qty, 0)) AS qty_sold
+            FROM sales_daily_lines s
+            LEFT JOIN items i ON s.item_id = i.item_id
+            GROUP BY COALESCE(i.name, s.item_name)
+            ORDER BY net_sales DESC
+            LIMIT 15
+            """
+        )
+        top_items_rows = cursor.fetchall() or []
+        top_items = []
+        for r in top_items_rows:
+            qty_val = float(r.get('qty_sold') or 0)
+            net_val = float(r.get('net_sales') or 0)
+            top_items.append({
+                'name': r.get('name'),
+                'net_sales': net_val,
+                'qty_sold': qty_val,
+                'avg_price': net_val / qty_val if qty_val else 0.0
+            })
+
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(s.sales_category, 'Uncategorized') AS category,
+                COUNT(*) AS rows,
+                SUM(COALESCE(s.net_sales, 0)) AS net_sales,
+                SUM(COALESCE(s.item_qty, 0)) AS qty_sold
+            FROM sales_daily_lines s
+            GROUP BY COALESCE(s.sales_category, 'Uncategorized')
+            ORDER BY net_sales DESC
+            LIMIT 15
+            """
+        )
+        categories_rows = cursor.fetchall() or []
+        categories = [
+            {
+                'category': r.get('category'),
+                'rows': int(r.get('rows') or 0),
+                'net_sales': float(r.get('net_sales') or 0),
+                'qty_sold': float(r.get('qty_sold') or 0)
+            }
+            for r in categories_rows
+        ]
+
+        cursor.execute(
+            """
+            SELECT
+                SUM(CASE WHEN net_sales IS NOT NULL THEN 1 ELSE 0 END) AS net_sales_rows,
+                SUM(CASE WHEN gross_sales IS NOT NULL THEN 1 ELSE 0 END) AS gross_sales_rows,
+                SUM(CASE WHEN discount_amount IS NOT NULL THEN 1 ELSE 0 END) AS discount_rows,
+                SUM(CASE WHEN item_qty IS NOT NULL THEN 1 ELSE 0 END) AS qty_rows
+            FROM sales_daily_lines
+            """
+        )
+        field_cov = cursor.fetchone() or {}
+
+        mapping_rate = (mapped_rows / total_rows * 100) if total_rows else None
+        avg_price_per_unit = (total_net / total_qty) if total_qty else 0.0
+        avg_discount_rate = (total_discounts / total_gross * 100) if total_gross else None
+
+        payload = {
+            'upload_stats': {
+                'uploads': int(uploads_row.get('uploads') or 0),
+                'total_rows_reported': int(uploads_row.get('total_rows') or 0),
+                'first_date': _iso(uploads_row.get('first_date')),
+                'last_date': _iso(uploads_row.get('last_date')),
+                'last_upload_at': _iso(uploads_row.get('last_upload_at'))
+            },
+            'line_totals': {
+                'rows': int(total_rows),
+                'qty': total_qty,
+                'net_sales': total_net,
+                'gross_sales': total_gross,
+                'discounts': total_discounts,
+                'avg_price_per_unit': avg_price_per_unit,
+                'avg_discount_rate_pct': avg_discount_rate
+            },
+            'field_coverage': {
+                'net_sales_rows': int(field_cov.get('net_sales_rows') or 0),
+                'gross_sales_rows': int(field_cov.get('gross_sales_rows') or 0),
+                'discount_rows': int(field_cov.get('discount_rows') or 0),
+                'qty_rows': int(field_cov.get('qty_rows') or 0)
+            },
+            'mapping': {
+                'mapped_rows': int(mapped_rows),
+                'unmapped_rows': int(mapping_row.get('unmapped_rows') or 0),
+                'mapped_items': int(mapping_row.get('mapped_items') or 0),
+                'distinct_sales_names': int(mapping_row.get('distinct_sales_names') or 0),
+                'mapping_rate_pct': mapping_rate
+            },
+            'recent_days': by_day,
+            'top_items': top_items,
+            'categories': categories
+        }
+        return jsonify(payload)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
 @sales_bp.route('/sales/uploads/<int:upload_id>/reverse', methods=['POST'])
 def reverse_upload(upload_id):
     """Delete all sales data associated with a given upload."""
