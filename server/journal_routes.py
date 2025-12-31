@@ -20,7 +20,8 @@ UPLOAD_TYPES = {
     'void_summary',
     'cash_activity',
     'giftcard_activity',
-    'processing_fees'
+    'processing_fees',
+    'payments_summary'
 }
 
 CATEGORY_ENUM = {'food', 'liquor', 'beer', 'wine', 'misc'}
@@ -33,7 +34,8 @@ MAPPING_FLAG = {
     'void_summary': 'has_sales',
     'cash_activity': 'has_sales',
     'giftcard_activity': 'has_giftcards',
-    'processing_fees': 'has_fees'
+    'processing_fees': 'has_fees',
+    'payments_summary': None
 }
 
 
@@ -201,10 +203,27 @@ def parse_tip_summary(rows):
     parsed = []
     totals = {'tips_incurred': 0.0, 'tips_paid': 0.0, 'auto_grat_incurred': 0.0}
     for r in rows:
-        tips = parse_numeric(r.get('Tips') or r.get('Tips Amount') or r.get('Total Tips'))
+        tips_collected = parse_numeric(
+            r.get('Tips') or r.get('Tips Amount') or r.get('Total Tips') or
+            r.get('Tips collected') or r.get('Tips Collected')
+        )
+        tips_refunded = parse_numeric(r.get('Tips refunded') or r.get('Tips Refunded'))
+        tips_total = parse_numeric(r.get('Total tips') or r.get('Total Tips'))
+        tips = tips_total
+        if tips is None:
+            # If total not provided, compute: collected - refunded
+            if tips_collected is not None or tips_refunded is not None:
+                tips = (tips_collected or 0) - (tips_refunded or 0)
         paid = parse_numeric(r.get('Tips Paid') or r.get('Paid Out') or r.get('Tips paid'))
         auto_grat = parse_numeric(r.get('Auto Gratuity') or r.get('Auto- gratuity') or r.get('Service Charge'))
-        parsed.append({'name': r.get('Name') or r.get('Tender') or 'tips', 'tips_incurred': tips, 'tips_paid': paid, 'auto_grat': auto_grat})
+        parsed.append({
+            'name': r.get('Name') or r.get('Tender') or 'tips',
+            'tips_incurred': tips,
+            'tips_paid': paid,
+            'auto_grat': auto_grat,
+            'tips_collected': tips_collected,
+            'tips_refunded': tips_refunded
+        })
         totals['tips_incurred'] += tips or 0
         totals['tips_paid'] += paid or 0
         totals['auto_grat_incurred'] += auto_grat or 0
@@ -238,6 +257,65 @@ def parse_cash_activity(rows):
         }
         parsed.append(entry)
     return parsed, []
+
+
+def parse_payments_summary(rows):
+    parsed = []
+    deposits = []
+    liabilities = {'tips_incurred': 0.0, 'tips_paid': 0.0, 'auto_grat_incurred': 0.0, 'tax_collected': 0.0, 'giftcard_sold': 0.0, 'giftcard_redeemed': 0.0}
+    for r in rows:
+        ptype = (r.get('Payment type') or r.get('Payment Type') or '').strip()
+        subtype = (r.get('Payment sub type') or r.get('Payment Sub Type') or '').strip()
+        tender = ptype
+        if subtype:
+            tender = f"{ptype} - {subtype}"
+
+        amount = parse_numeric(r.get('Amount'))
+        tips = parse_numeric(r.get('Tips'))
+        grat = parse_numeric(r.get('Grat') or r.get('Gratuity'))
+        tax_amt = parse_numeric(r.get('Tax amount') or r.get('Tax Amount'))
+        refunds = parse_numeric(r.get('Refunds'))
+        tip_refunds = parse_numeric(r.get('Tip refunds') or r.get('Tip Refunds'))
+        legacy_tips = parse_numeric(r.get('Legacy tips') or r.get('Legacy Tips'))
+        total = parse_numeric(r.get('Total'))
+
+        tips_total = (tips or 0) + (grat or 0) + (legacy_tips or 0) - (tip_refunds or 0)
+        liabilities['tips_incurred'] += tips_total
+        liabilities['tax_collected'] += tax_amt or 0
+        if ptype.lower().startswith('gift'):
+            liabilities['giftcard_sold'] += amount or 0
+
+        less_gc = amount if ptype.lower().startswith('gift') else 0
+        expected = None
+        if amount is not None:
+            expected = (amount or 0) - (tips or 0) - (tax_amt or 0) - (less_gc or 0) - (refunds or 0) + (tip_refunds or 0)
+
+        deposits.append({
+            'tender': tender,
+            'gross': amount,
+            'less_tips': tips,
+            'less_tax': tax_amt,
+            'less_giftcard_liab': less_gc,
+            'fees': None,
+            'expected_net_deposit': expected,
+            'notes': None
+        })
+
+        parsed.append({
+            'payment_type': ptype,
+            'payment_sub_type': subtype,
+            'amount': amount,
+            'tips': tips,
+            'grat': grat,
+            'tax_amount': tax_amt,
+            'refunds': refunds,
+            'tip_refunds': tip_refunds,
+            'legacy_tips': legacy_tips,
+            'total': total,
+            'computed_tips': tips_total
+        })
+
+    return parsed, deposits, liabilities
 
 
 def parse_processing_fees(rows):
@@ -329,6 +407,9 @@ def upload(upload_type):
     elif upload_type == 'processing_fees':
         parsed, warnings = parse_processing_fees(rows)
         fees_rows = parsed
+    elif upload_type == 'payments_summary':
+        parsed, deposits_rows, liabilities_update = parse_payments_summary(rows)
+        # payments summary covers tips and tax; mark has_* after insert
     elif upload_type in ('discounts_summary', 'void_summary'):
         for r in rows:
             parsed.append({k: v for k, v in r.items()})
@@ -364,6 +445,18 @@ def upload(upload_type):
 
         if liabilities_update:
             upsert_liabilities(cursor, business_date, liabilities_update)
+            # Mark flags for combined payment summary
+            cursor.execute(
+                """
+                UPDATE business_days
+                SET has_tips = TRUE,
+                    has_tax = TRUE,
+                    has_giftcards = CASE WHEN %s > 0 THEN TRUE ELSE has_giftcards END,
+                    updated_at = now()
+                WHERE business_date = %s
+                """,
+                (liabilities_update.get('giftcard_sold') or 0, business_date)
+            )
 
         if deposits_rows:
             cursor.execute("DELETE FROM deposits_expected WHERE business_date = %s", (business_date,))
@@ -730,6 +823,56 @@ def get_daily_packet():
         return jsonify({'error': 'business_date required'}), 400
     packet, warnings, blocking = compute_journal_packet(business_date)
     return jsonify(packet)
+
+
+@journal_bp.route('/uploads', methods=['GET'])
+def list_journal_uploads():
+    """List journal uploads for a business_date (or recent). Useful for manual review."""
+    business_date = request.args.get('business_date')
+    cursor = get_db_cursor()
+    try:
+        if business_date:
+            cursor.execute(
+                """
+                SELECT id, upload_type, business_date, source_filename, row_count, created_at
+                FROM journal_uploads
+                WHERE business_date = %s
+                ORDER BY created_at DESC
+                """,
+                (business_date,)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, upload_type, business_date, source_filename, row_count, created_at
+                FROM journal_uploads
+                ORDER BY created_at DESC
+                LIMIT 50
+                """
+            )
+        return jsonify(cursor.fetchall() or [])
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@journal_bp.route('/uploads/<int:upload_id>', methods=['GET'])
+def get_journal_upload(upload_id):
+    """Return raw/parsed journal upload to aid manual verification."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT * FROM journal_uploads WHERE id = %s", (upload_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        return jsonify(row)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
 
 @journal_bp.route('/validate', methods=['POST'])

@@ -1,14 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from './utils/auth';
 
 const UPLOADS = [
-  { key: 'category_summary', label: 'Sales Category Summary', description: 'Toast sales by category (gross/discount/net, tax, tips).' },
-  { key: 'tax_summary', label: 'Tax Summary', description: 'Daily sales tax summary.' },
-  { key: 'tip_summary', label: 'Tip Summary', description: 'Tips and auto-grat totals; include tips paid out if available.' },
-  { key: 'giftcard_activity', label: 'Gift Card Activity', description: 'Gift cards sold and redeemed.' },
-  { key: 'cash_activity', label: 'Cash / Deposit Detail', description: 'Expected deposits by tender (card/cash).' },
-  { key: 'processing_fees', label: 'Processing Fees', description: 'Card processor daily fees.' }
+  { key: 'payments_summary', label: 'Payments summary.csv', description: 'Single upload to populate tips, tax, gift cards sold, and deposits per tender.' }
 ];
 
 function UploadTile({ type, label, description, businessDate, onUploaded }) {
@@ -64,6 +59,71 @@ function UploadTile({ type, label, description, businessDate, onUploaded }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SalesUploadBox({ businessDate, onUploaded }) {
+  const [file, setFile] = useState(null);
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setResult(null);
+    if (!file) {
+      setError('Please select a CSV file to upload.');
+      return;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    if (businessDate) form.append('business_date', businessDate);
+    if (notes) form.append('notes', notes);
+    setIsSubmitting(true);
+    try {
+      const resp = await api.post('/api/sales/upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setResult(resp.data);
+      onUploaded?.();
+    } catch (err) {
+      const msg = err?.response?.data?.error || err.message || 'Upload failed';
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="border rounded p-4 bg-white shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <div className="font-semibold text-gray-800">Upload Sales (PMIX)</div>
+          <div className="text-xs text-gray-500">Toast Product Mix CSV for the business day.</div>
+        </div>
+        <span className="text-xs uppercase text-gray-500 bg-gray-100 px-2 py-1 rounded">sales</span>
+      </div>
+      {error && <div className="mb-2 text-sm text-red-600">{error}</div>}
+      {result && (
+        <div className="mb-2 text-sm text-green-700">
+          Upload successful - ID {result.upload_id}, rows {result.rows}
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex items-center gap-3">
+          <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
+          <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+            {isSubmitting ? 'Uploading...' : 'Upload Sales'}
+          </button>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Notes (optional)</label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border rounded px-2 py-1 text-sm" rows={2} />
+        </div>
+      </form>
     </div>
   );
 }
@@ -124,10 +184,17 @@ export default function CloseoutPage() {
   const [error, setError] = useState(null);
   const [validation, setValidation] = useState(null);
   const [locking, setLocking] = useState(false);
+  const [salesUploads, setSalesUploads] = useState([]);
+  const [salesError, setSalesError] = useState(null);
+  const [journalUploads, setJournalUploads] = useState([]);
+  const [journalError, setJournalError] = useState(null);
+  const [selectedJournalUpload, setSelectedJournalUpload] = useState(null);
 
   useEffect(() => {
     navigate(`/closeout/${businessDate}`, { replace: true });
     loadPacket(businessDate);
+    loadSalesUploads(businessDate);
+    loadJournalUploads(businessDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessDate]);
 
@@ -169,9 +236,42 @@ export default function CloseoutPage() {
 
   const handleUploaded = () => {
     loadPacket(businessDate);
+    loadSalesUploads(businessDate);
+    loadJournalUploads(businessDate);
   };
 
   const journalLines = packet?.journal_lines_ready_for_xero || [];
+
+  const loadSalesUploads = async (date) => {
+    try {
+      const res = await api.get('/api/sales/uploads', { params: { business_date: date } });
+      setSalesUploads(Array.isArray(res.data) ? res.data : []);
+      setSalesError(null);
+    } catch (err) {
+      console.error('Failed to load sales uploads', err);
+      setSalesError('Could not load sales uploads');
+    }
+  };
+
+  const loadJournalUploads = async (date) => {
+    try {
+      const res = await api.get('/api/journal/uploads', { params: { business_date: date } });
+      setJournalUploads(Array.isArray(res.data) ? res.data : []);
+      setJournalError(null);
+    } catch (err) {
+      console.error('Failed to load journal uploads', err);
+      setJournalError('Could not load payments uploads');
+    }
+  };
+
+  const openJournalUpload = async (id) => {
+    try {
+      const res = await api.get(`/api/journal/uploads/${id}`);
+      setSelectedJournalUpload(res.data);
+    } catch (err) {
+      alert('Failed to load upload detail');
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-4">
@@ -198,6 +298,100 @@ export default function CloseoutPage() {
         {UPLOADS.map((u) => (
           <UploadTile key={u.key} type={u.key} label={u.label} description={u.description} businessDate={businessDate} onUploaded={handleUploaded} />
         ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded p-3 text-sm">
+        <div className="font-semibold">Heads up</div>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Payments summary fills tips, tax, gift card sold, and expected deposits per tender.</li>
+          <li>Revenue by category and COGS still require sales uploads / category mapping; missing those will keep the day from locking.</li>
+          <li>Processor fees and gift card redemptions aren't in Payments summary; expect warnings until those feeds are added.</li>
+        </ul>
+      </div>
+
+      <SalesUploadBox businessDate={businessDate} onUploaded={handleUploaded} />
+
+      <div className="bg-white shadow rounded mt-4">
+        <div className="px-4 py-2 border-b font-semibold text-gray-800 flex justify-between items-center">
+          <span>Sales uploads for {businessDate}</span>
+          <Link to="/sales/uploads" className="text-blue-600 text-sm underline">Manage all uploads</Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-3 py-2">Upload ID</th>
+                <th className="px-3 py-2">Rows</th>
+                <th className="px-3 py-2">Filename</th>
+                <th className="px-3 py-2">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(salesUploads || []).map((u) => (
+                <tr key={u.id} className="border-t">
+                  <td className="px-3 py-2">
+                    <Link to={`/sales/${u.id}`} className="text-blue-600 underline">#{u.id}</Link>
+                  </td>
+                  <td className="px-3 py-2">{u.row_count}</td>
+                  <td className="px-3 py-2">{u.source_filename}</td>
+                  <td className="px-3 py-2">{u.created_at ? new Date(u.created_at).toLocaleString() : ''}</td>
+                </tr>
+              ))}
+              {(salesUploads || []).length === 0 && (
+                <tr>
+                  <td className="px-3 py-2" colSpan={4}>No sales uploads yet for this date.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded mt-4">
+        <div className="px-4 py-2 border-b font-semibold text-gray-800">Payments summary uploads</div>
+        {journalError && <div className="text-sm text-red-600 px-4 py-2">{journalError}</div>}
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-3 py-2">Upload ID</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Rows</th>
+                <th className="px-3 py-2">Filename</th>
+                <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(journalUploads || []).map((u) => (
+                <tr key={u.id} className="border-t">
+                  <td className="px-3 py-2">#{u.id}</td>
+                  <td className="px-3 py-2">{u.upload_type}</td>
+                  <td className="px-3 py-2">{u.row_count}</td>
+                  <td className="px-3 py-2">{u.source_filename}</td>
+                  <td className="px-3 py-2">{u.created_at ? new Date(u.created_at).toLocaleString() : ''}</td>
+                  <td className="px-3 py-2">
+                    <button className="text-blue-600 underline text-sm" onClick={() => openJournalUpload(u.id)}>View</button>
+                  </td>
+                </tr>
+              ))}
+              {(journalUploads || []).length === 0 && (
+                <tr>
+                  <td className="px-3 py-2" colSpan={6}>No payments summary uploads yet for this date.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {selectedJournalUpload && (
+          <div className="border-t px-4 py-3 text-sm bg-gray-50">
+            <div className="flex justify-between items-center">
+              <div className="font-semibold">Upload #{selectedJournalUpload.id} ({selectedJournalUpload.upload_type})</div>
+              <button className="text-sm text-blue-600 underline" onClick={() => setSelectedJournalUpload(null)}>Close</button>
+            </div>
+            <pre className="mt-2 bg-black text-green-100 text-xs p-3 rounded overflow-x-auto max-h-96">{JSON.stringify(selectedJournalUpload, null, 2)}</pre>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
