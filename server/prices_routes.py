@@ -253,8 +253,8 @@ def margin_dashboard():
         yield_units = {}
         if item_ids:
             cursor.execute(
-                "SELECT item_id, yield_unit FROM items WHERE item_id IN %s",
-                (tuple(item_ids),)
+                "SELECT item_id, yield_unit FROM items WHERE item_id = ANY(%s)",
+                (list(item_ids),)
             )
             for r in cursor.fetchall() or []:
                 yield_units[r.get('item_id')] = (r.get('yield_unit') or '').strip().lower() or None

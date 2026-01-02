@@ -39,6 +39,7 @@ import SalesUploadsPage from './SalesUploadsPage';
 import SalesUploadDetail from './SalesUploadDetail';
 import SalesDashboard from './SalesDashboard';
 import CloseoutPage from './CloseoutPage';
+import PaymentsUploadsPage from './PaymentsUploadsPage';
 import { api } from './utils/auth';
 import { API_URL, DEPLOY_TIME } from './config';
 
@@ -110,7 +111,7 @@ function hasAccess(user, pageKey) {
 function pageKeyFromPath(path) {
   if (!path) return 'dashboard';
   if (path.startsWith('/menu') || path.startsWith('/item') || path.startsWith('/ingredients')) return 'menu';
-  if (path.startsWith('/prices')) return 'prices';
+  if (path.startsWith('/prices')) return 'sales';
   if (path.startsWith('/inventory')) return 'inventory';
   if (path.startsWith('/users')) return 'users';
   if (path.startsWith('/shifts/patterns')) return 'shift_patterns';
@@ -118,9 +119,11 @@ function pageKeyFromPath(path) {
   if (path.startsWith('/shifts')) return 'shifts';
   if (path.startsWith('/tasks')) return 'tasks';
   if (path.startsWith('/roles')) return 'roles';
-  if (path.startsWith('/receiving')) return 'receiving';
-  if (path.startsWith('/inventory-scanner')) return 'inventory_scanner';
+  if (path.startsWith('/receiving')) return 'inventory';
+  if (path.startsWith('/inventory-scanner')) return 'inventory';
   if (path.startsWith('/closeout')) return 'sales';
+  if (path.startsWith('/payments')) return 'sales';
+  if (path.startsWith('/sales')) return 'sales';
   return 'dashboard';
 }
 
@@ -129,8 +132,8 @@ function Header({ user, onLogout }) {
   const path = location.pathname;
   let mainSection = 'dashboard';
   if (path.startsWith('/menu') || path.startsWith('/ingredients')) mainSection = 'menu';
-  else if (path.startsWith('/prices')) mainSection = 'prices';
-  else if (path.startsWith('/inventory')) mainSection = 'inventory';
+  else if (path.startsWith('/prices') || path.startsWith('/sales') || path.startsWith('/payments') || path.startsWith('/closeout')) mainSection = 'sales';
+  else if (path.startsWith('/inventory') || path.startsWith('/receiving') || path.startsWith('/inventory-scanner')) mainSection = 'inventory';
   else if (path.startsWith('/users')) mainSection = 'users';
   else if (path.startsWith('/shifts')) mainSection = 'shifts';
   else if (path.startsWith('/tasks')) mainSection = 'tasks';
@@ -139,10 +142,16 @@ function Header({ user, onLogout }) {
   if (mainSection === 'menu') {
     subNavItems.push({ href: '/menu', label: 'Menu' });
     subNavItems.push({ href: '/ingredients', label: 'Ingredients' });
-  } else if (mainSection === 'prices') {
-    subNavItems.push({ href: '/prices', label: 'Prices' });
+  } else if (mainSection === 'sales') {
+    subNavItems.push({ href: '/sales', label: 'Sales Dashboard' });
+    subNavItems.push({ href: '/sales/uploads', label: 'Sales Uploads' });
+    subNavItems.push({ href: '/payments/uploads', label: 'Payments Uploads' });
+    subNavItems.push({ href: '/mappings/sales', label: 'Sales Mappings' });
+    subNavItems.push({ href: '/prices', label: 'Sales & Margins' });
+    subNavItems.push({ href: '/closeout', label: 'Closeout' });
   } else if (mainSection === 'inventory') {
     subNavItems.push({ href: '/inventory', label: 'Inventory' });
+    subNavItems.push({ href: '/receiving/new', label: 'Receive Goods' });
   } else if (mainSection === 'users') {
     subNavItems.push({ href: '/users', label: 'User Management' });
   } else if (mainSection === 'shifts') {
@@ -164,9 +173,6 @@ function Header({ user, onLogout }) {
           {/* Top-level links rendered only if current user role has access */}
           {hasAccess(user, 'menu') && (
             <Link to="/menu" className="text-sm font-semibold text-gray-700 hover:text-black">Menu</Link>
-          )}
-          {hasAccess(user, 'prices') && (
-            <Link to="/prices" className="text-sm font-semibold text-gray-700 hover:text-black">Prices</Link>
           )}
           {hasAccess(user, 'inventory') && (
             <Link to="/inventory" className="text-sm font-semibold text-gray-700 hover:text-black">Inventory</Link>
@@ -290,6 +296,8 @@ function App() {
         <Route path="/mappings/sales" element={<PrivateRoute user={user}><SalesMappingManager /></PrivateRoute>} />
         <Route path="/closeout" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />
         <Route path="/closeout/:date" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />
+        <Route path="/payments/uploads" element={<PrivateRoute user={user}><PaymentsUploadsPage /></PrivateRoute>} />
+        <Route path="/prices" element={<PrivateRoute user={user}><Prices /></PrivateRoute>} />
       </Routes>
 
       {/* Footer with last deployment timestamp */}

@@ -377,7 +377,7 @@ export default function CloseoutPage() {
               ))}
               {(journalUploads || []).length === 0 && (
                 <tr>
-                  <td className="px-3 py-2" colSpan={6}>No payments summary uploads yet for this date.</td>
+                  <td className="px-3 py-2" colSpan={6}>No payments summary uploads yet for this date. Manage all at <Link to="/payments/uploads" className="text-blue-600 underline">Payments uploads</Link>.</td>
                 </tr>
               )}
             </tbody>
