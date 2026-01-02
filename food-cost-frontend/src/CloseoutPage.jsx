@@ -371,7 +371,8 @@ export default function CloseoutPage() {
                   <td className="px-3 py-2">{u.source_filename}</td>
                   <td className="px-3 py-2">{u.created_at ? new Date(u.created_at).toLocaleString() : ''}</td>
                   <td className="px-3 py-2">
-                    <button className="text-blue-600 underline text-sm" onClick={() => openJournalUpload(u.id)}>View</button>
+                    <button className="text-blue-600 underline text-sm mr-2" onClick={() => openJournalUpload(u.id)}>View</button>
+                    <button className="text-red-600 underline text-sm" onClick={() => openJournalUpload(u.id, true)}>Reverse</button>
                   </td>
                 </tr>
               ))}

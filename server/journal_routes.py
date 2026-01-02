@@ -875,6 +875,47 @@ def get_journal_upload(upload_id):
             pass
 
 
+@journal_bp.route('/uploads/<int:upload_id>/reverse', methods=['POST'])
+def reverse_journal_upload(upload_id):
+    """Delete journal_uploads row and dependent aggregates for that business_date."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT * FROM journal_uploads WHERE id = %s", (upload_id,))
+        upload = cursor.fetchone()
+        if not upload:
+            return jsonify({'error': 'Upload not found'}), 404
+
+        bdate = upload.get('business_date')
+        utype = (upload.get('upload_type') or '').lower()
+
+        # Remove derived rows depending on type
+        if utype in ('revenue_summary', 'category_summary'):
+            cursor.execute("DELETE FROM sales_category_summary WHERE business_date = %s", (bdate,))
+        if utype in ('tip_summary', 'payments_summary'):
+            cursor.execute("DELETE FROM liabilities_daily WHERE business_date = %s", (bdate,))
+        if utype in ('giftcard_activity',):
+            cursor.execute("UPDATE liabilities_daily SET giftcard_sold = NULL, giftcard_redeemed = NULL WHERE business_date = %s", (bdate,))
+        if utype in ('cash_activity', 'payments_summary'):
+            cursor.execute("DELETE FROM deposits_expected WHERE business_date = %s", (bdate,))
+        if utype in ('processing_fees',):
+            cursor.execute("DELETE FROM processing_fees_detail WHERE business_date = %s", (bdate,))
+
+        cursor.execute("DELETE FROM journal_uploads WHERE id = %s", (upload_id,))
+        cursor.connection.commit()
+        return jsonify({'status': 'ok', 'deleted': True, 'business_date': bdate, 'upload_type': utype})
+    except Exception as e:
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
 @journal_bp.route('/validate', methods=['POST'])
 def validate_day():
     data = request.get_json() or {}

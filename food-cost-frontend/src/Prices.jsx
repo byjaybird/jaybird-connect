@@ -36,7 +36,7 @@ function Prices() {
     let cancelled = false;
     setLoadingDash(true);
     setErrorDash(null);
-    api.get('/api/prices/margin_dashboard', { params: { days } })
+    api.get('/api/prices/margin_dashboard', { params: { days }, timeout: 30000 })
       .then((res) => {
         if (cancelled) return;
         setDashboard(res.data);

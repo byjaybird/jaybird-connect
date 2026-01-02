@@ -38,6 +38,17 @@ export default function PaymentsUploadsPage() {
     }
   };
 
+  const reverseUpload = async (id) => {
+    if (!window.confirm('Reversing will delete this upload and derived deposits/liabilities. Continue?')) return;
+    try {
+      await api.post(`/api/journal/uploads/${id}/reverse`);
+      if (selected && selected.id === id) setSelected(null);
+      await load();
+    } catch (err) {
+      alert('Failed to reverse upload');
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -84,8 +95,9 @@ export default function PaymentsUploadsPage() {
                   <td className="px-3 py-2">{u.row_count}</td>
                   <td className="px-3 py-2">{u.source_filename}</td>
                   <td className="px-3 py-2">{u.created_at ? new Date(u.created_at).toLocaleString() : ''}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 space-x-2">
                     <button className="text-blue-600 underline text-sm" onClick={() => viewUpload(u.id)}>View</button>
+                    <button className="text-red-600 underline text-sm" onClick={() => reverseUpload(u.id)}>Reverse</button>
                   </td>
                 </tr>
               ))}
