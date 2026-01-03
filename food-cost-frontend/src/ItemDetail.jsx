@@ -326,6 +326,12 @@ function ItemDetail() {
           </span>
         )
       ) : '—'}</p>
+      {itemCost && itemCost.status !== 'ok' && (
+        <div className="mb-3 text-sm text-gray-700 space-x-2">
+          <Link to="/prices/new" className="text-blue-600 underline">Add price quote</Link>
+          <Link to={`/menu?focus=${id}`} className="text-blue-600 underline">Edit recipe / conversions</Link>
+        </div>
+      )}
       {showCostDebug && itemCost && (
         <div className="bg-gray-50 border rounded p-3 mt-2 text-sm">
           {renderResolverIssues(itemCost)}

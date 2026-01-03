@@ -231,7 +231,9 @@ function Prices() {
                   <ul className="text-sm text-gray-700 space-y-1">
                     {dashboard.missing_cost_items.slice(0, 6).map((m) => (
                       <li key={`${m.item_id}-${m.name}`} className="flex justify-between">
-                        <span>{m.name || 'Unknown item'}</span>
+                        <Link to={`/item/${m.item_id || ''}`} className="text-blue-600 underline">
+                          {m.name || 'Unknown item'}
+                        </Link>
                         <span className="text-gray-500">{formatCurrency(m.net_sales)}</span>
                       </li>
                     ))}
@@ -270,7 +272,11 @@ function Prices() {
                     <tr key={`${it.item_id || 'unmapped'}-${it.name}`} className="border-t">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <span>{it.name}</span>
+                          {it.item_id ? (
+                            <Link to={`/item/${it.item_id}`} className="text-blue-600 underline">{it.name}</Link>
+                          ) : (
+                            <span>{it.name}</span>
+                          )}
                           {it.item_id == null && <Badge color="yellow">Unmapped</Badge>}
                           {it.cost_per_unit == null && it.item_id != null && <Badge color="red">Missing cost</Badge>}
                         </div>
