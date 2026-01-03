@@ -38,6 +38,7 @@ import SalesUpload from './SalesUpload';
 import SalesUploadsPage from './SalesUploadsPage';
 import SalesUploadDetail from './SalesUploadDetail';
 import SalesDashboard from './SalesDashboard';
+import SalesDayReview from './SalesDayReview';
 import CloseoutPage from './CloseoutPage';
 import PaymentsUploadsPage from './PaymentsUploadsPage';
 import { api } from './utils/auth';
@@ -145,6 +146,7 @@ function Header({ user, onLogout }) {
   } else if (mainSection === 'sales') {
     subNavItems.push({ href: '/sales', label: 'Sales Dashboard' });
     subNavItems.push({ href: '/sales/uploads', label: 'Sales Uploads' });
+    subNavItems.push({ href: '/sales/day-review', label: 'Daily Sales Review' });
     subNavItems.push({ href: '/payments/uploads', label: 'Payments Uploads' });
     subNavItems.push({ href: '/mappings/sales', label: 'Sales Mappings' });
     subNavItems.push({ href: '/prices', label: 'Sales & Margins' });
@@ -293,6 +295,7 @@ function App() {
         <Route path="/sales/upload" element={<PrivateRoute user={user}><SalesUpload /></PrivateRoute>} />
         <Route path="/sales/uploads" element={<PrivateRoute user={user}><SalesUploadsPage /></PrivateRoute>} />
         <Route path="/sales/:id" element={<PrivateRoute user={user}><SalesUploadDetail /></PrivateRoute>} />
+        <Route path="/sales/day-review" element={<PrivateRoute user={user}><SalesDayReview /></PrivateRoute>} />
         <Route path="/mappings/sales" element={<PrivateRoute user={user}><SalesMappingManager /></PrivateRoute>} />
         <Route path="/closeout" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />
         <Route path="/closeout/:date" element={<PrivateRoute user={user}><CloseoutPage /></PrivateRoute>} />

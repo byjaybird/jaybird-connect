@@ -502,6 +502,7 @@ def reverse_upload(upload_id):
         if not upload:
             return jsonify({'error': 'Upload not found'}), 404
 
+        business_date = upload.get('business_date')
         cursor.execute("SELECT COUNT(*) AS cnt FROM sales_daily_lines WHERE upload_id = %s", (upload_id,))
         line_count_row = cursor.fetchone() or {}
         expected_lines = int(line_count_row.get('cnt') or 0)
@@ -512,12 +513,36 @@ def reverse_upload(upload_id):
         cursor.execute("DELETE FROM sales_uploads WHERE id = %s", (upload_id,))
         deleted_uploads = cursor.rowcount
 
+        remaining_uploads_for_day = None
+        remaining_lines_for_day = None
+        additional_lines_removed = 0
+
+        if business_date:
+            # If this was the only upload for that business date, defensively clear any lingering rows
+            cursor.execute("SELECT COUNT(*) AS cnt FROM sales_uploads WHERE business_date = %s", (business_date,))
+            remaining_uploads_for_day = int((cursor.fetchone() or {}).get('cnt') or 0)
+
+            if remaining_uploads_for_day == 0:
+                cursor.execute("DELETE FROM sales_daily_lines WHERE business_date = %s", (business_date,))
+                additional_lines_removed = max(cursor.rowcount, 0)
+                cursor.execute(
+                    "UPDATE business_days SET has_sales = FALSE, updated_at = now() WHERE business_date = %s",
+                    (business_date,)
+                )
+
+            cursor.execute("SELECT COUNT(*) AS cnt FROM sales_daily_lines WHERE business_date = %s", (business_date,))
+            remaining_lines_for_day = int((cursor.fetchone() or {}).get('cnt') or 0)
+
         return jsonify({
             'status': 'ok',
             'upload_id': upload_id,
             'deleted_lines': deleted_lines,
             'expected_lines': expected_lines,
-            'deleted_upload_record': bool(deleted_uploads)
+            'deleted_upload_record': bool(deleted_uploads),
+            'business_date': business_date,
+            'additional_lines_removed': additional_lines_removed,
+            'remaining_uploads_for_day': remaining_uploads_for_day,
+            'remaining_lines_for_day': remaining_lines_for_day
         })
     except Exception as e:
         try:
@@ -559,12 +584,54 @@ def get_lines():
 @sales_bp.route('/sales/lines/<int:line_id>', methods=['PUT'])
 def update_sales_line(line_id):
     data = request.get_json() or {}
-    # Only allow setting item_id for now; preserve other fields if desired
-    item_id = data.get('item_id')
+    allowed_fields = {
+        'item_id': 'numeric',
+        'item_name': 'text',
+        'sales_category': 'text',
+        'item_qty': 'numeric',
+        'net_sales': 'numeric',
+        'discount_amount': 'numeric',
+        'gross_sales': 'numeric',
+        'tax_amount': 'numeric'
+    }
+    updates = {}
+    for field, ftype in allowed_fields.items():
+        if field not in data:
+            continue
+        val = data.get(field)
+        if ftype == 'numeric':
+            # Allow null clears; otherwise coerce to float if parsable
+            if val is None or val == '':
+                updates[field] = None
+            else:
+                parsed = parse_numeric(val)
+                if parsed is None:
+                    return jsonify({'error': f'Invalid numeric value for {field}'}), 400
+                if field == 'item_id':
+                    try:
+                        updates[field] = int(parsed)
+                    except Exception:
+                        return jsonify({'error': 'item_id must be an integer'}), 400
+                else:
+                    updates[field] = float(parsed)
+        else:
+            updates[field] = val
+
+    if not updates:
+        return jsonify({'error': 'No editable fields provided'}), 400
+
+    set_clause = ", ".join([f"{f} = %s" for f in updates.keys()])
+    params = list(updates.values())
     cursor = get_db_cursor()
     try:
-        cursor.execute("UPDATE sales_daily_lines SET item_id = %s WHERE id = %s", (item_id, line_id))
-        return jsonify({'status': 'ok'})
+        cursor.execute(
+            f"UPDATE sales_daily_lines SET {set_clause} WHERE id = %s RETURNING *",
+            params + [line_id]
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        return jsonify({'status': 'ok', 'line': row})
     finally:
         try:
             cursor.close()
