@@ -21,6 +21,14 @@ const formatNumber = (value, digits = 0) => {
   return num.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
+// Keep business dates aligned to their calendar day (avoid local TZ shifts)
+const formatBusinessDate = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m, d] = (dateStr.split('T')[0] || '').split('-').map(Number);
+  if ([y, m, d].some((n) => Number.isNaN(n))) return dateStr;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString();
+};
+
 export default function SalesDashboard() {
   const [rangeDays, setRangeDays] = useState(30);
   const [summary, setSummary] = useState(null);
@@ -121,7 +129,9 @@ export default function SalesDashboard() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-xl font-semibold">Daily Net Sales</h2>
-                  <p className="text-sm text-gray-500">{summary.start_date} → {summary.end_date}</p>
+                  <p className="text-sm text-gray-500">
+                    {formatBusinessDate(summary.start_date)} → {formatBusinessDate(summary.end_date)}
+                  </p>
                 </div>
                 <div className="text-sm text-gray-500">Total {formatCurrency(summary?.totals?.net_sales)}</div>
               </div>
@@ -172,7 +182,7 @@ export default function SalesDashboard() {
                 <tbody>
                   {summary.daily.map((day) => (
                     <tr key={day.business_date} className="border-t">
-                      <td className="px-3 py-2">{new Date(day.business_date).toLocaleDateString()}</td>
+                      <td className="px-3 py-2">{formatBusinessDate(day.business_date)}</td>
                       <td className="px-3 py-2 text-right">{formatNumber(day.qty_sold)}</td>
                       <td className="px-3 py-2 text-right">{formatCurrency(day.net_sales)}</td>
                       <td className="px-3 py-2 text-right">{formatCurrency(day.avg_item_price)}</td>
@@ -218,7 +228,7 @@ function HighlightDay({ title, day }) {
   return (
     <div className="border rounded p-3">
       <div className="text-xs uppercase text-gray-500">{title}</div>
-      <div className="text-lg font-semibold">{new Date(day.business_date).toLocaleDateString()}</div>
+      <div className="text-lg font-semibold">{formatBusinessDate(day.business_date)}</div>
       <div className="text-sm text-gray-600">{formatCurrency(day.net_sales)} • {formatNumber(day.qty_sold)} units</div>
     </div>
   );
