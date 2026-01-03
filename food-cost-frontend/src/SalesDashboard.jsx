@@ -24,9 +24,12 @@ const formatNumber = (value, digits = 0) => {
 // Keep business dates aligned to their calendar day (avoid local TZ shifts)
 const formatBusinessDate = (dateStr) => {
   if (!dateStr) return '';
-  const [y, m, d] = (dateStr.split('T')[0] || '').split('-').map(Number);
+  const isoDay = (dateStr.split('T')[0] || '').split('-');
+  if (isoDay.length !== 3) return dateStr;
+  const [y, m, d] = isoDay.map(Number);
   if ([y, m, d].some((n) => Number.isNaN(n))) return dateStr;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString();
+  const asUtc = new Date(Date.UTC(y, m - 1, d));
+  return new Intl.DateTimeFormat(undefined, { timeZone: 'UTC' }).format(asUtc);
 };
 
 export default function SalesDashboard() {
