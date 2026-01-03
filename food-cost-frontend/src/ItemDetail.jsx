@@ -34,6 +34,14 @@ const formatNumber = (value, digits = 0) => {
   return num.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
+// Format a business_date string without letting the local timezone shift the calendar day
+const formatBusinessDate = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m, d] = (dateStr.split('T')[0] || '').split('-').map(Number);
+  if ([y, m, d].some((n) => Number.isNaN(n))) return dateStr;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString();
+};
+
 function ItemDetail() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
@@ -414,7 +422,7 @@ function ItemDetail() {
             <div className="mt-6">
               <SalesSparkline data={salesInsights.daily} accessor="qty_sold" height={80} stroke="#16a34a" />
               <div className="text-xs text-gray-500 mt-2">
-                Last sale: {salesSummary.last_sale_date ? new Date(salesSummary.last_sale_date).toLocaleDateString() : 'no sales yet'} •
+                Last sale: {salesSummary.last_sale_date ? formatBusinessDate(salesSummary.last_sale_date) : 'no sales yet'} •
                 {' '}Avg price {formatCurrency(avgUnitPrice)}
               </div>
             </div>
@@ -441,7 +449,7 @@ function ItemDetail() {
                   <tbody>
                     {salesInsights.daily.map((day) => (
                       <tr key={day.business_date} className="border-t">
-                        <td className="px-3 py-2">{new Date(day.business_date).toLocaleDateString()}</td>
+                        <td className="px-3 py-2">{formatBusinessDate(day.business_date)}</td>
                         <td className="px-3 py-2 text-right">{formatNumber(day.qty_sold)}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.net_sales)}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.avg_item_price)}</td>
@@ -562,7 +570,7 @@ function SalesHighlightCard({ title, day }) {
   return (
     <div className="border rounded p-3">
       <div className="text-xs uppercase text-gray-500">{title}</div>
-      <div className="text-lg font-semibold">{new Date(day.business_date).toLocaleDateString()}</div>
+      <div className="text-lg font-semibold">{formatBusinessDate(day.business_date)}</div>
       <div className="text-sm text-gray-600">{formatCurrency(day.net_sales)} • {formatNumber(day.qty_sold)} units</div>
     </div>
   );
