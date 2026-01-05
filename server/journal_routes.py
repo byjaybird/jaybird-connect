@@ -270,6 +270,11 @@ def parse_payments_summary(rows):
         if subtype:
             tender = f"{ptype} - {subtype}"
 
+        ptype_norm = ptype.strip().lower()
+        # Skip rollup rows like "Total" to avoid double counting
+        if ptype_norm == 'total':
+            continue
+
         amount = parse_numeric(r.get('Amount'))
         tips = parse_numeric(r.get('Tips'))
         grat = parse_numeric(r.get('Grat') or r.get('Gratuity'))
@@ -279,23 +284,22 @@ def parse_payments_summary(rows):
         legacy_tips = parse_numeric(r.get('Legacy tips') or r.get('Legacy Tips'))
         total = parse_numeric(r.get('Total'))
 
-        # Legacy tips are a fallback (older exports) not an additive; don't double-count with Tips.
-        tip_base = tips if tips is not None else legacy_tips
-        tips_total = (tip_base or 0) + (grat or 0) - (tip_refunds or 0)
+        # Use the Tips column only for tips incurred; ignore legacy/computed rollups.
+        tip_base = tips if tips is not None else Decimal('0')
+        tips_total = (tip_base or 0) - (tip_refunds or 0)
         liabilities['tips_incurred'] += tips_total
         liabilities['tax_collected'] += tax_amt or 0
         if ptype.lower().startswith('gift'):
             liabilities['giftcard_sold'] += amount or 0
 
-        less_gc = amount if ptype.lower().startswith('gift') else 0
-        expected = None
-        if amount is not None:
-            expected = (amount or 0) - (tip_base or 0) - (tax_amt or 0) - (less_gc or 0) - (refunds or 0) + (tip_refunds or 0)
+        less_gc = amount if ptype_norm.startswith('gift') else 0
+        # Treat Amount as the expected deposit provided by the payments summary (already a net figure per tender).
+        expected = amount
 
         deposits.append({
             'tender': tender,
             'gross': amount,
-            'less_tips': tips,
+            'less_tips': tip_base,
             'less_tax': tax_amt,
             'less_giftcard_liab': less_gc,
             'fees': None,

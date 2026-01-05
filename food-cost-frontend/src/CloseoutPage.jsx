@@ -312,15 +312,6 @@ export default function CloseoutPage() {
         ))}
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded p-3 text-sm">
-        <div className="font-semibold">Heads up</div>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>Payments summary fills tips, tax, gift card sold, and expected deposits per tender.</li>
-          <li>Revenue by category still requires sales uploads / category mapping; missing those will keep the day from locking.</li>
-          <li>Processor fees and gift card redemptions aren't in Payments summary; expect warnings until those feeds are added.</li>
-        </ul>
-      </div>
-
       <SalesUploadBox businessDate={businessDate} onUploaded={handleUploaded} />
 
       <div className="bg-white shadow rounded mt-4">
