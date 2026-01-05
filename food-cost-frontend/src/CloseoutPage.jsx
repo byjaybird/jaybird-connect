@@ -273,6 +273,18 @@ export default function CloseoutPage() {
     }
   };
 
+  const reverseJournalUpload = async (id) => {
+    if (!id) return;
+    if (!window.confirm('Reverse (delete) this payments summary upload?')) return;
+    try {
+      await api.post(`/api/journal/uploads/${id}/reverse`);
+      setSelectedJournalUpload(null);
+      handleUploaded();
+    } catch (err) {
+      alert(err?.response?.data?.error || err.message || 'Failed to reverse upload');
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -304,7 +316,7 @@ export default function CloseoutPage() {
         <div className="font-semibold">Heads up</div>
         <ul className="list-disc pl-5 space-y-1">
           <li>Payments summary fills tips, tax, gift card sold, and expected deposits per tender.</li>
-          <li>Revenue by category and COGS still require sales uploads / category mapping; missing those will keep the day from locking.</li>
+          <li>Revenue by category still requires sales uploads / category mapping; missing those will keep the day from locking.</li>
           <li>Processor fees and gift card redemptions aren't in Payments summary; expect warnings until those feeds are added.</li>
         </ul>
       </div>
@@ -372,7 +384,7 @@ export default function CloseoutPage() {
                   <td className="px-3 py-2">{u.created_at ? new Date(u.created_at).toLocaleString() : ''}</td>
                   <td className="px-3 py-2">
                     <button className="text-blue-600 underline text-sm mr-2" onClick={() => openJournalUpload(u.id)}>View</button>
-                    <button className="text-red-600 underline text-sm" onClick={() => openJournalUpload(u.id, true)}>Reverse</button>
+                    <button className="text-red-600 underline text-sm" onClick={() => reverseJournalUpload(u.id)}>Reverse</button>
                   </td>
                 </tr>
               ))}
@@ -427,17 +439,6 @@ export default function CloseoutPage() {
             ]}
           />
 
-          <Table
-            title="Estimated COGS"
-            rows={packet.cogs || []}
-            columns={[
-              { key: 'category', label: 'Category', render: (r) => (r.category || '').toString().toUpperCase() },
-              { key: 'estimated_cogs', label: 'Estimated COGS', render: (r) => `$${Number(r.estimated_cogs || 0).toFixed(2)}` },
-              { key: 'source', label: 'Source' },
-              { key: 'calc_method', label: 'Method' }
-            ]}
-          />
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white shadow rounded p-4">
               <div className="font-semibold text-gray-800 mb-2">Liabilities</div>
@@ -462,15 +463,38 @@ export default function CloseoutPage() {
             </div>
           </div>
 
-          <Table
-            title="Journal Lines (ready for Xero)"
-            rows={journalLines}
-            columns={[
-              { key: 'account', label: 'Account' },
-              { key: 'type', label: 'Type' },
-              { key: 'amount', label: 'Amount', render: (r) => `$${Number(r.amount || 0).toFixed(2)}` }
-            ]}
-          />
+          <div className="bg-white shadow rounded mt-4">
+            <div className="px-4 py-2 border-b font-semibold text-gray-800">Journal Entry Preview</div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-left">
+                  <tr>
+                    <th className="px-3 py-2">Account</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {journalLines.map((line, idx) => {
+                    const amt = Number(line.amount || 0);
+                    const isDebit = (line.type || '').toLowerCase() === 'debit';
+                    return (
+                      <tr key={idx} className="border-t">
+                        <td className="px-3 py-2">{line.account}</td>
+                        <td className="px-3 py-2 text-right">{isDebit ? `$${amt.toFixed(2)}` : ''}</td>
+                        <td className="px-3 py-2 text-right">{!isDebit ? `$${amt.toFixed(2)}` : ''}</td>
+                      </tr>
+                    );
+                  })}
+                  {journalLines.length === 0 && (
+                    <tr>
+                      <td className="px-3 py-3 text-center text-gray-500" colSpan={3}>No journal lines yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
     </div>

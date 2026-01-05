@@ -279,7 +279,9 @@ def parse_payments_summary(rows):
         legacy_tips = parse_numeric(r.get('Legacy tips') or r.get('Legacy Tips'))
         total = parse_numeric(r.get('Total'))
 
-        tips_total = (tips or 0) + (grat or 0) + (legacy_tips or 0) - (tip_refunds or 0)
+        # Legacy tips are a fallback (older exports) not an additive; don't double-count with Tips.
+        tip_base = tips if tips is not None else legacy_tips
+        tips_total = (tip_base or 0) + (grat or 0) - (tip_refunds or 0)
         liabilities['tips_incurred'] += tips_total
         liabilities['tax_collected'] += tax_amt or 0
         if ptype.lower().startswith('gift'):
@@ -288,7 +290,7 @@ def parse_payments_summary(rows):
         less_gc = amount if ptype.lower().startswith('gift') else 0
         expected = None
         if amount is not None:
-            expected = (amount or 0) - (tips or 0) - (tax_amt or 0) - (less_gc or 0) - (refunds or 0) + (tip_refunds or 0)
+            expected = (amount or 0) - (tip_base or 0) - (tax_amt or 0) - (less_gc or 0) - (refunds or 0) + (tip_refunds or 0)
 
         deposits.append({
             'tender': tender,
@@ -664,7 +666,8 @@ def compute_expected_deposits(cursor, business_date, liabilities, revenue_total,
     tax = liabilities.get('tax_collected') or 0
     gift_sold = liabilities.get('giftcard_sold') or 0
     gift_red = liabilities.get('giftcard_redeemed') or 0
-    expected_total = (revenue_total or 0) - tips - tax - gift_sold + gift_red - (fees_total or 0)
+    # revenue_total is net sales (excludes tips). For fallback, assume tips are deposited with card batches.
+    expected_total = (revenue_total or 0) + tips - tax - gift_sold + gift_red - (fees_total or 0)
     warnings = []
     if not uploads.get('cash_activity'):
         warnings.append({'code': 'warn_missing_cash_activity', 'severity': 'warn', 'message': 'Cash/deposit detail missing; using single aggregate expected deposit.'})
@@ -687,20 +690,26 @@ def compute_journal_packet(business_date):
         bd = cursor.fetchone() or {}
 
         uploads = load_latest_uploads(cursor, business_date)
+        has_sales_upload = bool(uploads.get('revenue_summary') or uploads.get('category_summary'))
+        if not has_sales_upload:
+            cursor.execute("SELECT 1 FROM sales_daily_lines WHERE business_date = %s LIMIT 1", (business_date,))
+            has_sales_upload = bool(cursor.fetchone())
+        has_payments_summary = bool(uploads.get('payments_summary'))
         completeness = {
-            'sales': bool(uploads.get('revenue_summary') or uploads.get('category_summary')),
-            'tax': bool(uploads.get('tax_summary')),
-            'tips': bool(uploads.get('tip_summary')),
-            'giftcards': bool(uploads.get('giftcard_activity')),
-            'fees': bool(uploads.get('processing_fees'))
+            'sales': has_sales_upload,
+            'payments_summary': has_payments_summary,
+            # Payments summary includes tax/tips/giftcards/fees, so mark those complete when it exists
+            'tax': bool(uploads.get('tax_summary') or has_payments_summary),
+            'tips': bool(uploads.get('tip_summary') or has_payments_summary),
+            'giftcards': bool(uploads.get('giftcard_activity') or has_payments_summary),
+            'fees': bool(uploads.get('processing_fees') or has_payments_summary)
         }
 
+        # Only block on missing product mix (sales) and payments summary; the others become optional
         if not completeness['sales']:
             blocking.append({'code': 'err_missing_sales', 'severity': 'error', 'message': 'Sales/category upload missing.'})
-        if not completeness['tax']:
-            blocking.append({'code': 'err_missing_tax', 'severity': 'error', 'message': 'Tax summary missing.'})
-        if not completeness['tips']:
-            blocking.append({'code': 'err_missing_tips', 'severity': 'error', 'message': 'Tip summary missing.'})
+        if not completeness['payments_summary']:
+            blocking.append({'code': 'err_missing_payments_summary', 'severity': 'error', 'message': 'Payments summary missing.'})
 
         # Category mappings
         cursor.execute("SELECT source_category, mapped_category FROM sales_category_mappings")
@@ -731,31 +740,20 @@ def compute_journal_packet(business_date):
 
         revenue_total = sum([float(r.get('net_sales') or 0) for r in revenue_rows])
 
-        # COGS estimates
-        cogs_rows, total_sales, missing_sales_dollars = compute_cogs(cursor, business_date, category_map, item_map)
-        missing_ratio = (missing_sales_dollars / total_sales) if total_sales else 0
-        if missing_ratio > 0.25:
-            blocking.append({'code': 'err_missing_costs', 'severity': 'error', 'message': 'More than 25% of sales dollars missing costs'})
-        elif missing_ratio > 0.10:
-            warnings.append({'code': 'warn_missing_costs', 'severity': 'warn', 'message': 'More than 10% of sales dollars missing costs'})
-
-        gross_margin = {
-            'net_sales': revenue_total,
-            'cogs': sum([r.get('estimated_cogs') or 0 for r in cogs_rows]),
-            'margin': revenue_total - sum([r.get('estimated_cogs') or 0 for r in cogs_rows])
-        }
+        # COGS estimates removed from closeout journal; keep revenue_total for deposits/liabilities
+        cogs_rows = []
 
         # Liabilities
         cursor.execute("SELECT * FROM liabilities_daily WHERE business_date = %s", (business_date,))
         liab = cursor.fetchone() or {}
-        if not liab and uploads.get('tip_summary') is None:
+        if not liab and uploads.get('tip_summary') is None and not has_payments_summary:
             warnings.append({'code': 'warn_missing_tip_summary', 'severity': 'warn', 'message': 'Tip summary missing; liabilities may be understated.'})
-        if not liab and uploads.get('tax_summary') is None:
+        if not liab and uploads.get('tax_summary') is None and not has_payments_summary:
             warnings.append({'code': 'warn_missing_tax_summary', 'severity': 'warn', 'message': 'Tax summary missing.'})
 
         # Processing fees
         fee_total = fetch_processing_fees(cursor, business_date)
-        if fee_total == 0 and not uploads.get('processing_fees'):
+        if fee_total == 0 and not uploads.get('processing_fees') and not has_payments_summary:
             warnings.append({'code': 'warn_missing_fees', 'severity': 'warn', 'message': 'Processing fees feed missing; deposit estimate excludes fees.'})
 
         expected_deposits, deposit_warnings = compute_expected_deposits(cursor, business_date, liab, revenue_total, fee_total, uploads)
@@ -765,18 +763,25 @@ def compute_journal_packet(business_date):
         fees_block = {'processing_fees': fee_total, 'source': 'processing_fees_detail' if fee_total else None}
 
         journal_lines = []
+        # Deposits (assets)
+        for d in expected_deposits or []:
+            expected_amt = d.get('expected')
+            if expected_amt is None:
+                continue
+            tender = (d.get('tender') or '').strip()
+            acct = 'Petty Cash' if 'cash' in tender.lower() else f"{tender.title()} Deposits Receivable" if tender else 'Deposits Receivable'
+            journal_lines.append({'account': acct, 'type': 'debit', 'amount': round(float(expected_amt), 2)})
+
         for r in revenue_rows:
             amt = r.get('net_sales')
             if amt:
                 acct = f"{str(r.get('category') or '').title()} Sales"
                 journal_lines.append({'account': acct, 'type': 'credit', 'amount': round(float(amt), 2)})
-        for c in cogs_rows:
-            amt = c.get('estimated_cogs')
-            if amt:
-                acct = f"{str(c.get('category') or '').title()} COGS"
-                journal_lines.append({'account': acct, 'type': 'debit', 'amount': round(float(amt), 2)})
         if liab.get('tips_incurred'):
-            journal_lines.append({'account': 'Tips Payable', 'type': 'credit', 'amount': round(float(liab.get('tips_incurred')), 2)})
+            tips_amt = round(float(liab.get('tips_incurred')), 2)
+            # Payout tips daily from petty cash: clear liability and reduce cash
+            journal_lines.append({'account': 'Tips Payable', 'type': 'debit', 'amount': tips_amt})
+            journal_lines.append({'account': 'Petty Cash', 'type': 'credit', 'amount': tips_amt})
         if liab.get('auto_grat_incurred'):
             journal_lines.append({'account': 'Auto Gratuity Payable', 'type': 'credit', 'amount': round(float(liab.get('auto_grat_incurred')), 2)})
         if liab.get('tax_collected'):
@@ -788,6 +793,12 @@ def compute_journal_packet(business_date):
         if fee_total:
             journal_lines.append({'account': 'Processing Fees', 'type': 'debit', 'amount': round(float(fee_total), 2)})
 
+        # Validate journal balance
+        debit_total = sum(float(l.get('amount') or 0) for l in journal_lines if (l.get('type') or '').lower() == 'debit')
+        credit_total = sum(float(l.get('amount') or 0) for l in journal_lines if (l.get('type') or '').lower() == 'credit')
+        if abs(debit_total - credit_total) > 0.01:
+            warnings.append({'code': 'warn_unbalanced_journal', 'severity': 'warn', 'message': f'Journal not balanced (debits {debit_total:.2f} vs credits {credit_total:.2f}).'})
+
         packet = {
             'business_date': business_date,
             'status': bd.get('status') or 'open',
@@ -795,7 +806,6 @@ def compute_journal_packet(business_date):
             'warnings': warnings + blocking,
             'revenue': revenue_rows,
             'cogs': cogs_rows,
-            'gross_margin': gross_margin,
             'liabilities': {
                 'tips_incurred': liab.get('tips_incurred'),
                 'tips_paid': liab.get('tips_paid'),
