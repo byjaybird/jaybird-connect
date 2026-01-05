@@ -271,8 +271,8 @@ def parse_payments_summary(rows):
             tender = f"{ptype} - {subtype}"
 
         ptype_norm = ptype.strip().lower()
-        # Skip rollup rows like "Total" to avoid double counting
-        if ptype_norm == 'total':
+        # Skip rollup rows like "Total" and the aggregate Credit/Debit line (subtypes carry the real rows)
+        if ptype_norm == 'total' or (ptype_norm == 'credit/debit' and subtype.strip() == ''):
             continue
 
         amount = parse_numeric(r.get('Amount'))
@@ -777,10 +777,14 @@ def compute_journal_packet(business_date):
             journal_lines.append({'account': acct, 'type': 'debit', 'amount': round(float(expected_amt), 2)})
 
         for r in revenue_rows:
-            amt = r.get('net_sales')
-            if amt:
+            gross_amt = float(r.get('gross_sales') or 0)
+            disc_amt = float(r.get('discounts') or 0)
+            if gross_amt:
                 acct = f"{str(r.get('category') or '').title()} Sales"
-                journal_lines.append({'account': acct, 'type': 'credit', 'amount': round(float(amt), 2)})
+                journal_lines.append({'account': acct, 'type': 'credit', 'amount': round(gross_amt, 2)})
+            if disc_amt:
+                disc_acct = f"{str(r.get('category') or '').title()} Discounts"
+                journal_lines.append({'account': disc_acct, 'type': 'debit', 'amount': round(disc_amt, 2)})
         if liab.get('tips_incurred'):
             tips_amt = round(float(liab.get('tips_incurred')), 2)
             # Payout tips daily from petty cash: clear liability and reduce cash
