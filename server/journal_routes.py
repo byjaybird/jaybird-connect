@@ -293,8 +293,13 @@ def parse_payments_summary(rows):
             liabilities['giftcard_sold'] += amount or 0
 
         less_gc = amount if ptype_norm.startswith('gift') else 0
-        # Treat Amount as the expected deposit provided by the payments summary (already a net figure per tender).
-        expected = amount
+
+        # Expected deposit: amount + tips (minus tip refunds), since card batches include tips.
+        expected = (amount or 0)
+        if tip_base:
+            expected += tip_base
+        if tip_refunds:
+            expected -= tip_refunds
 
         deposits.append({
             'tender': tender,
@@ -787,6 +792,8 @@ def compute_journal_packet(business_date):
                 journal_lines.append({'account': disc_acct, 'type': 'debit', 'amount': round(disc_amt, 2)})
         if liab.get('tips_incurred'):
             tips_amt = round(float(liab.get('tips_incurred')), 2)
+            # Recognize tips liability when collected
+            journal_lines.append({'account': 'Tips Payable', 'type': 'credit', 'amount': tips_amt})
             # Payout tips daily from petty cash: clear liability and reduce cash
             journal_lines.append({'account': 'Tips Payable', 'type': 'debit', 'amount': tips_amt})
             journal_lines.append({'account': 'Petty Cash', 'type': 'credit', 'amount': tips_amt})
