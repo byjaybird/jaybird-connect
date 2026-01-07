@@ -2,304 +2,212 @@ import React, { useEffect, useState } from 'react';
 import { api } from './utils/auth';
 import { Link } from 'react-router-dom';
 
+function formatQty(value, unit) {
+  if (value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (Number.isNaN(num)) return '—';
+  const rounded = Math.round(num * 100) / 100;
+  return `${rounded.toLocaleString()}${unit ? ` ${unit}` : ''}`;
+}
+
+function varianceTone(val) {
+  if (val === null || val === undefined) return 'text-gray-600';
+  if (val < -0.01) return 'text-red-600 font-semibold';
+  if (val > 0.01) return 'text-emerald-700 font-semibold';
+  return 'text-gray-800';
+}
+
 export default function InventoryDashboard() {
-  const [inventory, setInventory] = useState({});
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({});
+  const [lookbackDays, setLookbackDays] = useState(45);
+  const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [reload, setReload] = useState(0);
-
-  // Pagination state per category: { [category]: { page: number, pageSize: number } }
-  const DEFAULT_PAGE_SIZE = 50;
-  const [pagination, setPagination] = useState({});
-
-  // Sort state per category: { [category]: { key: string, dir: 'asc'|'desc' } }
-  const [sortState, setSortState] = useState({});
-
-  useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        const ingredientsRes = await api.get('/api/ingredients');
-        const itemsRes = await api.get('/api/items?is_prep=true');
-
-        const allIngredients = ingredientsRes.data || [];
-        const allItems = itemsRes.data || [];
-
-        const visibleIngredients = allIngredients.filter(i => !i.archived);
-        const visibleItems = allItems.filter(i => !i.is_archived);
-
-        const allVisible = [
-          ...visibleIngredients.map(i => ({ ...i, source_type: 'ingredient', source_id: i.ingredient_id })),
-          ...visibleItems.map(i => ({ ...i, source_type: 'item', source_id: i.item_id })),
-        ];
-
-        // Batch fetch latest inventory rows for all visible items in a single request
-        const batchPayload = { items: allVisible.map(i => ({ source_type: i.source_type, source_id: i.source_id })) };
-        const batchRes = await api.post('/api/inventory/current/batch', batchPayload);
-        if (batchRes.data && batchRes.data.error) {
-          throw new Error(batchRes.data.error || 'Batch inventory lookup failed');
-        }
-
-        const results = (batchRes.data && batchRes.data.results) || [];
-        const lookup = results.reduce((acc, r) => {
-          acc[`${r.source_type}-${r.source_id}`] = r;
-          return acc;
-        }, {});
-
-        const enriched = allVisible.map((item) => {
-          const key = `${item.source_type}-${item.source_id}`;
-          const res = lookup[key];
-          const latest = res && res.data ? res.data : null;
-          return {
-            ...item,
-            quantity: latest?.quantity || 0,
-            quantity_base: latest?.quantity_base != null ? latest.quantity_base : null,
-            base_unit: latest?.base_unit || null,
-            unit: latest?.unit || item.unit || '-',
-            location: latest?.location || '-',
-            created_at: latest?.created_at || null,
-            user_id: latest?.user_id || '-'
-          };
-        });
-
-        // Fetch expected quantities for ingredients based on received goods + adjustments
-        try {
-          const ingredientItems = allVisible.filter(i => i.source_type === 'ingredient').map(i => ({ source_type: 'ingredient', source_id: i.source_id }));
-          if (ingredientItems.length > 0) {
-            const expRes = await api.post('/api/inventory/expected/batch', { items: ingredientItems });
-            const expList = expRes.data && expRes.data.results ? expRes.data.results : [];
-            const expLookup = {};
-            expList.forEach(e => {
-              if (e && e.source_type && (e.source_id !== undefined && e.source_id !== null)) {
-                expLookup[`${e.source_type}-${e.source_id}`] = e.data || null;
-              }
-            });
-
-            // Attach expected fields to enriched
-            for (let ev of enriched) {
-              if (ev.source_type === 'ingredient') {
-                const k = `${ev.source_type}-${ev.source_id}`;
-                const d = expLookup[k];
-                ev.expected_quantity_base = d ? d.quantity_base : null;
-                ev.expected_base_unit = d ? d.base_unit : null;
-              } else {
-                ev.expected_quantity_base = null;
-                ev.expected_base_unit = null;
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to fetch expected inventory', e);
-        }
-
-        const groupedByCategory = enriched.reduce((acc, item) => {
-          const category = item.category || 'Uncategorized';
-          if (!acc[category]) acc[category] = [];
-          acc[category].push(item);
-          return acc;
-        }, {});
-
-        setInventory(groupedByCategory);
-
-        // Initialize pagination for each category (default page 1)
-        const initialPagination = Object.keys(groupedByCategory).reduce((acc, cat) => {
-          acc[cat] = { page: 1, pageSize: DEFAULT_PAGE_SIZE };
-          return acc;
-        }, {});
-        setPagination(initialPagination);
-
-        // Initialize default sort (by Item name asc) for each category
-        const initialSort = Object.keys(groupedByCategory).reduce((acc, cat) => {
-          acc[cat] = { key: 'name', dir: 'asc' };
-          return acc;
-        }, {});
-        setSortState(initialSort);
-
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch inventory', err.response || err);
-        setError('Failed to load inventory data. Please check your connection and try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInventory();
-  }, [reload]);
-  
-  if (loading) return <div className="p-4">Loading inventory...</div>;
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
-
-  // Sorting helper
-  const compareValues = (a, b, key) => {
-    if (a == null && b == null) return 0;
-    if (a == null) return -1;
-    if (b == null) return 1;
-
-    // handle nested/computed keys
-    switch (key) {
-      case 'name':
-        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
-      case 'type':
-        return String(a.source_type || '').localeCompare(String(b.source_type || ''), undefined, { sensitivity: 'base' });
-      case 'quantity':
-        return Number(a.quantity || 0) - Number(b.quantity || 0);
-      case 'unit':
-        return String(a.unit || '').localeCompare(String(b.unit || ''), undefined, { sensitivity: 'base' });
-      case 'expected': {
-        const va = a.expected_quantity_base != null ? Number(a.expected_quantity_base) : null;
-        const vb = b.expected_quantity_base != null ? Number(b.expected_quantity_base) : null;
-        if (va == null && vb == null) return 0;
-        if (va == null) return -1;
-        if (vb == null) return 1;
-        return va - vb;
-      }
-      case 'variance': {
-        const va = (a.quantity_base != null && a.expected_quantity_base != null) ? Number(a.quantity_base) - Number(a.expected_quantity_base) : null;
-        const vb = (b.quantity_base != null && b.expected_quantity_base != null) ? Number(b.quantity_base) - Number(b.expected_quantity_base) : null;
-        if (va == null && vb == null) return 0;
-        if (va == null) return -1;
-        if (vb == null) return 1;
-        return va - vb;
-      }
-      case 'location':
-        return String(a.location || '').localeCompare(String(b.location || ''), undefined, { sensitivity: 'base' });
-      case 'created_at': {
-        const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return da - db;
-      }
-      case 'user':
-        return String(a.user_id || '').localeCompare(String(b.user_id || ''), undefined, { sensitivity: 'base' });
-      default:
-        return 0;
+  const fetchReconciliation = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/api/inventory/reconciliation/latest?lookback_days=${lookbackDays}`);
+      setRows(res.data?.results || []);
+      setMeta(res.data?.meta || {});
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load inventory reconciliation', err.response || err);
+      setError('Unable to load inventory reconciliation. Please retry.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSort = (category, key) => {
-    setSortState(prev => {
-      const cur = prev[category] || { key: 'name', dir: 'asc' };
-      if (cur.key === key) {
-        // toggle direction
-        const next = { ...cur, dir: cur.dir === 'asc' ? 'desc' : 'asc' };
-        return { ...prev, [category]: next };
-      }
-      // new key -> default asc
-      return { ...prev, [category]: { key, dir: 'asc' } };
-    });
-  };
+  useEffect(() => {
+    fetchReconciliation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookbackDays]);
+
+  if (loading) return <div className="p-4">Loading inventory variance...</div>;
+  if (error) return <div className="p-4 text-red-600">{error}</div>;
+
+  const windowLabel = meta?.window_start && meta?.window_end
+    ? `${new Date(meta.window_start).toLocaleDateString()} → ${new Date(meta.window_end).toLocaleDateString()}`
+    : 'recent';
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
+    <div className="p-6 space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <Link to="/inventory/manual" className="bg-blue-600 text-white px-3 py-1 rounded">Add Inventory (Manual)</Link>
+          <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
+          <p className="text-gray-600 text-sm">Variance between physical counts and theoretical usage from sales.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-700">Lookback</label>
+          <select
+            value={lookbackDays}
+            onChange={(e) => setLookbackDays(Number(e.target.value))}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value={14}>14 days</option>
+            <option value={30}>30 days</option>
+            <option value={45}>45 days</option>
+            <option value={60}>60 days</option>
+            <option value={90}>90 days</option>
+          </select>
+          <button onClick={fetchReconciliation} className="px-3 py-1 border rounded text-sm bg-white hover:bg-gray-50">Reload</button>
+          <Link to="/inventory/manual" className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Add Inventory (Manual)</Link>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="border rounded p-3 bg-white">
+          <div className="text-sm text-gray-600">Ingredients reviewed</div>
+          <div className="text-2xl font-semibold">{meta?.ingredients_scanned || 0}</div>
+          <div className="text-xs text-gray-500">{windowLabel}</div>
+        </div>
+        <div className="border rounded p-3 bg-white">
+          <div className="text-sm text-gray-600">Sales rows without item mapping</div>
+          <div className="text-2xl font-semibold">{meta?.sales_skipped_no_item ? Number(meta.sales_skipped_no_item).toFixed(0) : 0}</div>
+          <div className="text-xs text-gray-500">These sales could not be tied to a recipe.</div>
+        </div>
+        <div className="border rounded p-3 bg-white">
+          <div className="text-sm text-gray-600">Data window</div>
+          <div className="text-md font-semibold">{windowLabel}</div>
+          <div className="text-xs text-gray-500">Counts compared to purchases, adjustments, and sales.</div>
+        </div>
+      </div>
 
-      {Object.entries(inventory).map(([category, items]) => {
-        const total = items.length;
-        const { page = 1, pageSize = DEFAULT_PAGE_SIZE } = pagination[category] || {};
-        const pageCount = Math.max(1, Math.ceil(total / pageSize));
-        const currentPage = Math.min(Math.max(1, page), pageCount);
-        const startIdx = (currentPage - 1) * pageSize;
-
-        // Apply sorting before pagination
-        const sort = sortState[category] || { key: 'name', dir: 'asc' };
-        const itemsCopy = [...items];
-        itemsCopy.sort((a, b) => {
-          const cmp = compareValues(a, b, sort.key);
-          return sort.dir === 'asc' ? cmp : -cmp;
-        });
-
-        const pageItems = itemsCopy.slice(startIdx, startIdx + pageSize);
-
-        const setPage = (newPage) => {
-          setPagination(prev => ({ ...prev, [category]: { ...(prev[category] || {}), page: newPage } }));
-        };
-        const setPageSize = (newSize) => {
-          setPagination(prev => ({ ...prev, [category]: { ...(prev[category] || {}), pageSize: newSize, page: 1 } }));
-        };
-
-        const renderSortIndicator = (cat, key) => {
-          const s = sortState[cat];
-          if (!s || s.key !== key) return null;
-          return s.dir === 'asc' ? ' ▲' : ' ▼';
-        };
-
-        return (
-          <div key={category} className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-semibold">{category} <span className="text-sm text-gray-500">({total})</span></h2>
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Rows:</label>
-                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="border rounded px-2 py-1 text-sm">
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+      {(meta?.sales_skipped_missing_recipe && Object.keys(meta.sales_skipped_missing_recipe).length > 0) && (
+        <div className="border rounded p-3 bg-amber-50 text-amber-800 text-sm">
+          <div className="font-semibold mb-1">Sales with missing recipes</div>
+          <div className="space-y-1">
+            {Object.entries(meta.sales_skipped_missing_recipe).map(([name, qty]) => (
+              <div key={name} className="flex justify-between">
+                <span>{name}</span>
+                <span className="font-semibold">{Number(qty).toFixed(2)} sold</span>
               </div>
-            </div>
-
-            <table className="w-full border text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th onClick={() => handleSort(category, 'name')} className="cursor-pointer text-left px-3 py-2 border">Item{renderSortIndicator(category, 'name')}</th>
-                  <th onClick={() => handleSort(category, 'type')} className="cursor-pointer text-left px-3 py-2 border">Type{renderSortIndicator(category, 'type')}</th>
-                  <th onClick={() => handleSort(category, 'quantity')} className="cursor-pointer text-right px-3 py-2 border">Qty{renderSortIndicator(category, 'quantity')}</th>
-                  <th onClick={() => handleSort(category, 'unit')} className="cursor-pointer text-left px-3 py-2 border">Unit{renderSortIndicator(category, 'unit')}</th>
-                  <th onClick={() => handleSort(category, 'expected')} className="cursor-pointer text-right px-3 py-2 border">Expected{renderSortIndicator(category, 'expected')}</th>
-                  <th onClick={() => handleSort(category, 'variance')} className="cursor-pointer text-right px-3 py-2 border">Variance{renderSortIndicator(category, 'variance')}</th>
-                  <th onClick={() => handleSort(category, 'location')} className="cursor-pointer text-left px-3 py-2 border">Location{renderSortIndicator(category, 'location')}</th>
-                  <th onClick={() => handleSort(category, 'created_at')} className="cursor-pointer text-left px-3 py-2 border">Last Updated{renderSortIndicator(category, 'created_at')}</th>
-                  <th onClick={() => handleSort(category, 'user')} className="cursor-pointer text-left px-3 py-2 border">User{renderSortIndicator(category, 'user')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((item) => (
-                  <tr key={`${item.source_type}-${item.source_id}`} className="border-b">
-                    <td className="px-3 py-2 border">{item.name}</td>
-                    <td className="px-3 py-2 border">{item.source_type}</td>
-                    <td className="px-3 py-2 text-right border">{item.quantity}</td>
-                    <td className="px-3 py-2 border">{item.unit}</td>
-
-                    <td className="px-3 py-2 text-right border">
-                      {item.expected_quantity_base != null ?
-                        `${Number(item.expected_quantity_base).toFixed(2)} ${item.expected_base_unit || item.base_unit || ''}` :
-                        '-'
-                      }
-                    </td>
-
-                    <td className="px-3 py-2 text-right border">
-                      { (item.expected_quantity_base != null && item.quantity_base != null) ?
-                        `${(Number(item.quantity_base) - Number(item.expected_quantity_base)).toFixed(2)} ${item.base_unit || item.expected_base_unit || ''}` :
-                        '-'
-                      }
-                    </td>
-
-                    <td className="px-3 py-2 border">{item.location}</td>
-                    <td className="px-3 py-2 border">{item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</td>
-                    <td className="px-3 py-2 border">{item.user_id}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="flex items-center justify-between mt-2">
-              <div className="text-sm text-gray-600">Showing {Math.min(startIdx + 1, total)} - {Math.min(startIdx + pageItems.length, total)} of {total}</div>
-              <div className="flex items-center space-x-2">
-                <button onClick={() => setPage(1)} disabled={currentPage === 1} className="px-2 py-1 border rounded bg-white disabled:opacity-50">First</button>
-                <button onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className="px-2 py-1 border rounded bg-white disabled:opacity-50">Prev</button>
-                <span className="px-2 py-1 text-sm">Page {currentPage} of {pageCount}</span>
-                <button onClick={() => setPage(currentPage + 1)} disabled={currentPage === pageCount} className="px-2 py-1 border rounded bg-white disabled:opacity-50">Next</button>
-                <button onClick={() => setPage(pageCount)} disabled={currentPage === pageCount} className="px-2 py-1 border rounded bg-white disabled:opacity-50">Last</button>
-              </div>
-            </div>
+            ))}
           </div>
-        );
-      })}
+        </div>
+      )}
+
+      <div className="border rounded bg-white overflow-hidden">
+        <div className="grid grid-cols-12 bg-gray-50 text-xs font-semibold text-gray-700 uppercase tracking-wide border-b">
+          <div className="col-span-3 px-3 py-2">Ingredient</div>
+          <div className="col-span-2 px-3 py-2 text-right">Last Count</div>
+          <div className="col-span-2 px-3 py-2 text-right">Expected</div>
+          <div className="col-span-2 px-3 py-2 text-right">Variance</div>
+          <div className="col-span-2 px-3 py-2 text-right">Sales Usage</div>
+          <div className="col-span-1 px-3 py-2 text-right">Details</div>
+        </div>
+        {rows.length === 0 && (
+          <div className="p-4 text-sm text-gray-600">No inventory records in this window.</div>
+        )}
+        {rows.map((row) => {
+          const latestUnit = row.latest_count?.base_unit || row.latest_count?.unit || '';
+          const expectedUnit = row.latest_count?.base_unit || row.previous_count?.base_unit || latestUnit;
+          const variance = row.variance_base;
+          const isExpanded = expandedId === row.ingredient_id;
+
+          return (
+            <div key={row.ingredient_id} className="border-b last:border-b-0">
+              <button
+                className="w-full grid grid-cols-12 items-center hover:bg-gray-50 focus:bg-gray-50 transition text-left"
+                onClick={() => setExpandedId(isExpanded ? null : row.ingredient_id)}
+              >
+                <div className="col-span-3 px-3 py-3">
+                  <div className="font-semibold text-sm">{row.ingredient_name}</div>
+                  <div className="text-xs text-gray-500">
+                    {row.previous_count?.created_at
+                      ? `Prev count: ${new Date(row.previous_count.created_at).toLocaleDateString()}`
+                      : 'No prior count'}
+                  </div>
+                </div>
+                <div className="col-span-2 px-3 py-3 text-right text-sm">
+                  {formatQty(row.latest_count?.quantity_base, latestUnit)}
+                  <div className="text-xs text-gray-500">{row.latest_count?.created_at ? new Date(row.latest_count.created_at).toLocaleString() : '—'}</div>
+                </div>
+                <div className="col-span-2 px-3 py-3 text-right text-sm">
+                  {row.expected_base !== null && row.expected_base !== undefined
+                    ? formatQty(row.expected_base, expectedUnit)
+                    : '—'}
+                </div>
+                <div className="col-span-2 px-3 py-3 text-right text-sm">
+                  <span className={varianceTone(variance)}>
+                    {variance !== null && variance !== undefined ? formatQty(variance, expectedUnit) : '—'}
+                  </span>
+                </div>
+                <div className="col-span-2 px-3 py-3 text-right text-sm">
+                  {formatQty(row.sales_usage_base, expectedUnit)}
+                </div>
+                <div className="col-span-1 px-3 py-3 text-right text-gray-500 text-xs">
+                  {isExpanded ? 'Hide' : 'View'}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="bg-gray-50 border-t px-4 py-3 text-sm space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="border rounded p-3 bg-white">
+                      <div className="text-xs text-gray-600 uppercase">Previous Count</div>
+                      <div className="font-semibold">{formatQty(row.previous_count?.quantity_base, row.previous_count?.base_unit)}</div>
+                      <div className="text-xs text-gray-500">{row.previous_count?.created_at ? new Date(row.previous_count.created_at).toLocaleString() : '—'}</div>
+                    </div>
+                    <div className="border rounded p-3 bg-white">
+                      <div className="text-xs text-gray-600 uppercase">Movements</div>
+                      <div className="flex justify-between"><span>Purchases</span><span className="font-semibold">{formatQty(row.purchases_base, expectedUnit)}</span></div>
+                      <div className="flex justify-between"><span>Adjustments</span><span className="font-semibold">{formatQty(row.adjustments_base, expectedUnit)}</span></div>
+                      <div className="flex justify-between"><span>Sales usage</span><span className="font-semibold">{formatQty(row.sales_usage_base, expectedUnit)}</span></div>
+                    </div>
+                    <div className="border rounded p-3 bg-white">
+                      <div className="text-xs text-gray-600 uppercase">Expected vs Count</div>
+                      <div className="flex justify-between"><span>Expected</span><span className="font-semibold">{formatQty(row.expected_base, expectedUnit)}</span></div>
+                      <div className="flex justify-between"><span>Actual</span><span className="font-semibold">{formatQty(row.latest_count?.quantity_base, latestUnit)}</span></div>
+                      <div className="flex justify-between"><span>Variance</span><span className={varianceTone(variance)}>{formatQty(variance, expectedUnit)}</span></div>
+                    </div>
+                  </div>
+
+                  {row.sales_breakdown && row.sales_breakdown.length > 0 && (
+                    <div className="border rounded bg-white p-3">
+                      <div className="text-xs uppercase text-gray-600 mb-2">Sales drivers in window</div>
+                      <div className="grid grid-cols-12 text-xs font-semibold text-gray-700 border-b pb-1">
+                        <div className="col-span-6">Item</div>
+                        <div className="col-span-3 text-right">Qty sold</div>
+                        <div className="col-span-3 text-right">Usage ({expectedUnit || 'base'})</div>
+                      </div>
+                      {row.sales_breakdown.slice(0, 8).map((s, idx) => (
+                        <div key={`${s.item_id || s.item_name}-${idx}`} className="grid grid-cols-12 py-1 border-b last:border-b-0 text-xs">
+                          <div className="col-span-6">{s.item_name || `Item ${s.item_id || ''}`}</div>
+                          <div className="col-span-3 text-right">{Number(s.qty_sold || 0).toFixed(2)}</div>
+                          <div className="col-span-3 text-right">{formatQty(s.usage_base, expectedUnit)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

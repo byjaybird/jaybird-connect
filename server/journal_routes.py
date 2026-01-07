@@ -271,8 +271,8 @@ def parse_payments_summary(rows):
             tender = f"{ptype} - {subtype}"
 
         ptype_norm = ptype.strip().lower()
-        # Skip rollup rows like "Total" and the aggregate Credit/Debit line (subtypes carry the real rows)
-        if ptype_norm == 'total' or (ptype_norm == 'credit/debit' and subtype.strip() == ''):
+        # Skip rollup rows like "Total", aggregate Credit/Debit (no subtype), and rollup Other
+        if ptype_norm == 'total' or (ptype_norm == 'credit/debit' and subtype.strip() == '') or ptype_norm == 'other':
             continue
 
         amount = parse_numeric(r.get('Amount'))

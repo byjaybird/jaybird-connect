@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone, date
 from flask import Blueprint, request, jsonify
 from .utils.db import get_db_cursor
 from .utils.conversion_helper import convert_to_base
@@ -386,3 +388,402 @@ def expected_inventory_batch():
         return jsonify({'error': 'Database error', 'details': str(e)}), 500
     finally:
         cursor.close()
+
+
+def _ensure_datetime(val):
+    """Normalize DB values (datetime/date/str) to timezone-aware UTC datetimes."""
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if isinstance(val, date):
+        return datetime.combine(val, datetime.min.time(), tzinfo=timezone.utc)
+    if isinstance(val, str):
+        try:
+            # Handle trailing Z or offset-naive strings
+            cleaned = val.replace('Z', '+00:00') if val.endswith('Z') else val
+            return datetime.fromisoformat(cleaned)
+        except Exception:
+            return None
+    return None
+
+
+def _get_global_conversion_map(cursor):
+    """Return {(from_unit, to_unit): factor} for global conversions."""
+    cursor.execute("""
+        SELECT LOWER(from_unit) AS from_unit, LOWER(to_unit) AS to_unit, factor
+        FROM ingredient_conversions
+        WHERE is_global = TRUE
+    """)
+    rows = cursor.fetchall()
+    conv = {}
+    for r in rows:
+        try:
+            key = ((r.get('from_unit') or '').strip().lower(), (r.get('to_unit') or '').strip().lower())
+            conv[key] = float(r.get('factor'))
+        except Exception:
+            continue
+    return conv
+
+
+def _conversion_factor(from_unit, to_unit, conv_map):
+    if not from_unit or not to_unit:
+        return None
+    key = (str(from_unit).strip().lower(), str(to_unit).strip().lower())
+    return conv_map.get(key)
+
+
+@inventory_bp.route('/api/inventory/reconciliation/latest', methods=['GET'])
+def inventory_reconciliation_latest():
+    """
+    Compute variances between the two most recent inventory counts per ingredient,
+    factoring purchases, adjustments, and sales-driven usage (via recipes).
+    Returns one row per ingredient that has at least one inventory count in the lookback window.
+    """
+    lookback_days = request.args.get('lookback_days', type=int) or 45
+    ingredient_filter = request.args.get('ingredient_id')
+
+    cursor = get_db_cursor()
+    try:
+        # Pull the latest two counts for each ingredient
+        cursor.execute("""
+            WITH ranked AS (
+                SELECT
+                    source_id AS ingredient_id,
+                    quantity,
+                    unit,
+                    quantity_base,
+                    base_unit,
+                    location,
+                    created_at,
+                    user_id,
+                    ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
+                FROM inventory_count_entries
+                WHERE source_type = 'ingredient'
+            )
+            SELECT * FROM ranked WHERE rn <= 2
+        """)
+        count_rows = cursor.fetchall()
+
+        latest_counts = {}
+        previous_counts = {}
+        for row in count_rows:
+            iid = row.get('ingredient_id')
+            if ingredient_filter and str(iid) != str(ingredient_filter):
+                continue
+            rn = row.get('rn')
+            if rn == 1:
+                latest_counts[iid] = row
+            elif rn == 2:
+                previous_counts[iid] = row
+
+        if not latest_counts:
+            return jsonify({'results': [], 'meta': {'message': 'No inventory counts found'}})
+
+        # Filter to ingredients whose latest count is within the lookback window
+        now_ts = datetime.now(timezone.utc)
+        cutoff = now_ts - timedelta(days=lookback_days)
+        filtered_ids = [iid for iid, row in latest_counts.items() if (_ensure_datetime(row.get('created_at')) or cutoff) >= cutoff]
+
+        if ingredient_filter and str(ingredient_filter) in map(str, filtered_ids):
+            filtered_ids = [int(ingredient_filter)]
+
+        if not filtered_ids:
+            return jsonify({'results': [], 'meta': {'message': 'No recent inventory counts in the selected window'}})
+
+        # Build ingredient name lookup
+        cursor.execute("SELECT ingredient_id, name FROM ingredients WHERE ingredient_id = ANY(%s)", (filtered_ids,))
+        ing_rows = cursor.fetchall()
+        ing_name = {r['ingredient_id']: r.get('name') for r in ing_rows}
+
+        # Establish global time bounds for fetching purchases/adjustments/sales
+        interval_starts = []
+        interval_ends = []
+        for iid in filtered_ids:
+            latest_row = latest_counts.get(iid)
+            prev_row = previous_counts.get(iid)
+            ldt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
+            pdt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
+            if ldt:
+                interval_ends.append(ldt)
+            if pdt:
+                interval_starts.append(pdt)
+        global_start = min(interval_starts) if interval_starts else cutoff
+        global_end = max(interval_ends) if interval_ends else now_ts
+
+        # Fetch purchases within the window for relevant ingredients
+        cursor.execute("""
+            SELECT ingredient_id, units, unit_type, receive_date
+            FROM received_goods
+            WHERE ingredient_id = ANY(%s)
+              AND receive_date > %s
+              AND receive_date <= %s
+        """, (filtered_ids, global_start, global_end))
+        purchase_rows = cursor.fetchall()
+
+        purchases_by_ing = defaultdict(list)
+        for r in purchase_rows:
+            iid = r.get('ingredient_id')
+            qty = r.get('units')
+            unit_type = r.get('unit_type')
+            try:
+                qty_base, base_unit = convert_to_base(iid, 'ingredient', unit_type, qty)
+                qty_base = float(qty_base)
+            except Exception:
+                qty_base = float(qty or 0)
+                base_unit = unit_type
+            ts = _ensure_datetime(r.get('receive_date')) or global_start
+            purchases_by_ing[iid].append({'ts': ts, 'quantity_base': qty_base, 'base_unit': base_unit or unit_type})
+
+        # Fetch adjustments
+        cursor.execute("""
+            SELECT source_id AS ingredient_id, quantity_base, base_unit, created_at
+            FROM inventory_adjustments
+            WHERE source_type = 'ingredient'
+              AND source_id = ANY(%s)
+              AND created_at > %s
+              AND created_at <= %s
+        """, (filtered_ids, global_start, global_end))
+        adjustment_rows = cursor.fetchall()
+        adjustments_by_ing = defaultdict(list)
+        for r in adjustment_rows:
+            iid = r.get('ingredient_id')
+            ts = _ensure_datetime(r.get('created_at')) or global_start
+            try:
+                qty_base = float(r.get('quantity_base') or 0)
+            except Exception:
+                qty_base = 0.0
+            adjustments_by_ing[iid].append({'ts': ts, 'quantity_base': qty_base, 'base_unit': r.get('base_unit')})
+
+        # Fetch sales rows in the window
+        cursor.execute("""
+            SELECT business_date, item_id, item_name, item_qty
+            FROM sales_daily_lines
+            WHERE business_date > %s
+              AND business_date <= %s
+        """, (global_start, global_end))
+        sales_rows = cursor.fetchall()
+
+        # Preload items, recipes, and conversions for usage calculations
+        cursor.execute("SELECT * FROM items")
+        item_rows = cursor.fetchall()
+        items_lookup = {r.get('item_id'): r for r in item_rows}
+
+        cursor.execute("SELECT * FROM recipes WHERE archived IS NULL OR archived = FALSE")
+        recipe_rows = cursor.fetchall()
+        recipes_lookup = defaultdict(list)
+        for r in recipe_rows:
+            recipes_lookup[r.get('item_id')].append(r)
+
+        global_conversions = _get_global_conversion_map(cursor)
+
+        usage_cache = {}
+        skipped_sales = {'no_item_id': 0, 'missing_recipe': defaultdict(float), 'compute_errors': defaultdict(float)}
+
+        def resolve_usage_per_unit(item_id, output_unit, visited=None):
+            key = (item_id, (output_unit or '').strip().lower())
+            if key in usage_cache:
+                return usage_cache[key]
+
+            visited = visited or set()
+            if item_id in visited:
+                usage_cache[key] = {'status': 'error', 'issue': 'circular', 'ingredients': {}}
+                return usage_cache[key]
+            visited.add(item_id)
+
+            item = items_lookup.get(item_id)
+            comps = recipes_lookup.get(item_id, [])
+            if not item or not comps:
+                usage_cache[key] = {'status': 'error', 'issue': 'missing_recipe', 'ingredients': {}}
+                return usage_cache[key]
+
+            totals = defaultdict(lambda: {'quantity_base': 0.0, 'base_unit': None})
+            issues = []
+
+            for comp in comps:
+                c_qty = comp.get('quantity')
+                c_unit = comp.get('unit')
+                try:
+                    qty_val = float(c_qty)
+                except Exception:
+                    issues.append({'component': comp, 'issue': 'invalid_quantity'})
+                    continue
+
+                if comp.get('source_type') == 'ingredient':
+                    iid = comp.get('source_id')
+                    try:
+                        qty_base, base_unit = convert_to_base(iid, 'ingredient', c_unit, qty_val)
+                        qty_base = float(qty_base)
+                    except Exception:
+                        qty_base = qty_val
+                        base_unit = c_unit
+                    cur = totals[iid]
+                    cur['quantity_base'] += qty_base
+                    cur['base_unit'] = cur['base_unit'] or base_unit
+                elif comp.get('source_type') == 'item':
+                    child_id = comp.get('source_id')
+                    child_usage = resolve_usage_per_unit(child_id, c_unit, visited=set(visited))
+                    if child_usage.get('status') != 'ok':
+                        issues.append({'component': comp, 'issue': child_usage.get('issue')})
+                        continue
+                    for iid, info in child_usage['ingredients'].items():
+                        cur = totals[iid]
+                        cur['quantity_base'] += info['quantity_base'] * qty_val
+                        cur['base_unit'] = cur['base_unit'] or info.get('base_unit')
+                else:
+                    issues.append({'component': comp, 'issue': 'unknown_source_type'})
+
+            # Yield scaling: divide totals by effective yield to get per-unit usage
+            yield_qty = item.get('yield_qty')
+            yield_unit = (item.get('yield_unit') or '').strip().lower() or output_unit or 'unit'
+
+            try:
+                yield_qty_val = float(yield_qty) if yield_qty is not None else 1.0
+            except Exception:
+                yield_qty_val = 1.0
+
+            output_unit_norm = (output_unit or yield_unit or '').strip().lower()
+            factor = 1.0
+            if yield_unit != output_unit_norm:
+                conv = _conversion_factor(yield_unit, output_unit_norm, global_conversions)
+                if conv:
+                    factor = float(conv)
+                else:
+                    issues.append({'issue': 'missing_yield_conversion', 'from': yield_unit, 'to': output_unit_norm})
+
+            effective_yield = yield_qty_val * factor if yield_qty_val else 1.0
+            if effective_yield == 0:
+                effective_yield = 1.0
+                issues.append({'issue': 'zero_effective_yield'})
+
+            per_unit = {}
+            for iid, info in totals.items():
+                per_unit[iid] = {
+                    'quantity_base': info['quantity_base'] / effective_yield if effective_yield else info['quantity_base'],
+                    'base_unit': info.get('base_unit')
+                }
+
+            status = 'ok' if not issues else 'warning'
+            usage_cache[key] = {'status': status, 'issue': issues, 'ingredients': per_unit}
+            return usage_cache[key]
+
+        sales_usage_events = defaultdict(list)
+
+        for row in sales_rows:
+            item_id = row.get('item_id')
+            qty_raw = row.get('item_qty')
+            try:
+                qty_sold = float(qty_raw or 0)
+            except Exception:
+                qty_sold = 0.0
+            if not qty_sold:
+                continue
+
+            ts = _ensure_datetime(row.get('business_date')) or global_start
+            if not item_id:
+                skipped_sales['no_item_id'] += qty_sold
+                continue
+
+            usage = resolve_usage_per_unit(item_id, (items_lookup.get(item_id) or {}).get('yield_unit'))
+            if usage.get('status') == 'error':
+                skipped_sales['missing_recipe'][item_id] += qty_sold
+                continue
+            if usage.get('status') != 'ok':
+                skipped_sales['compute_errors'][item_id] += qty_sold
+
+            for iid, info in usage.get('ingredients', {}).items():
+                amount = (info.get('quantity_base') or 0) * qty_sold
+                sales_usage_events[iid].append({
+                    'ts': ts,
+                    'quantity_base': amount,
+                    'base_unit': info.get('base_unit'),
+                    'item_id': item_id,
+                    'item_name': row.get('item_name') or (items_lookup.get(item_id) or {}).get('name'),
+                    'qty_sold': qty_sold
+                })
+
+        results = []
+        for iid in filtered_ids:
+            latest_row = latest_counts.get(iid)
+            prev_row = previous_counts.get(iid)
+
+            latest_dt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
+            prev_dt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
+
+            purchases = sum(e['quantity_base'] for e in purchases_by_ing.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
+            adjustments = sum(e['quantity_base'] for e in adjustments_by_ing.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
+            usage = sum(e['quantity_base'] for e in sales_usage_events.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
+
+            expected = None
+            variance = None
+            if prev_row:
+                try:
+                    expected = float(prev_row.get('quantity_base') or 0) + purchases + adjustments - usage
+                    variance = float(latest_row.get('quantity_base') or 0) - expected
+                except Exception:
+                    expected = None
+                    variance = None
+
+            breakdown_map = defaultdict(lambda: {'item_id': None, 'item_name': None, 'qty_sold': 0.0, 'usage_base': 0.0})
+            for e in sales_usage_events.get(iid, []):
+                if prev_dt and e['ts'] <= prev_dt:
+                    continue
+                if latest_dt and e['ts'] > latest_dt:
+                    continue
+                k = e.get('item_id') or e.get('item_name')
+                entry = breakdown_map[k]
+                entry['item_id'] = e.get('item_id')
+                entry['item_name'] = e.get('item_name')
+                entry['qty_sold'] += e.get('qty_sold') or 0
+                entry['usage_base'] += e.get('quantity_base') or 0
+
+            breakdown = sorted(breakdown_map.values(), key=lambda x: abs(x['usage_base']), reverse=True)
+
+            results.append({
+                'ingredient_id': iid,
+                'ingredient_name': ing_name.get(iid) or f'Ingredient {iid}',
+                'latest_count': {
+                    'quantity_base': latest_row.get('quantity_base'),
+                    'base_unit': latest_row.get('base_unit') or latest_row.get('unit'),
+                    'quantity': latest_row.get('quantity'),
+                    'unit': latest_row.get('unit'),
+                    'location': latest_row.get('location'),
+                    'created_at': latest_dt.isoformat() if latest_dt else None,
+                    'user_id': latest_row.get('user_id')
+                },
+                'previous_count': {
+                    'quantity_base': prev_row.get('quantity_base') if prev_row else None,
+                    'base_unit': prev_row.get('base_unit') if prev_row else None,
+                    'quantity': prev_row.get('quantity') if prev_row else None,
+                    'unit': prev_row.get('unit') if prev_row else None,
+                    'location': prev_row.get('location') if prev_row else None,
+                    'created_at': prev_dt.isoformat() if prev_dt else None,
+                    'user_id': prev_row.get('user_id') if prev_row else None
+                } if prev_row else None,
+                'purchases_base': purchases,
+                'adjustments_base': adjustments,
+                'sales_usage_base': usage,
+                'expected_base': expected,
+                'variance_base': variance,
+                'sales_breakdown': breakdown
+            })
+
+        # Sort by largest variance magnitude first
+        results.sort(key=lambda r: abs(r['variance_base'] or 0), reverse=True)
+
+        meta = {
+            'ingredients_scanned': len(filtered_ids),
+            'sales_skipped_no_item': skipped_sales['no_item_id'],
+            'sales_skipped_missing_recipe': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['missing_recipe'].items()},
+            'sales_skipped_compute_errors': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['compute_errors'].items()},
+            'window_start': global_start.isoformat() if isinstance(global_start, datetime) else None,
+            'window_end': global_end.isoformat() if isinstance(global_end, datetime) else None
+        }
+
+        return jsonify({'results': results, 'meta': meta}), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
