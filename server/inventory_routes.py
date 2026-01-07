@@ -538,14 +538,15 @@ def inventory_reconciliation_latest():
         global_start = min(interval_starts) if interval_starts else cutoff
         global_end = max(interval_ends) if interval_ends else now_ts
 
-        # Fetch purchases within the window for relevant ingredients
+        # Fetch purchases within the window for relevant ingredients (bounded by lookback cutoff)
+        purchases_start = cutoff
         cursor.execute("""
             SELECT ingredient_id, units, unit_type, receive_date
             FROM received_goods
             WHERE ingredient_id = ANY(%s)
               AND receive_date >= %s
               AND receive_date <= %s
-        """, (filtered_ids, global_start, global_end))
+        """, (filtered_ids, purchases_start, global_end))
         purchase_rows = cursor.fetchall()
 
         purchases_by_ing = defaultdict(list)
@@ -629,16 +630,16 @@ def inventory_reconciliation_latest():
 
         relevant_item_ids = [iid for iid in item_components.keys() if depends_on_filtered(iid)]
 
-        # Fetch sales rows in the window but only for relevant items
+        # Fetch sales rows in the window but only for relevant items (bounded by lookback cutoff)
         sales_rows = []
         if relevant_item_ids:
             cursor.execute("""
                 SELECT business_date, item_id, item_name, item_qty
                 FROM sales_daily_lines
-                WHERE business_date > %s
+                WHERE business_date >= %s
                   AND business_date <= %s
                   AND item_id = ANY(%s)
-            """, (global_start, global_end, relevant_item_ids))
+            """, (cutoff, global_end, relevant_item_ids))
             sales_rows = cursor.fetchall()
 
         usage_cache = {}
@@ -775,6 +776,7 @@ def inventory_reconciliation_latest():
 
             latest_dt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
             prev_dt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
+            effective_start_dt = max([d for d in [prev_dt, cutoff] if d], default=cutoff)
 
             # Pick a canonical unit: prefer latest count's base_unit, else unit, else previous, else first purchase unit
             canonical_unit = (
@@ -795,7 +797,7 @@ def inventory_reconciliation_latest():
             for e in purchases_by_ing.get(iid, []):
                 ts = e.get('ts')
                 # Compare on date to avoid dropping same-day purchases (receive_date has no time component)
-                if prev_dt and ts and ts.date() < prev_dt.date():
+                if ts and ts < effective_start_dt:
                     continue
                 if latest_dt and ts and ts.date() > latest_dt.date():
                     continue
@@ -828,7 +830,7 @@ def inventory_reconciliation_latest():
             purchase_details = purchase_details[:10]
             adjustments = 0.0
             for e in adjustments_by_ing.get(iid, []):
-                if (prev_dt and e['ts'] <= prev_dt) or (latest_dt and e['ts'] > latest_dt):
+                if (e['ts'] and e['ts'] < effective_start_dt) or (latest_dt and e['ts'] > latest_dt):
                     continue
                 qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
                 if err:
@@ -841,7 +843,7 @@ def inventory_reconciliation_latest():
 
             usage = 0.0
             for e in sales_usage_events.get(iid, []):
-                if (prev_dt and e['ts'] <= prev_dt) or (latest_dt and e['ts'] > latest_dt):
+                if (e['ts'] and e['ts'] < effective_start_dt) or (latest_dt and e['ts'] > latest_dt):
                     continue
                 qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
                 if err:
@@ -872,7 +874,7 @@ def inventory_reconciliation_latest():
 
             breakdown_map = defaultdict(lambda: {'item_id': None, 'item_name': None, 'qty_sold': 0.0, 'usage_base': 0.0, 'base_unit': canonical_unit, 'recipe_unit': None})
             for e in sales_usage_events.get(iid, []):
-                if prev_dt and e['ts'] <= prev_dt:
+                if effective_start_dt and e['ts'] and e['ts'] < effective_start_dt:
                     continue
                 if latest_dt and e['ts'] > latest_dt:
                     continue
