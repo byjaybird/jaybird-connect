@@ -42,6 +42,15 @@ function IngredientDetail() {
   const [editingQuoteIdx, setEditingQuoteIdx] = useState(null);
   const [editQuote, setEditQuote] = useState(null);
 
+  const [usageLookback, setUsageLookback] = useState(14);
+  const [usageData, setUsageData] = useState(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState(null);
+  const [discrepancyLookback, setDiscrepancyLookback] = useState(30);
+  const [discrepancyData, setDiscrepancyData] = useState([]);
+  const [discrepancyLoading, setDiscrepancyLoading] = useState(false);
+  const [discrepancyError, setDiscrepancyError] = useState(null);
+
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -184,6 +193,46 @@ function IngredientDetail() {
 
     return () => { mounted = false; };
   }, [id]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadUsage() {
+      setUsageLoading(true);
+      try {
+        const res = await api.get(`/api/ingredients/${id}/usage?lookback_days=${usageLookback}`);
+        if (!mounted) return;
+        setUsageData(res.data || null);
+        setUsageError(null);
+      } catch (err) {
+        if (!mounted) return;
+        setUsageError('Failed to load expected usage from sales.');
+      } finally {
+        if (mounted) setUsageLoading(false);
+      }
+    }
+    loadUsage();
+    return () => { mounted = false; };
+  }, [id, usageLookback]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadDiscrepancies() {
+      setDiscrepancyLoading(true);
+      try {
+        const res = await api.get(`/api/inventory/discrepancies?ingredient_id=${id}&lookback_days=${discrepancyLookback}&limit_counts=5`);
+        if (!mounted) return;
+        setDiscrepancyData(res.data?.results || []);
+        setDiscrepancyError(null);
+      } catch (err) {
+        if (!mounted) return;
+        setDiscrepancyError('Failed to load inventory discrepancies for this ingredient.');
+      } finally {
+        if (mounted) setDiscrepancyLoading(false);
+      }
+    }
+    loadDiscrepancies();
+    return () => { mounted = false; };
+  }, [id, discrepancyLookback]);
 
   const handleDeleteConversion = async (convId) => {
     try {
@@ -504,6 +553,144 @@ function IngredientDetail() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl font-semibold">Expected Usage from Sales</h3>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Lookback</label>
+            <select
+              value={usageLookback}
+              onChange={(e) => setUsageLookback(Number(e.target.value))}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={60}>60 days</option>
+            </select>
+          </div>
+        </div>
+        {usageLoading ? (
+          <p className="text-gray-600">Calculating expected usage…</p>
+        ) : usageError ? (
+          <p className="text-red-600">{usageError}</p>
+        ) : usageData ? (
+          <div className="border rounded bg-white">
+            <div className="p-3 border-b flex items-center justify-between text-sm">
+              <div>
+                <div className="text-gray-600 text-xs">Window</div>
+                <div>{new Date(usageData.window_start).toLocaleDateString()} → {new Date(usageData.window_end).toLocaleDateString()}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-gray-600 text-xs">Total expected usage</div>
+                <div className="text-lg font-semibold">
+                  {Number(usageData.usage_base || 0).toFixed(2)} {usageData.base_unit || ''}
+                </div>
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="text-xs uppercase text-gray-600 mb-2">Sales drivers</div>
+              {usageData.breakdown && usageData.breakdown.length > 0 ? (
+                <table className="w-full text-sm border">
+                  <thead className="bg-gray-100 text-xs uppercase text-gray-700">
+                    <tr>
+                      <th className="border px-3 py-2 text-left">Item</th>
+                      <th className="border px-3 py-2 text-right">Qty sold</th>
+                      <th className="border px-3 py-2 text-right">Usage ({usageData.base_unit || 'base'})</th>
+                      <th className="border px-3 py-2 text-right">Per sale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usageData.breakdown.slice(0, 12).map((b, idx) => {
+                      const perSale = Number(b.qty_sold || 0) ? (Number(b.usage_base || 0) / Number(b.qty_sold || 1)) : 0;
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="border px-3 py-2">{b.item_name || `Item ${b.item_id}`}</td>
+                          <td className="border px-3 py-2 text-right">{Number(b.qty_sold || 0).toFixed(2)}</td>
+                          <td className="border px-3 py-2 text-right">{Number(b.usage_base || 0).toFixed(2)}</td>
+                          <td className="border px-3 py-2 text-right">{perSale.toFixed(3)} {usageData.base_unit || ''}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-gray-600 text-sm">No sales found in this window.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-gray-600">No usage data available.</p>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl font-semibold">Inventory Count Variances</h3>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Lookback</label>
+            <select
+              value={discrepancyLookback}
+              onChange={(e) => setDiscrepancyLookback(Number(e.target.value))}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={60}>60 days</option>
+              <option value={90}>90 days</option>
+            </select>
+          </div>
+        </div>
+        {discrepancyLoading ? (
+          <p className="text-gray-600">Loading variances…</p>
+        ) : discrepancyError ? (
+          <p className="text-red-600">{discrepancyError}</p>
+        ) : discrepancyData && discrepancyData.length > 0 ? (
+          <div className="border rounded bg-white">
+            <table className="w-full text-sm border">
+              <thead className="bg-gray-100 text-xs uppercase text-gray-700">
+                <tr>
+                  <th className="border px-3 py-2 text-left">Count Date</th>
+                  <th className="border px-3 py-2 text-right">Current</th>
+                  <th className="border px-3 py-2 text-right">Expected</th>
+                  <th className="border px-3 py-2 text-right">Variance</th>
+                  <th className="border px-3 py-2 text-right">Purchases</th>
+                  <th className="border px-3 py-2 text-right">Sales Usage</th>
+                  <th className="border px-3 py-2 text-right">Adjustments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {discrepancyData.slice(0, 5).map((d, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="border px-3 py-2">
+                      {d.count_date ? new Date(d.count_date).toLocaleDateString() : '—'}
+                      {d.location ? <div className="text-xs text-gray-500">{d.location}</div> : null}
+                    </td>
+                    <td className="border px-3 py-2 text-right">{Number(d.current_count || 0).toFixed(2)} {d.canonical_unit || ''}</td>
+                    <td className="border px-3 py-2 text-right">
+                      {d.expected !== null && d.expected !== undefined ? `${Number(d.expected || 0).toFixed(2)} ${d.canonical_unit || ''}` : '—'}
+                    </td>
+                    <td className="border px-3 py-2 text-right">
+                      {d.variance !== null && d.variance !== undefined ? `${Number(d.variance || 0).toFixed(2)} ${d.canonical_unit || ''}` : '—'}
+                    </td>
+                    <td className="border px-3 py-2 text-right">{Number(d.purchases || 0).toFixed(2)} {d.canonical_unit || ''}</td>
+                    <td className="border px-3 py-2 text-right">{Number(d.sales_usage || 0).toFixed(2)} {d.canonical_unit || ''}</td>
+                    <td className="border px-3 py-2 text-right">{Number(d.adjustments || 0).toFixed(2)} {d.canonical_unit || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {discrepancyData.some(d => d.conversion_issues && d.conversion_issues.length) && (
+              <div className="p-3 text-amber-800 bg-amber-50 text-xs border-t">
+                Conversion issues detected; add conversions to clean up variances.
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-600">No inventory counts found in this window.</p>
         )}
       </div>
 

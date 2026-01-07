@@ -779,6 +779,37 @@ def sales_daily_summary():
             pass
 
 
+@sales_bp.route('/sales/unmapped', methods=['GET'])
+def unmapped_sales():
+    """Return unmapped sales grouped by item_name for a recent window (default 60 days)."""
+    lookback_days = request.args.get('lookback_days', type=int) or 60
+    now_ts = datetime.utcnow()
+    start_date = now_ts.date() - timedelta(days=lookback_days)
+
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                COALESCE(TRIM(item_name), 'Unknown') AS item_name,
+                SUM(COALESCE(item_qty, 0)) AS qty_sold,
+                SUM(COALESCE(net_sales, 0)) AS net_sales,
+                COUNT(*) AS rows
+            FROM sales_daily_lines
+            WHERE item_id IS NULL
+              AND business_date >= %s
+            GROUP BY COALESCE(TRIM(item_name), 'Unknown')
+            ORDER BY net_sales DESC
+            LIMIT 100
+        """, (start_date,))
+        rows = cursor.fetchall()
+        return jsonify({'lookback_days': lookback_days, 'results': rows})
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
 @sales_bp.route('/sales/items/<int:item_id>/daily', methods=['GET'])
 def item_daily_sales(item_id):
     """Return sales for an individual item grouped by day to power forecasting."""
