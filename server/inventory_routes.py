@@ -443,6 +443,8 @@ def inventory_reconciliation_latest():
 
     cursor = get_db_cursor()
     try:
+        # Limit scan window for inventory_count_entries to reduce workload while still allowing a prior count.
+        buffer_days = max(lookback_days * 2, 90)
         # Pull the latest two counts for each ingredient
         cursor.execute("""
             WITH ranked AS (
@@ -458,9 +460,10 @@ def inventory_reconciliation_latest():
                     ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
                 FROM inventory_count_entries
                 WHERE source_type = 'ingredient'
+                  AND created_at >= NOW() - (%s || ' days')::interval
             )
             SELECT * FROM ranked WHERE rn <= 2
-        """)
+        """, (buffer_days,))
         count_rows = cursor.fetchall()
 
         latest_counts = {}
