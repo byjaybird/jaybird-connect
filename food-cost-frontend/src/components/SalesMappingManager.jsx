@@ -8,9 +8,6 @@ export default function SalesMappingManager() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [newItemId, setNewItemId] = useState('');
-  const [unmapped, setUnmapped] = useState([]);
-  const [unmappedLookback, setUnmappedLookback] = useState(60);
-  const [unmappedLoading, setUnmappedLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -32,24 +29,6 @@ export default function SalesMappingManager() {
     load();
     return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadUnmapped() {
-      setUnmappedLoading(true);
-      try {
-        const resp = await api.get(`/api/sales/unmapped?lookback_days=${unmappedLookback}`);
-        if (!mounted) return;
-        setUnmapped(resp.data?.results || []);
-      } catch (err) {
-        console.error('Failed to load unmapped sales', err);
-      } finally {
-        if (mounted) setUnmappedLoading(false);
-      }
-    }
-    loadUnmapped();
-    return () => { mounted = false; };
-  }, [unmappedLookback]);
 
   const handleCreate = async () => {
     if (!newName || !newItemId) return;
@@ -94,52 +73,6 @@ export default function SalesMappingManager() {
   return (
     <div className="bg-white rounded shadow p-4">
       <h2 className="text-lg font-semibold mb-2">Sales Item Mappings</h2>
-
-      <div className="mb-4 border rounded p-3 bg-gray-50">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <div className="text-sm font-semibold text-gray-800">Unmapped sales (last {unmappedLookback} days)</div>
-            <div className="text-xs text-gray-600">Map these to clean up product mix.</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-600">Lookback</label>
-            <select
-              value={unmappedLookback}
-              onChange={(e) => setUnmappedLookback(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-xs"
-            >
-              <option value={30}>30</option>
-              <option value={60}>60</option>
-              <option value={90}>90</option>
-            </select>
-          </div>
-        </div>
-        {unmappedLoading ? (
-          <div className="text-sm text-gray-600">Loading…</div>
-        ) : unmapped.length ? (
-          <table className="w-full text-sm border">
-            <thead className="bg-white text-xs uppercase text-gray-600">
-              <tr>
-                <th className="border px-2 py-1 text-left">Sales name</th>
-                <th className="border px-2 py-1 text-right">Qty sold</th>
-                <th className="border px-2 py-1 text-right">Net sales</th>
-              </tr>
-            </thead>
-            <tbody>
-              {unmapped.slice(0, 25).map((u, idx) => (
-                <tr key={`${u.item_name || 'unmapped'}-${idx}`} className="border-t">
-                  <td className="px-2 py-1">{u.item_name || 'Unknown'}</td>
-                  <td className="px-2 py-1 text-right">{Number(u.qty_sold || 0).toFixed(2)}</td>
-                  <td className="px-2 py-1 text-right">${Number(u.net_sales || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="text-sm text-gray-600">No unmapped sales in this window.</div>
-        )}
-      </div>
-
       <div className="mb-2 flex gap-2">
         <input placeholder="Search sales name" value={search} onChange={e => setSearch(e.target.value)} className="border rounded px-2 py-1" />
       </div>
