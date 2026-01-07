@@ -32,32 +32,32 @@ from .prices_routes import prices_bp
 from .conversions_routes import conversions_bp
 from .sales_mappings_routes import sales_mappings_bp
 
-app = Flask(__name__)# Configure CORS with a more precise configuration
-CORS(app, 
-    resources={
-        r"/*": {
-            "origins": ["https://jaybird-connect.web.app"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True,
-            "max_age": 3600
-        }
-    },
-    allow_origins=["https://jaybird-connect.web.app"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+app = Flask(__name__)
+
+# Allowed origins for CORS
+ALLOWED_ORIGINS = {
+    "https://jaybird-connect.web.app",
+    "https://jaybird-connect.firebaseapp.com",
+    "http://localhost:5173",
+    "http://localhost:3000"
+}
+
+# Configure CORS
+CORS(
+    app,
+    resources={r"/*": {"origins": list(ALLOWED_ORIGINS)}},
+    supports_credentials=True,
     expose_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     max_age=3600,
-    supports_credentials=True
 )
 
 # Ensure all responses have proper CORS headers
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get('Origin')
-    if origin == 'https://jaybird-connect.web.app':
+    if origin in ALLOWED_ORIGINS:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         if request.method == 'OPTIONS':
