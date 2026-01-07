@@ -814,8 +814,9 @@ def inventory_reconciliation_latest():
             'sales_skipped_no_item': skipped_sales['no_item_id'],
             'sales_skipped_missing_recipe': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['missing_recipe'].items()},
             'sales_skipped_compute_errors': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['compute_errors'].items()},
-            'window_start': global_start.isoformat() if isinstance(global_start, datetime) else None,
-            'window_end': global_end.isoformat() if isinstance(global_end, datetime) else None
+            # Display window reflects user-selected lookback (not the internal extended window used to find the previous count)
+            'window_start': cutoff.isoformat() if isinstance(cutoff, datetime) else None,
+            'window_end': (max(interval_ends) if interval_ends else now_ts).isoformat()
         }
 
         return jsonify({'results': results, 'meta': meta}), 200
