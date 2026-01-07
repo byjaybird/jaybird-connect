@@ -517,7 +517,7 @@ def inventory_reconciliation_latest():
             SELECT ingredient_id, units, unit_type, receive_date
             FROM received_goods
             WHERE ingredient_id = ANY(%s)
-              AND receive_date > %s
+              AND receive_date >= %s
               AND receive_date <= %s
         """, (filtered_ids, global_start, global_end))
         purchase_rows = cursor.fetchall()
@@ -744,7 +744,11 @@ def inventory_reconciliation_latest():
             latest_dt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
             prev_dt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
 
-            purchases = sum(e['quantity_base'] for e in purchases_by_ing.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
+            purchases = sum(
+                e['quantity_base']
+                for e in purchases_by_ing.get(iid, [])
+                if (not prev_dt or e['ts'] >= prev_dt) and (not latest_dt or e['ts'] <= latest_dt)
+            )
             adjustments = sum(e['quantity_base'] for e in adjustments_by_ing.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
             usage = sum(e['quantity_base'] for e in sales_usage_events.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
 

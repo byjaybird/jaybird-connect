@@ -10,6 +10,14 @@ function formatQty(value, unit) {
   return `${rounded.toLocaleString()}${unit ? ` ${unit}` : ''}`;
 }
 
+function formatPerUnit(usageBase, qtySold, unit) {
+  const qtyNum = Number(qtySold);
+  if (!qtyNum || Number.isNaN(qtyNum) || qtyNum === 0) return '—';
+  const per = Number(usageBase || 0) / qtyNum;
+  const rounded = Math.round(per * 1000) / 1000;
+  return `${rounded}${unit ? ` ${unit}` : ''} / sale`;
+}
+
 function varianceTone(val) {
   if (val === null || val === undefined) return 'text-gray-600';
   if (val < -0.01) return 'text-red-600 font-semibold';
@@ -192,19 +200,24 @@ export default function InventoryDashboard() {
 
                   {row.sales_breakdown && row.sales_breakdown.length > 0 && (
                     <div className="border rounded bg-white p-3">
-                      <div className="text-xs uppercase text-gray-600 mb-2">Sales drivers in window</div>
+                      <div className="text-xs uppercase text-gray-600 mb-2">Sales drivers in window (mapped to recipes)</div>
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-700 border-b pb-1">
                         <div className="col-span-6">Item</div>
-                        <div className="col-span-3 text-right">Qty sold</div>
-                        <div className="col-span-3 text-right">Usage ({expectedUnit || 'base'})</div>
+                        <div className="col-span-2 text-right">Qty sold</div>
+                        <div className="col-span-2 text-right">Total usage</div>
+                        <div className="col-span-2 text-right">Usage / sale</div>
                       </div>
-                      {row.sales_breakdown.slice(0, 8).map((s, idx) => (
+                      {row.sales_breakdown.slice(0, 12).map((s, idx) => (
                         <div key={`${s.item_id || s.item_name}-${idx}`} className="grid grid-cols-12 py-1 border-b last:border-b-0 text-xs">
                           <div className="col-span-6">{s.item_name || `Item ${s.item_id || ''}`}</div>
-                          <div className="col-span-3 text-right">{Number(s.qty_sold || 0).toFixed(2)}</div>
-                          <div className="col-span-3 text-right">{formatQty(s.usage_base, expectedUnit)}</div>
+                          <div className="col-span-2 text-right">{Number(s.qty_sold || 0).toFixed(2)}</div>
+                          <div className="col-span-2 text-right">{formatQty(s.usage_base, expectedUnit)}</div>
+                          <div className="col-span-2 text-right">{formatPerUnit(s.usage_base, s.qty_sold, expectedUnit)}</div>
                         </div>
                       ))}
+                      {row.sales_breakdown.length > 12 && (
+                        <div className="text-xs text-gray-500 mt-2">Showing top 12 by usage; refine recipe mappings if totals look off (e.g., high qty sold but tiny usage).</div>
+                      )}
                     </div>
                   )}
                 </div>
