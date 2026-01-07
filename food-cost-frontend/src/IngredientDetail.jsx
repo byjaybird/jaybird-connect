@@ -692,8 +692,6 @@ function IngredientDetail() {
       </div>
 
       <div className="mb-6">
-=======
->>>>>>> theirs
         <h3 className="text-xl font-semibold mb-2">Inventory Entries</h3>
         {inventoryLoading ? (
           <p className="text-gray-600">Loading inventory…</p>

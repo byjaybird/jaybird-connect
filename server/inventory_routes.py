@@ -947,3 +947,139 @@ def inventory_reconciliation_latest():
             cursor.close()
         except Exception:
             pass
+
+
+@inventory_bp.route('/api/ingredients/<int:ingredient_id>/usage', methods=['GET'])
+def ingredient_usage_from_sales(ingredient_id):
+    """Return expected usage for a single ingredient based on sales of items that include it in recipes."""
+    lookback_days = request.args.get('lookback_days', type=int) or 30
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    now_ts = datetime.now(timezone.utc)
+    window_start = _ensure_datetime(start_date) or (now_ts - timedelta(days=lookback_days))
+    window_end = _ensure_datetime(end_date) or now_ts
+
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("SELECT name FROM ingredients WHERE ingredient_id = %s", (ingredient_id,))
+        ing = cursor.fetchone() or {}
+
+        cursor.execute("SELECT * FROM items")
+        items = {r.get('item_id'): r for r in cursor.fetchall()}
+
+        cursor.execute("SELECT * FROM recipes WHERE archived IS NULL OR archived = FALSE")
+        recipes = defaultdict(list)
+        for r in cursor.fetchall():
+            recipes[r.get('item_id')].append(r)
+
+        conv_map = _build_conversion_map(cursor, [ingredient_id])
+        usage_cache = {}
+
+        def usage_per_sale(item_id, visited=None):
+            if item_id in usage_cache:
+                return usage_cache[item_id]
+            visited = visited or set()
+            if item_id in visited:
+                usage_cache[item_id] = None
+                return None
+            visited.add(item_id)
+
+            comps = recipes.get(item_id, [])
+            if not comps:
+                usage_cache[item_id] = None
+                return None
+
+            total_base = 0.0
+            base_unit = None
+            for comp in comps:
+                try:
+                    qty_val = float(comp.get('quantity'))
+                except Exception:
+                    continue
+                unit = comp.get('unit')
+                if comp.get('source_type') == 'ingredient':
+                    if comp.get('source_id') != ingredient_id:
+                        continue
+                    try:
+                        qty_base, bu = convert_to_base(ingredient_id, 'ingredient', unit, qty_val)
+                        qty_base = float(qty_base)
+                    except Exception:
+                        qty_base = qty_val
+                        bu = unit
+                    total_base += qty_base
+                    base_unit = base_unit or bu
+                elif comp.get('source_type') == 'item':
+                    child_usage = usage_per_sale(comp.get('source_id'), visited=set(visited))
+                    if not child_usage:
+                        continue
+                    total_base += child_usage.get('quantity_base', 0) * qty_val
+                    base_unit = base_unit or child_usage.get('base_unit')
+
+            try:
+                yq = float((items.get(item_id) or {}).get('yield_qty')) if (items.get(item_id) or {}).get('yield_qty') is not None else 1.0
+            except Exception:
+                yq = 1.0
+            if yq == 0:
+                yq = 1.0
+            if yq != 1.0:
+                total_base = total_base / yq
+
+            usage_cache[item_id] = {'quantity_base': total_base, 'base_unit': base_unit}
+            return usage_cache[item_id]
+
+        cursor.execute("""
+            SELECT business_date, item_id, item_name, item_qty
+            FROM sales_daily_lines
+            WHERE item_id IS NOT NULL
+              AND business_date >= %s
+              AND business_date <= %s
+        """, (window_start, window_end))
+        sales_rows = cursor.fetchall()
+
+        breakdown_map = defaultdict(lambda: {'item_id': None, 'item_name': None, 'qty_sold': 0.0, 'usage_base': 0.0, 'base_unit': None})
+        total_usage = 0.0
+        base_unit = None
+
+        for row in sales_rows:
+            item_id = row.get('item_id')
+            try:
+                qty_sold = float(row.get('item_qty') or 0)
+            except Exception:
+                qty_sold = 0.0
+            if not item_id or qty_sold == 0:
+                continue
+            per_sale = usage_per_sale(item_id)
+            if not per_sale or per_sale.get('quantity_base') is None:
+                continue
+            usage_amount = per_sale['quantity_base'] * qty_sold
+            bu = per_sale.get('base_unit')
+            base_unit = base_unit or bu
+            total_usage += usage_amount
+
+            entry = breakdown_map[item_id]
+            entry['item_id'] = item_id
+            entry['item_name'] = row.get('item_name') or (items.get(item_id) or {}).get('name')
+            entry['qty_sold'] += qty_sold
+            entry['usage_base'] += usage_amount
+            entry['base_unit'] = bu or entry['base_unit']
+
+        breakdown = sorted(breakdown_map.values(), key=lambda x: abs(x['usage_base']), reverse=True)
+
+        return jsonify({
+            'ingredient_id': ingredient_id,
+            'ingredient_name': ing.get('name'),
+            'base_unit': base_unit,
+            'usage_base': total_usage,
+            'window_start': window_start.isoformat(),
+            'window_end': window_end.isoformat(),
+            'breakdown': breakdown
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
