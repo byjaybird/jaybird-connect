@@ -406,29 +406,52 @@ def _ensure_datetime(val):
     return None
 
 
-def _get_global_conversion_map(cursor):
-    """Return {(from_unit, to_unit): factor} for global conversions."""
+def _build_conversion_map(cursor, ingredient_ids):
+    """Return a conversion map keyed by (from_unit, to_unit) including global and per-ingredient rows."""
     cursor.execute("""
-        SELECT LOWER(from_unit) AS from_unit, LOWER(to_unit) AS to_unit, factor
+        SELECT ingredient_id, LOWER(from_unit) AS from_unit, LOWER(to_unit) AS to_unit, factor, is_global
         FROM ingredient_conversions
-        WHERE is_global = TRUE
-    """)
+        WHERE is_global = TRUE OR ingredient_id = ANY(%s)
+    """, (ingredient_ids or [0],))
     rows = cursor.fetchall()
-    conv = {}
+    conv = defaultdict(dict)
     for r in rows:
         try:
+            ing_id = r.get('ingredient_id') or 'global'
             key = ((r.get('from_unit') or '').strip().lower(), (r.get('to_unit') or '').strip().lower())
-            conv[key] = float(r.get('factor'))
+            conv[ing_id][key] = float(r.get('factor'))
         except Exception:
             continue
     return conv
 
 
-def _conversion_factor(from_unit, to_unit, conv_map):
+def _conversion_factor(from_unit, to_unit, conv_map, ingredient_id=None):
+    """Lookup factor for ingredient-specific then global conversions."""
     if not from_unit or not to_unit:
         return None
     key = (str(from_unit).strip().lower(), str(to_unit).strip().lower())
-    return conv_map.get(key)
+    ing_key = ingredient_id if ingredient_id is not None else 'global'
+    return conv_map.get(ing_key, {}).get(key) or conv_map.get('global', {}).get(key)
+
+
+def _convert_quantity(qty, from_unit, to_unit, conv_map, ingredient_id=None):
+    """Convert qty between arbitrary units using stored conversion factors (direct or inverse)."""
+    if to_unit is None or from_unit is None or str(from_unit).strip().lower() == str(to_unit).strip().lower():
+        return qty, None  # no conversion needed
+    factor = _conversion_factor(from_unit, to_unit, conv_map, ingredient_id)
+    if factor is not None:
+        try:
+            return float(qty) * float(factor), None
+        except Exception as e:
+            return qty, str(e)
+    # Try inverse if available
+    inv = _conversion_factor(to_unit, from_unit, conv_map, ingredient_id)
+    if inv is not None:
+        try:
+            return float(qty) / float(inv), None
+        except Exception as e:
+            return qty, str(e)
+    return qty, 'missing_conversion'
 
 
 @inventory_bp.route('/api/inventory/reconciliation/latest', methods=['GET'])
@@ -497,6 +520,9 @@ def inventory_reconciliation_latest():
         ing_rows = cursor.fetchall()
         ing_name = {r['ingredient_id']: r.get('name') for r in ing_rows}
 
+        # Build conversion map (ingredient-specific + global) for all relevant ingredients
+        conv_map = _build_conversion_map(cursor, filtered_ids)
+
         # Establish global time bounds for fetching purchases/adjustments/sales
         interval_starts = []
         interval_ends = []
@@ -534,7 +560,13 @@ def inventory_reconciliation_latest():
                 qty_base = float(qty or 0)
                 base_unit = unit_type
             ts = _ensure_datetime(r.get('receive_date')) or global_start
-            purchases_by_ing[iid].append({'ts': ts, 'quantity_base': qty_base, 'base_unit': base_unit or unit_type})
+            purchases_by_ing[iid].append({
+                'ts': ts,
+                'quantity': qty,
+                'unit': unit_type,
+                'quantity_base': qty_base,
+                'base_unit': base_unit or unit_type
+            })
 
         # Fetch adjustments
         cursor.execute("""
@@ -651,6 +683,7 @@ def inventory_reconciliation_latest():
                     except Exception:
                         qty_base = qty_val
                         base_unit = c_unit
+                        issues.append({'component': comp, 'issue': 'missing_conversion'})
                     cur = totals[iid]
                     cur['quantity_base'] += qty_base
                     cur['base_unit'] = cur['base_unit'] or base_unit
@@ -698,7 +731,7 @@ def inventory_reconciliation_latest():
                 }
 
             status = 'ok' if not issues else 'warning'
-            usage_cache[key] = {'status': status, 'issue': issues, 'ingredients': per_unit}
+            usage_cache[key] = {'status': status, 'issue': issues, 'ingredients': per_unit, 'recipe_unit': output_unit}
             return usage_cache[key]
 
         sales_usage_events = defaultdict(list)
@@ -731,6 +764,7 @@ def inventory_reconciliation_latest():
                     'ts': ts,
                     'quantity_base': amount,
                     'base_unit': info.get('base_unit'),
+                    'recipe_unit': usage.get('recipe_unit'),
                     'item_id': item_id,
                     'item_name': row.get('item_name') or (items_lookup.get(item_id) or {}).get('name'),
                     'qty_sold': qty_sold
@@ -744,25 +778,89 @@ def inventory_reconciliation_latest():
             latest_dt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
             prev_dt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
 
-            purchases = sum(
-                e['quantity_base']
+            # Pick a canonical unit: prefer latest count's base_unit, else unit, else previous, else first purchase unit
+            canonical_unit = (
+                (latest_row.get('base_unit') or latest_row.get('unit') or '').strip().lower()
+                if latest_row else ''
+            )
+            if not canonical_unit and prev_row:
+                canonical_unit = (prev_row.get('base_unit') or prev_row.get('unit') or '').strip().lower()
+            if not canonical_unit:
+                p_list = purchases_by_ing.get(iid, [])
+                if p_list:
+                    canonical_unit = (p_list[0].get('base_unit') or p_list[0].get('unit') or '').strip().lower()
+            canonical_unit = canonical_unit or None
+            conversion_issues = []
+
+            purchases = 0.0
+            purchase_details = [
+                {
+                    'ts': e['ts'].isoformat() if e.get('ts') else None,
+                    'quantity': e.get('quantity'),
+                    'unit': e.get('unit'),
+                    'quantity_base': e.get('quantity_base'),
+                    'base_unit': e.get('base_unit')
+                }
                 for e in purchases_by_ing.get(iid, [])
                 if (not prev_dt or e['ts'] >= prev_dt) and (not latest_dt or e['ts'] <= latest_dt)
-            )
-            adjustments = sum(e['quantity_base'] for e in adjustments_by_ing.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
-            usage = sum(e['quantity_base'] for e in sales_usage_events.get(iid, []) if (not prev_dt or e['ts'] > prev_dt) and (not latest_dt or e['ts'] <= latest_dt))
+            ]
+            for p in purchase_details:
+                qty_can, err = _convert_quantity(p.get('quantity_base'), p.get('base_unit'), canonical_unit, conv_map, iid)
+                if err:
+                    conversion_issues.append({'type': 'purchase', 'unit': p.get('base_unit'), 'target': canonical_unit, 'detail': err})
+                    qty_can = p.get('quantity_base')
+                try:
+                    purchases += float(qty_can or 0)
+                except Exception:
+                    purchases += 0.0
+            # Sort purchases descending by timestamp for display
+            purchase_details.sort(key=lambda x: x.get('ts') or '', reverse=True)
+            purchase_details = purchase_details[:10]
+            adjustments = 0.0
+            for e in adjustments_by_ing.get(iid, []):
+                if (prev_dt and e['ts'] <= prev_dt) or (latest_dt and e['ts'] > latest_dt):
+                    continue
+                qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
+                if err:
+                    conversion_issues.append({'type': 'adjustment', 'unit': e.get('base_unit'), 'target': canonical_unit, 'detail': err})
+                    qty_can = e.get('quantity_base')
+                try:
+                    adjustments += float(qty_can or 0)
+                except Exception:
+                    adjustments += 0.0
+
+            usage = 0.0
+            for e in sales_usage_events.get(iid, []):
+                if (prev_dt and e['ts'] <= prev_dt) or (latest_dt and e['ts'] > latest_dt):
+                    continue
+                qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
+                if err:
+                    conversion_issues.append({'type': 'sales_usage', 'unit': e.get('base_unit'), 'target': canonical_unit, 'detail': err})
+                    qty_can = e.get('quantity_base')
+                try:
+                    usage += float(qty_can or 0)
+                except Exception:
+                    usage += 0.0
 
             expected = None
             variance = None
             if prev_row:
                 try:
-                    expected = float(prev_row.get('quantity_base') or 0) + purchases + adjustments - usage
-                    variance = float(latest_row.get('quantity_base') or 0) - expected
+                    prev_qty_can, err_prev = _convert_quantity(prev_row.get('quantity_base'), prev_row.get('base_unit'), canonical_unit, conv_map, iid)
+                    if err_prev:
+                        conversion_issues.append({'type': 'previous_count', 'unit': prev_row.get('base_unit'), 'target': canonical_unit, 'detail': err_prev})
+                        prev_qty_can = prev_row.get('quantity_base')
+                    latest_qty_can, err_latest = _convert_quantity(latest_row.get('quantity_base'), latest_row.get('base_unit'), canonical_unit, conv_map, iid)
+                    if err_latest:
+                        conversion_issues.append({'type': 'latest_count', 'unit': latest_row.get('base_unit'), 'target': canonical_unit, 'detail': err_latest})
+                        latest_qty_can = latest_row.get('quantity_base')
+                    expected = float(prev_qty_can or 0) + purchases + adjustments - usage
+                    variance = float(latest_qty_can or 0) - expected
                 except Exception:
                     expected = None
                     variance = None
 
-            breakdown_map = defaultdict(lambda: {'item_id': None, 'item_name': None, 'qty_sold': 0.0, 'usage_base': 0.0})
+            breakdown_map = defaultdict(lambda: {'item_id': None, 'item_name': None, 'qty_sold': 0.0, 'usage_base': 0.0, 'base_unit': canonical_unit, 'recipe_unit': None})
             for e in sales_usage_events.get(iid, []):
                 if prev_dt and e['ts'] <= prev_dt:
                     continue
@@ -773,13 +871,20 @@ def inventory_reconciliation_latest():
                 entry['item_id'] = e.get('item_id')
                 entry['item_name'] = e.get('item_name')
                 entry['qty_sold'] += e.get('qty_sold') or 0
-                entry['usage_base'] += e.get('quantity_base') or 0
+                entry['recipe_unit'] = entry['recipe_unit'] or e.get('recipe_unit')
+                # Store usage in canonical if possible
+                qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
+                if err:
+                    conversion_issues.append({'type': 'sales_breakdown', 'unit': e.get('base_unit'), 'target': canonical_unit, 'detail': err})
+                    qty_can = e.get('quantity_base')
+                entry['usage_base'] += qty_can or 0
 
             breakdown = sorted(breakdown_map.values(), key=lambda x: abs(x['usage_base']), reverse=True)
 
             results.append({
                 'ingredient_id': iid,
                 'ingredient_name': ing_name.get(iid) or f'Ingredient {iid}',
+                'canonical_unit': canonical_unit,
                 'latest_count': {
                     'quantity_base': latest_row.get('quantity_base'),
                     'base_unit': latest_row.get('base_unit') or latest_row.get('unit'),
@@ -799,11 +904,13 @@ def inventory_reconciliation_latest():
                     'user_id': prev_row.get('user_id') if prev_row else None
                 } if prev_row else None,
                 'purchases_base': purchases,
+                'purchases': purchase_details,
                 'adjustments_base': adjustments,
                 'sales_usage_base': usage,
                 'expected_base': expected,
                 'variance_base': variance,
-                'sales_breakdown': breakdown
+                'sales_breakdown': breakdown,
+                'conversion_issues': conversion_issues
             })
 
         # Sort by largest variance magnitude first

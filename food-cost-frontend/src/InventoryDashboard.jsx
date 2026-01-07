@@ -136,9 +136,10 @@ export default function InventoryDashboard() {
         )}
         {rows.map((row) => {
           const latestUnit = row.latest_count?.base_unit || row.latest_count?.unit || '';
-          const expectedUnit = row.latest_count?.base_unit || row.previous_count?.base_unit || latestUnit;
+          const expectedUnit = row.canonical_unit || row.latest_count?.base_unit || row.previous_count?.base_unit || latestUnit;
           const variance = row.variance_base;
           const isExpanded = expandedId === row.ingredient_id;
+          const hasConversionIssues = Array.isArray(row.conversion_issues) && row.conversion_issues.length > 0;
 
           return (
             <div key={row.ingredient_id} className="border-b last:border-b-0">
@@ -153,6 +154,11 @@ export default function InventoryDashboard() {
                       ? `Prev count: ${new Date(row.previous_count.created_at).toLocaleDateString()}`
                       : 'No prior count'}
                   </div>
+                  {hasConversionIssues && (
+                    <div className="mt-1 inline-flex items-center text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                      Conversion issues
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-2 px-3 py-3 text-right text-sm">
                   {formatQty(row.latest_count?.quantity_base, latestUnit)}
@@ -200,24 +206,62 @@ export default function InventoryDashboard() {
 
                   {row.sales_breakdown && row.sales_breakdown.length > 0 && (
                     <div className="border rounded bg-white p-3">
-                      <div className="text-xs uppercase text-gray-600 mb-2">Sales drivers in window (mapped to recipes)</div>
+                      <div className="text-xs uppercase text-gray-600 mb-2">
+                        Sales drivers in window (mapped to recipes, usage shown in base unit)
+                      </div>
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-700 border-b pb-1">
                         <div className="col-span-6">Item</div>
                         <div className="col-span-2 text-right">Qty sold</div>
-                        <div className="col-span-2 text-right">Total usage</div>
-                        <div className="col-span-2 text-right">Usage / sale</div>
+                        <div className="col-span-2 text-right">Total usage ({expectedUnit || 'base'})</div>
+                        <div className="col-span-2 text-right">Usage / sale ({expectedUnit || 'base'})</div>
                       </div>
                       {row.sales_breakdown.slice(0, 12).map((s, idx) => (
                         <div key={`${s.item_id || s.item_name}-${idx}`} className="grid grid-cols-12 py-1 border-b last:border-b-0 text-xs">
                           <div className="col-span-6">{s.item_name || `Item ${s.item_id || ''}`}</div>
                           <div className="col-span-2 text-right">{Number(s.qty_sold || 0).toFixed(2)}</div>
-                          <div className="col-span-2 text-right">{formatQty(s.usage_base, expectedUnit)}</div>
+                          <div className="col-span-2 text-right">
+                            {formatQty(s.usage_base, expectedUnit)}
+                            {s.recipe_unit && s.recipe_unit !== expectedUnit && (
+                              <div className="text-[10px] text-gray-500">Recipe unit: {s.recipe_unit}</div>
+                            )}
+                          </div>
                           <div className="col-span-2 text-right">{formatPerUnit(s.usage_base, s.qty_sold, expectedUnit)}</div>
                         </div>
                       ))}
                       {row.sales_breakdown.length > 12 && (
                         <div className="text-xs text-gray-500 mt-2">Showing top 12 by usage; refine recipe mappings if totals look off (e.g., high qty sold but tiny usage).</div>
                       )}
+                    </div>
+                  )}
+                  {row.purchases && row.purchases.length > 0 && (
+                    <div className="border rounded bg-white p-3">
+                      <div className="text-xs uppercase text-gray-600 mb-2">Purchases in window</div>
+                      <div className="grid grid-cols-12 text-xs font-semibold text-gray-700 border-b pb-1">
+                        <div className="col-span-5">Date</div>
+                        <div className="col-span-3 text-right">Qty (orig)</div>
+                        <div className="col-span-4 text-right">Qty (base)</div>
+                      </div>
+                      {row.purchases.map((p, idx) => (
+                        <div key={`${p.ts}-${idx}`} className="grid grid-cols-12 py-1 border-b last:border-b-0 text-xs">
+                          <div className="col-span-5">{p.ts ? new Date(p.ts).toLocaleDateString() : '—'}</div>
+                          <div className="col-span-3 text-right">{formatQty(p.quantity, p.unit)}</div>
+                          <div className="col-span-4 text-right">{formatQty(p.quantity_base, p.base_unit)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {hasConversionIssues && (
+                    <div className="border rounded bg-amber-50 p-3 text-sm text-amber-800">
+                      <div className="text-xs uppercase font-semibold mb-1">Conversion issues (please add/update conversions)</div>
+                      <div className="space-y-1">
+                        {row.conversion_issues.map((c, idx) => (
+                          <div key={idx} className="flex justify-between">
+                            <span className="font-semibold">{c.type}</span>
+                            <span>{c.unit || '?'} → {c.target || expectedUnit || 'base'}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
