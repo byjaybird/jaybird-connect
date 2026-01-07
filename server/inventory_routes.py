@@ -641,8 +641,6 @@ def inventory_reconciliation_latest():
             """, (global_start, global_end, relevant_item_ids))
             sales_rows = cursor.fetchall()
 
-        global_conversions = _get_global_conversion_map(cursor)
-
         usage_cache = {}
         skipped_sales = {'no_item_id': 0, 'missing_recipe': defaultdict(float), 'compute_errors': defaultdict(float)}
 
@@ -712,7 +710,7 @@ def inventory_reconciliation_latest():
             output_unit_norm = (output_unit or yield_unit or '').strip().lower()
             factor = 1.0
             if yield_unit != output_unit_norm:
-                conv = _conversion_factor(yield_unit, output_unit_norm, global_conversions)
+                conv = _conversion_factor(yield_unit, output_unit_norm, conv_map, None)
                 if conv:
                     factor = float(conv)
                 else:
