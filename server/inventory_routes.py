@@ -553,15 +553,6 @@ def inventory_reconciliation_latest():
                 qty_base = 0.0
             adjustments_by_ing[iid].append({'ts': ts, 'quantity_base': qty_base, 'base_unit': r.get('base_unit')})
 
-        # Fetch sales rows in the window
-        cursor.execute("""
-            SELECT business_date, item_id, item_name, item_qty
-            FROM sales_daily_lines
-            WHERE business_date > %s
-              AND business_date <= %s
-        """, (global_start, global_end))
-        sales_rows = cursor.fetchall()
-
         # Preload items, recipes, and conversions for usage calculations
         cursor.execute("SELECT * FROM items")
         item_rows = cursor.fetchall()
@@ -572,6 +563,48 @@ def inventory_reconciliation_latest():
         recipes_lookup = defaultdict(list)
         for r in recipe_rows:
             recipes_lookup[r.get('item_id')].append(r)
+
+        # Build a dependency map so we only pull sales for items that feed into the filtered ingredients
+        item_components = defaultdict(list)
+        for r in recipe_rows:
+            item_components[r.get('item_id')].append({'source_type': r.get('source_type'), 'source_id': r.get('source_id')})
+
+        memo_depends = {}
+
+        def depends_on_filtered(item_id, visiting=None):
+            visiting = visiting or set()
+            if item_id in memo_depends:
+                return memo_depends[item_id]
+            if item_id in visiting:
+                memo_depends[item_id] = False
+                return False
+            visiting.add(item_id)
+            comps = item_components.get(item_id, [])
+            for c in comps:
+                if c.get('source_type') == 'ingredient' and c.get('source_id') in filtered_ids:
+                    memo_depends[item_id] = True
+                    return True
+                if c.get('source_type') == 'item':
+                    child_id = c.get('source_id')
+                    if child_id and depends_on_filtered(child_id, visiting=set(visiting)):
+                        memo_depends[item_id] = True
+                        return True
+            memo_depends[item_id] = False
+            return False
+
+        relevant_item_ids = [iid for iid in item_components.keys() if depends_on_filtered(iid)]
+
+        # Fetch sales rows in the window but only for relevant items
+        sales_rows = []
+        if relevant_item_ids:
+            cursor.execute("""
+                SELECT business_date, item_id, item_name, item_qty
+                FROM sales_daily_lines
+                WHERE business_date > %s
+                  AND business_date <= %s
+                  AND item_id = ANY(%s)
+            """, (global_start, global_end, relevant_item_ids))
+            sales_rows = cursor.fetchall()
 
         global_conversions = _get_global_conversion_map(cursor)
 

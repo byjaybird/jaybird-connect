@@ -20,7 +20,7 @@ function varianceTone(val) {
 export default function InventoryDashboard() {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});
-  const [lookbackDays, setLookbackDays] = useState(45);
+  const [lookbackDays, setLookbackDays] = useState(14);
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -66,6 +66,8 @@ export default function InventoryDashboard() {
             onChange={(e) => setLookbackDays(Number(e.target.value))}
             className="border rounded px-2 py-1 text-sm"
           >
+            <option value={1}>1 day</option>
+            <option value={7}>7 days</option>
             <option value={14}>14 days</option>
             <option value={30}>30 days</option>
             <option value={45}>45 days</option>
