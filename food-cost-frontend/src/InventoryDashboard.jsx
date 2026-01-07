@@ -30,6 +30,8 @@ export default function InventoryDashboard() {
   const [meta, setMeta] = useState({});
   const [lookbackDays, setLookbackDays] = useState(14);
   const [expandedId, setExpandedId] = useState(null);
+  const [reload, setReload] = useState(0);
+  const [conversionDrafts, setConversionDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -54,7 +56,7 @@ export default function InventoryDashboard() {
   useEffect(() => {
     fetchReconciliation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookbackDays]);
+  }, [lookbackDays, reload]);
 
   if (loading) return <div className="p-4">Loading inventory variance...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
@@ -254,13 +256,57 @@ export default function InventoryDashboard() {
                   {hasConversionIssues && (
                     <div className="border rounded bg-amber-50 p-3 text-sm text-amber-800">
                       <div className="text-xs uppercase font-semibold mb-1">Conversion issues (please add/update conversions)</div>
-                      <div className="space-y-1">
-                        {row.conversion_issues.map((c, idx) => (
-                          <div key={idx} className="flex justify-between">
-                            <span className="font-semibold">{c.type}</span>
-                            <span>{c.unit || '?'} → {c.target || expectedUnit || 'base'}</span>
-                          </div>
-                        ))}
+                      <div className="space-y-2">
+                        {row.conversion_issues.map((c, idx) => {
+                          const key = `${row.ingredient_id}-${c.unit || ''}-${c.target || ''}`;
+                          const draft = conversionDrafts[key] || { factor: '' };
+                          return (
+                            <div key={idx} className="border rounded px-2 py-2 bg-white text-gray-800">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="font-semibold">{c.type}</span>
+                                <span>{c.unit || '?'} → {c.target || expectedUnit || 'base'}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-600">Factor:</label>
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={draft.factor}
+                                  onChange={(e) => setConversionDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || {}), factor: e.target.value } }))}
+                                  className="border rounded px-2 py-1 text-xs w-24"
+                                  placeholder="e.g. 29.57"
+                                />
+                                <button
+                                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded disabled:opacity-50"
+                                  disabled={!draft.factor || draft.saving}
+                                  onClick={async () => {
+                                    setConversionDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || {}), saving: true, error: null, success: false } }));
+                                    try {
+                                      await api.post('/api/ingredient_conversions', {
+                                        ingredient_id: row.ingredient_id,
+                                        from_unit: c.unit,
+                                        to_unit: c.target || expectedUnit,
+                                        factor: Number(draft.factor),
+                                        is_global: false
+                                      });
+                                      setConversionDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || {}), saving: false, success: true } }));
+                                      setReload(r => r + 1);
+                                    } catch (err) {
+                                      setConversionDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || {}), saving: false, error: 'Save failed' } }));
+                                    }
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                {draft.success && <span className="text-emerald-700 text-xs">Saved</span>}
+                                {draft.error && <span className="text-red-600 text-xs">{draft.error}</span>}
+                              </div>
+                              <div className="text-[10px] text-gray-500 mt-1">
+                                Factor = ({c.target || expectedUnit || 'to'}) per 1 {c.unit || 'from'} (ingredient-specific)
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

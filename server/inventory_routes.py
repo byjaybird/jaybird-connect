@@ -791,17 +791,29 @@ def inventory_reconciliation_latest():
             conversion_issues = []
 
             purchases = 0.0
-            purchase_details = [
-                {
-                    'ts': e['ts'].isoformat() if e.get('ts') else None,
+            purchase_details = []
+            for e in purchases_by_ing.get(iid, []):
+                ts = e.get('ts')
+                # Compare on date to avoid dropping same-day purchases (receive_date has no time component)
+                if prev_dt and ts and ts.date() < prev_dt.date():
+                    continue
+                if latest_dt and ts and ts.date() > latest_dt.date():
+                    continue
+                purchase_details.append({
+                    'ts': ts.isoformat() if ts else None,
                     'quantity': e.get('quantity'),
                     'unit': e.get('unit'),
                     'quantity_base': e.get('quantity_base'),
                     'base_unit': e.get('base_unit')
-                }
-                for e in purchases_by_ing.get(iid, [])
-                if (not prev_dt or e['ts'] >= prev_dt) and (not latest_dt or e['ts'] <= latest_dt)
-            ]
+                })
+                qty_can, err = _convert_quantity(e.get('quantity_base'), e.get('base_unit'), canonical_unit, conv_map, iid)
+                if err:
+                    conversion_issues.append({'type': 'purchase', 'unit': e.get('base_unit'), 'target': canonical_unit, 'detail': err})
+                    qty_can = e.get('quantity_base')
+                try:
+                    purchases += float(qty_can or 0)
+                except Exception:
+                    purchases += 0.0
             for p in purchase_details:
                 qty_can, err = _convert_quantity(p.get('quantity_base'), p.get('base_unit'), canonical_unit, conv_map, iid)
                 if err:
