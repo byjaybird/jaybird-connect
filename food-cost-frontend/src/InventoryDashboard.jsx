@@ -28,7 +28,10 @@ export default function InventoryDashboard() {
   const fetchReconciliation = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/inventory/reconciliation/latest?lookback_days=${lookbackDays}`);
+      const res = await api.get(
+        `/api/inventory/reconciliation/latest?lookback_days=${lookbackDays}`,
+        { timeout: 20000 }
+      );
       setRows(res.data?.results || []);
       setMeta(res.data?.meta || {});
       setError(null);

@@ -444,7 +444,7 @@ def inventory_reconciliation_latest():
     cursor = get_db_cursor()
     try:
         # Limit scan window for inventory_count_entries to reduce workload while still allowing a prior count.
-        buffer_days = max(lookback_days * 2, 90)
+        buffer_days = max(lookback_days * 2, 60)
         # Pull the latest two counts for each ingredient
         cursor.execute("""
             WITH ranked AS (
