@@ -41,7 +41,6 @@ function IngredientDetail() {
 
   const [editingQuoteIdx, setEditingQuoteIdx] = useState(null);
   const [editQuote, setEditQuote] = useState(null);
-
   const [usageLookback, setUsageLookback] = useState(14);
   const [usageData, setUsageData] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -50,7 +49,6 @@ function IngredientDetail() {
   const [discrepancyData, setDiscrepancyData] = useState([]);
   const [discrepancyLoading, setDiscrepancyLoading] = useState(false);
   const [discrepancyError, setDiscrepancyError] = useState(null);
-
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -233,7 +231,6 @@ function IngredientDetail() {
     loadDiscrepancies();
     return () => { mounted = false; };
   }, [id, discrepancyLookback]);
-
   const handleDeleteConversion = async (convId) => {
     try {
       await api.delete(`/api/ingredient_conversions/${convId}`);
@@ -695,6 +692,8 @@ function IngredientDetail() {
       </div>
 
       <div className="mb-6">
+=======
+>>>>>>> theirs
         <h3 className="text-xl font-semibold mb-2">Inventory Entries</h3>
         {inventoryLoading ? (
           <p className="text-gray-600">Loading inventory…</p>
