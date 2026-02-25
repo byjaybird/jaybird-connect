@@ -10,7 +10,8 @@ inventory_bp = Blueprint('inventory', __name__)
 @inventory_bp.route('/api/inventory/upload-scan', methods=['POST'])
 def upload_scan():
     """Accepts a list of scan objects similar to the scanner flow.
-    Each scan may include: barcode (optional), quantity, unit (optional), source_type, source_id, location (optional)
+    Each scan may include: barcode (optional), quantity, unit (optional), source_type, source_id, location (optional),
+    recorded_date (optional, YYYY-MM-DD or ISO datetime)
     This will convert quantity to base units (if possible) and insert into inventory_count_entries.
     """
     scans = request.json or []
@@ -24,6 +25,23 @@ def upload_scan():
             source_id = scan.get('source_id')
             unit = scan.get('unit') or 'unit_from_scan'
             location = scan.get('location') or 'location_from_request'
+            recorded_date = scan.get('recorded_date')
+
+            created_at = datetime.now(timezone.utc)
+            if recorded_date:
+                try:
+                    if isinstance(recorded_date, str):
+                        parsed = recorded_date.strip()
+                        if len(parsed) == 10:
+                            created_at = datetime.strptime(parsed, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                        else:
+                            created_at = datetime.fromisoformat(parsed.replace('Z', '+00:00'))
+                            if created_at.tzinfo is None:
+                                created_at = created_at.replace(tzinfo=timezone.utc)
+                    else:
+                        raise ValueError('recorded_date must be a string')
+                except Exception:
+                    return jsonify({'error': f"Invalid recorded_date '{recorded_date}'. Use YYYY-MM-DD or ISO datetime."}), 400
 
             try:
                 quantity_base, base_unit = convert_to_base(source_id, source_type, unit, quantity)
@@ -41,8 +59,8 @@ def upload_scan():
             cursor.execute('''
                 INSERT INTO inventory_count_entries
                 (source_type, source_id, quantity, unit, quantity_base, base_unit, barcode, location, created_at, user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
-            ''', (source_type, source_id, quantity, unit, quantity_base, base_unit, barcode, location, uid))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (source_type, source_id, quantity, unit, quantity_base, base_unit, barcode, location, created_at, uid))
 
         cursor.connection.commit()
     finally:

@@ -2,8 +2,22 @@ import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { api } from './utils/auth';
 
+function getLocalDateString() {
+  const now = new Date();
+  const tzOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - tzOffsetMs).toISOString().slice(0, 10);
+}
+
+function isValidInventoryDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const dt = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return false;
+  return dt.toISOString().slice(0, 10) === value;
+}
+
 export default function ManualInventoryAdd({ onSaved }) {
   const [rows, setRows] = useState([{ id: Date.now(), source_type: '', source_id: '', name: '', quantity: '', unit: '' }]);
+  const [inventoryDate, setInventoryDate] = useState(getLocalDateString);
   const [items, setItems] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,6 +67,12 @@ export default function ManualInventoryAdd({ onSaved }) {
   const handleSubmit = async (e) => {
     e && e.preventDefault();
     setMessage(null);
+
+    if (!isValidInventoryDate(inventoryDate)) {
+      setMessage({ type: 'error', text: 'Please select a valid inventory date from the calendar picker.' });
+      return;
+    }
+
     // Validate
     const payload = [];
     for (let row of rows) {
@@ -63,7 +83,8 @@ export default function ManualInventoryAdd({ onSaved }) {
         quantity: qty,
         source_type: row.source_type,
         source_id: row.source_id,
-        unit: row.unit || 'unit_from_manual'
+        unit: row.unit || 'unit_from_manual',
+        recorded_date: inventoryDate || null
       });
     }
     if (payload.length === 0) {
@@ -102,6 +123,26 @@ export default function ManualInventoryAdd({ onSaved }) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold">Add Inventory (Manual)</h3>
         <div className="flex items-center space-x-2">
+          <div>
+            <label className="text-sm text-gray-700 block">
+              Inventory Date
+              <span
+                className="ml-1 text-gray-500 cursor-help"
+                title="Use the calendar picker to select the date the inventory was counted (format: YYYY-MM-DD)."
+                aria-label="Date field help"
+              >
+                ?
+              </span>
+            </label>
+            <input
+              type="date"
+              value={inventoryDate}
+              onChange={(e) => setInventoryDate(e.target.value)}
+              max={getLocalDateString()}
+              className="shadow border rounded py-1 px-2"
+              aria-label="Inventory date"
+            />
+          </div>
           <button type="button" onClick={addRow} className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded">Add Row</button>
           <button type="button" onClick={handleSubmit} disabled={isSubmitting} className={`bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded ${isSubmitting ? 'opacity-50' : ''}`}>{isSubmitting ? 'Saving...' : 'Save All'}</button>
         </div>
