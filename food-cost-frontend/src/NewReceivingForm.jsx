@@ -2,20 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { api, checkAuthStatus } from './utils/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Select from 'react-select';
+import { canEdit } from './utils/permissions';
 
 // Use the shared `api` axios instance which injects auth headers and base URL
 
+const EMPTY_ITEM = { ingredientId: '', units: '', unitType: '', pricePerUnit: '', newIngredientName: '', creatingIngredient: false };
+
+function getLocalUser() {
+    try {
+        const raw = localStorage.getItem('appUser');
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (e) {
+        return null;
+    }
+}
 
 const NewReceivingForm = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [receiveDate, setReceiveDate] = useState('');
     const [supplier, setSupplier] = useState('');
-    const [items, setItems] = useState([{ ingredientId: '', units: '', unitType: '', pricePerUnit: '' }]);
+    const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
     const [ingredients, setIngredients] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [user] = useState(getLocalUser());
+    const [allowedCreateIngredient, setAllowedCreateIngredient] = useState(false);
+
+    const fetchIngredients = async () => {
+        const response = await api.get('/api/ingredients');
+        if (!Array.isArray(response.data)) {
+            console.error("Unexpected data format:", response.data);
+            return [];
+        }
+
+        return response.data
+            .filter(ingredient => !ingredient.archived)
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    };
+
+    useEffect(() => {
+        setAllowedCreateIngredient(canEdit(user, 'ingredients'));
+    }, [user]);
 
     useEffect(() => {
         let mounted = true;
@@ -30,14 +60,9 @@ const NewReceivingForm = () => {
             }
 
             try {
-                const response = await api.get('/api/ingredients');
+                const nextIngredients = await fetchIngredients();
                 if (!mounted) return;
-                if (Array.isArray(response.data)) {
-                    setIngredients(response.data.filter(ingredient => !ingredient.archived));
-                } else {
-                    console.error("Unexpected data format:", response.data);
-                    setIngredients([]);
-                }
+                setIngredients(nextIngredients);
             } catch (error) {
                 console.error("Error fetching ingredients", error);
                 if (error?.response?.status === 401) {
@@ -51,7 +76,7 @@ const NewReceivingForm = () => {
 
         init();
         return () => { mounted = false; };
-    }, [navigate]);
+    }, [location.pathname, navigate]);
 
     const handleChange = (index, event) => {
         const newItems = [...items];
@@ -66,13 +91,70 @@ const NewReceivingForm = () => {
     };
 
     const addNewRow = () => {
-        setItems([...items, { ingredientId: '', units: '', unitType: '', pricePerUnit: '' }]);
+        setItems([...items, { ...EMPTY_ITEM }]);
     };
 
     const removeRow = (index) => {
         if (items.length > 1) {
             const newItems = items.filter((_, i) => i !== index);
             setItems(newItems);
+        }
+    };
+
+    const handleCreateIngredient = async (index) => {
+        if (!allowedCreateIngredient) {
+            alert('You do not have permission to create ingredients');
+            return;
+        }
+
+        const newName = (items[index]?.newIngredientName || '').trim();
+        if (!newName) return;
+
+        const existing = ingredients.find(
+            ingredient => (ingredient.name || '').trim().toLowerCase() === newName.toLowerCase()
+        );
+        if (existing) {
+            setItems(prev => prev.map((item, itemIndex) => (
+                itemIndex === index
+                    ? { ...item, ingredientId: existing.ingredient_id, newIngredientName: '' }
+                    : item
+            )));
+            setSuccess(`Selected existing ingredient "${existing.name}".`);
+            setError('');
+            return;
+        }
+
+        setItems(prev => prev.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, creatingIngredient: true } : item
+        )));
+        setError('');
+        setSuccess('');
+
+        try {
+            await api.post('/api/ingredients', { name: newName });
+            const nextIngredients = await fetchIngredients();
+            const created = nextIngredients.find(
+                ingredient => (ingredient.name || '').trim().toLowerCase() === newName.toLowerCase()
+            );
+
+            setIngredients(nextIngredients);
+            setItems(prev => prev.map((item, itemIndex) => (
+                itemIndex === index
+                    ? {
+                        ...item,
+                        ingredientId: created ? created.ingredient_id : item.ingredientId,
+                        newIngredientName: '',
+                        creatingIngredient: false
+                    }
+                    : item
+            )));
+            setSuccess(created ? `Created ingredient "${created.name}".` : 'Ingredient created successfully.');
+        } catch (createError) {
+            console.error('Failed to create ingredient', createError);
+            setItems(prev => prev.map((item, itemIndex) => (
+                itemIndex === index ? { ...item, creatingIngredient: false } : item
+            )));
+            setError('Failed to create ingredient. Please try again.');
         }
     };
 
@@ -86,7 +168,12 @@ const NewReceivingForm = () => {
             const response = await api.post('/api/receiving', {
                 receiveDate,
                 supplier,
-                items
+                items: items.map(({ ingredientId, units, unitType, pricePerUnit }) => ({
+                    ingredientId,
+                    units,
+                    unitType,
+                    pricePerUnit
+                }))
             });
             setSuccess('Receiving record created successfully!');
             setTimeout(() => {
@@ -182,6 +269,29 @@ const NewReceivingForm = () => {
                                         isClearable
                                         aria-label="Ingredient"
                                     />
+                                    <div className="mt-2 flex gap-2">
+                                        <input
+                                            type="text"
+                                            name="newIngredientName"
+                                            value={item.newIngredientName}
+                                            onChange={e => handleChange(index, e)}
+                                            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                            placeholder="Or create new ingredient"
+                                            autoComplete="off"
+                                            disabled={!allowedCreateIngredient || item.creatingIngredient}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCreateIngredient(index)}
+                                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-semibold py-2 px-3 rounded"
+                                            disabled={!allowedCreateIngredient || !item.newIngredientName?.trim() || item.creatingIngredient}
+                                        >
+                                            {item.creatingIngredient ? 'Adding...' : 'Add'}
+                                        </button>
+                                    </div>
+                                    {!allowedCreateIngredient && (
+                                        <p className="mt-1 text-xs text-gray-500">You do not have permission to create ingredients.</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-gray-700 text-sm font-bold mb-2">
