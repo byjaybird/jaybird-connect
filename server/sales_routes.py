@@ -240,6 +240,15 @@ def upload_sales():
             hash_input = f"{upload_id}|{master_id}|{item_id_text}|{menu_item}|{business_date}|{rn}"
             row_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
 
+            resolved_sales_category = (
+                (menu_group if menu_group is not None else None)
+                or (default_sales_category if default_sales_category is not None else None)
+                or (menu_name if menu_name is not None else None)
+                or ''
+            )
+            if resolved_sales_category is not None:
+                resolved_sales_category = str(resolved_sales_category).strip()
+
             cursor.execute(
                 """
                 INSERT INTO sales_daily_lines (
@@ -252,7 +261,7 @@ def upload_sales():
                     rn,
                     row_hash,
                     business_date,
-                    menu_group or default_sales_category or menu_name,
+                    resolved_sales_category,
                     menu_item,
                     mapped_item_id,
                     float(item_qty) if item_qty is not None else None,
