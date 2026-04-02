@@ -38,6 +38,9 @@ function SalesUpload() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setResult(resp.data);
+      if (resp?.data?.upload_id) {
+        navigate(`/sales/${resp.data.upload_id}`);
+      }
     } catch (err) {
       console.error('Upload failed', err);
       if (err?.response?.data) setError(err.response.data.error || JSON.stringify(err.response.data));
