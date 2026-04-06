@@ -19,7 +19,7 @@ export default function SalesUploadDetail() {
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentLineId, setCurrentLineId] = useState(null);
   const [showCreateItem, setShowCreateItem] = useState(false);
   const [createItemName, setCreateItemName] = useState('');
   const [createItemCategory, setCreateItemCategory] = useState('');
@@ -81,13 +81,26 @@ export default function SalesUploadDetail() {
     [lines]
   );
 
-  const currentLine = unresolvedLines[currentIndex] || null;
+  const currentLine = useMemo(() => {
+    if (currentLineId == null) return unresolvedLines[0] || null;
+    return lines.find((line) => line.id === currentLineId) || unresolvedLines[0] || null;
+  }, [currentLineId, lines, unresolvedLines]);
+
+  const unresolvedIndex = useMemo(() => {
+    if (!currentLine) return -1;
+    return unresolvedLines.findIndex((line) => line.id === currentLine.id);
+  }, [currentLine, unresolvedLines]);
 
   useEffect(() => {
-    if (currentIndex >= unresolvedLines.length) {
-      setCurrentIndex(unresolvedLines.length > 0 ? unresolvedLines.length - 1 : 0);
+    if (currentLineId == null) {
+      if (unresolvedLines[0]) setCurrentLineId(unresolvedLines[0].id);
+      return;
     }
-  }, [currentIndex, unresolvedLines.length]);
+    const exists = lines.some((line) => line.id === currentLineId);
+    if (!exists) {
+      setCurrentLineId(unresolvedLines[0]?.id ?? null);
+    }
+  }, [currentLineId, lines, unresolvedLines]);
 
   useEffect(() => {
     if (!currentLine) {
@@ -154,6 +167,8 @@ export default function SalesUploadDetail() {
       } else {
         await loadData(false);
       }
+      const nextUnresolved = unresolvedLines.filter((entry) => entry.id !== line.id);
+      setCurrentLineId(nextUnresolved[0]?.id ?? null);
       if (!silent) {
         setMessage(`Saved row ${line.row_num || line.id}.`);
       }
@@ -304,7 +319,7 @@ export default function SalesUploadDetail() {
               </div>
               {unresolvedLines.length > 0 && (
                 <div className="text-sm text-gray-600">
-                  Reviewing row {currentIndex + 1} of {unresolvedLines.length}
+                  Reviewing row {Math.max(unresolvedIndex, 0) + 1} of {unresolvedLines.length}
                 </div>
               )}
             </div>
@@ -394,16 +409,22 @@ export default function SalesUploadDetail() {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setCurrentIndex((prev) => Math.max(prev - 1, 0))}
-                    disabled={currentIndex === 0}
+                    onClick={() => {
+                      if (unresolvedIndex <= 0) return;
+                      setCurrentLineId(unresolvedLines[unresolvedIndex - 1]?.id ?? currentLine.id);
+                    }}
+                    disabled={unresolvedIndex <= 0}
                     className="bg-gray-100 text-gray-700 px-4 py-2 rounded border border-gray-200 disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCurrentIndex((prev) => Math.min(prev + 1, unresolvedLines.length - 1))}
-                    disabled={currentIndex >= unresolvedLines.length - 1}
+                    onClick={() => {
+                      if (unresolvedIndex < 0 || unresolvedIndex >= unresolvedLines.length - 1) return;
+                      setCurrentLineId(unresolvedLines[unresolvedIndex + 1]?.id ?? currentLine.id);
+                    }}
+                    disabled={unresolvedIndex < 0 || unresolvedIndex >= unresolvedLines.length - 1}
                     className="bg-gray-100 text-gray-700 px-4 py-2 rounded border border-gray-200 disabled:opacity-50"
                   >
                     Skip
