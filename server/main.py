@@ -539,7 +539,31 @@ def items():
         cursor.connection.close()
         return jsonify({'status': 'Item added'})
     else:
-        cursor.execute("SELECT * FROM items WHERE archived IS NULL OR archived = FALSE")
+        cursor.execute("""
+            SELECT
+                i.*,
+                COALESCE(rc.recipe_row_count, 0) AS recipe_row_count,
+                COALESCE(rc.ingredient_recipe_count, 0) AS ingredient_recipe_count,
+                COALESCE(rc.item_recipe_count, 0) AS item_recipe_count,
+                CASE
+                    WHEN COALESCE(rc.recipe_row_count, 0) = 0 THEN 'missing_recipe'
+                    WHEN COALESCE(rc.ingredient_recipe_count, 0) = 0 THEN 'missing_ingredient_lines'
+                    ELSE 'ok'
+                END AS recipe_coverage_status
+            FROM items i
+            LEFT JOIN (
+                SELECT
+                    item_id,
+                    COUNT(*) AS recipe_row_count,
+                    COUNT(*) FILTER (WHERE source_type = 'ingredient') AS ingredient_recipe_count,
+                    COUNT(*) FILTER (WHERE source_type = 'item') AS item_recipe_count
+                FROM recipes
+                WHERE archived IS NULL OR archived = FALSE
+                GROUP BY item_id
+            ) rc
+              ON rc.item_id = i.item_id
+            WHERE i.archived IS NULL OR i.archived = FALSE
+        """)
         items = cursor.fetchall()
         cursor.connection.close()
         return jsonify(items)

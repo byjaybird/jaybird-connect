@@ -18,6 +18,7 @@ import EditIngredient from './EditIngredient';
 import NewPriceQuoteForm from './NewPriceQuoteForm';
 import Prices from './Prices';
 import InventoryDashboard from './InventoryDashboard';
+import InventoryCorrections from './InventoryCorrections';
 import ManualInventoryPage from './ManualInventoryPage';
 import InventoryScanner from './InventoryScanner';
 import NewReceivingForm from './NewReceivingForm';
@@ -153,6 +154,7 @@ function Header({ user, onLogout }) {
     subNavItems.push({ href: '/closeout', label: 'Closeout' });
   } else if (mainSection === 'inventory') {
     subNavItems.push({ href: '/inventory', label: 'Inventory' });
+    subNavItems.push({ href: '/inventory/corrections', label: 'Corrections' });
     subNavItems.push({ href: '/receiving/new', label: 'Receive Goods' });
   } else if (mainSection === 'users') {
     subNavItems.push({ href: '/users', label: 'User Management' });
@@ -273,6 +275,7 @@ function App() {
         <Route path="/ingredients" element={<PrivateRoute user={user}><IngredientsPage /></PrivateRoute>} />
         <Route path="/prices" element={<PrivateRoute user={user}><Prices /></PrivateRoute>} />
         <Route path="/inventory" element={<PrivateRoute user={user}><InventoryDashboard /></PrivateRoute>} />
+        <Route path="/inventory/corrections" element={<PrivateRoute user={user}><InventoryCorrections /></PrivateRoute>} />
         <Route path="/inventory/manual" element={<PrivateRoute user={user}><ManualInventoryPage /></PrivateRoute>} />
         <Route path="/users" element={<PrivateRoute user={user}><UserManagement /></PrivateRoute>} />
         <Route path="/roles" element={<PrivateRoute user={user}><RoleManagement /></PrivateRoute>} />

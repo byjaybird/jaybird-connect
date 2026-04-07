@@ -28,20 +28,43 @@ function varianceTone(val) {
 export default function InventoryDashboard() {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});
-  const [lookbackDays, setLookbackDays] = useState(14);
+  const [snapshots, setSnapshots] = useState([]);
+  const [startEntryDate, setStartEntryDate] = useState('');
+  const [endEntryDate, setEndEntryDate] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [reload, setReload] = useState(0);
   const [conversionDrafts, setConversionDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchReconciliation = async () => {
+  const fetchSnapshots = async () => {
+    const res = await api.get('/api/inventory/reconciliation/snapshots', { timeout: 20000 });
+    const options = res.data?.results || [];
+    setSnapshots(options);
+    setStartEntryDate((current) => {
+      if (current && options.some((opt) => opt.snapshot_date === current)) return current;
+      return options[1]?.snapshot_date || options[0]?.snapshot_date || '';
+    });
+    setEndEntryDate((current) => {
+      if (current && options.some((opt) => opt.snapshot_date === current)) return current;
+      return options[0]?.snapshot_date || '';
+    });
+    return options;
+  };
+
+  const fetchReconciliation = async (startDate = startEntryDate, endDate = endEntryDate) => {
+    if (!startDate || !endDate) return;
+    if (new Date(`${startDate}T00:00:00`).getTime() > new Date(`${endDate}T00:00:00`).getTime()) {
+      setError('Start inventory date must be on or before end inventory date.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await api.get(
-        `/api/inventory/reconciliation/latest?lookback_days=${lookbackDays}`,
-        { timeout: 20000 }
-      );
+      const params = new URLSearchParams();
+      if (startDate) params.set('start_entry_date', startDate);
+      if (endDate) params.set('end_entry_date', endDate);
+      const res = await api.get(`/api/inventory/reconciliation/latest?${params.toString()}`, { timeout: 20000 });
       setRows(res.data?.results || []);
       setMeta(res.data?.meta || {});
       setError(null);
@@ -54,43 +77,96 @@ export default function InventoryDashboard() {
   };
 
   useEffect(() => {
-    fetchReconciliation();
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        await fetchSnapshots();
+        if (!mounted) return;
+        if (!startEntryDate && !endEntryDate) {
+          setRows([]);
+          setMeta({});
+          setError(null);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to load inventory snapshot options', err.response || err);
+        setError('Unable to load inventory snapshot dates. Please retry.');
+        setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookbackDays, reload]);
+  }, [reload]);
+
+  useEffect(() => {
+    if (!startEntryDate || !endEntryDate) return;
+    if (new Date(`${startEntryDate}T00:00:00`).getTime() > new Date(`${endEntryDate}T00:00:00`).getTime()) return;
+    fetchReconciliation(startEntryDate, endEntryDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startEntryDate, endEntryDate]);
 
   if (loading) return <div className="p-4">Loading inventory variance...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
 
-  const windowLabel = meta?.window_start && meta?.window_end
-    ? `${new Date(meta.window_start).toLocaleDateString()} → ${new Date(meta.window_end).toLocaleDateString()}`
-    : 'recent';
+  const windowLabel = meta?.start_entry_date && meta?.end_entry_date
+    ? `${new Date(`${meta.start_entry_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${meta.end_entry_date}T00:00:00`).toLocaleDateString()}`
+    : 'inventory snapshots';
+
+  const selectedRangeInvalid = Boolean(
+    startEntryDate &&
+    endEntryDate &&
+    new Date(`${startEntryDate}T00:00:00`).getTime() > new Date(`${endEntryDate}T00:00:00`).getTime()
+  );
 
   return (
     <div className="p-6 space-y-5">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
-          <p className="text-gray-600 text-sm">Variance between physical counts and theoretical usage from sales.</p>
+          <p className="text-gray-600 text-sm">Compare two inventory snapshots against received goods and expected usage from product mix sales.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-700">Lookback</label>
-          <select
-            value={lookbackDays}
-            onChange={(e) => setLookbackDays(Number(e.target.value))}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value={1}>1 day</option>
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-            <option value={45}>45 days</option>
-            <option value={60}>60 days</option>
-            <option value={90}>90 days</option>
-          </select>
-          <button onClick={fetchReconciliation} className="px-3 py-1 border rounded text-sm bg-white hover:bg-gray-50">Reload</button>
+        <div className="flex flex-col md:flex-row md:items-end gap-2">
+          <div>
+            <label className="block text-sm text-gray-700">Start inventory</label>
+            <select
+              value={startEntryDate}
+              onChange={(e) => setStartEntryDate(e.target.value)}
+              className="border rounded px-2 py-1 text-sm min-w-40"
+            >
+              {snapshots.map((snapshot) => (
+                <option key={`start-${snapshot.snapshot_date}`} value={snapshot.snapshot_date}>
+                  {new Date(`${snapshot.snapshot_date}T00:00:00`).toLocaleDateString()}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700">End inventory</label>
+            <select
+              value={endEntryDate}
+              onChange={(e) => setEndEntryDate(e.target.value)}
+              className="border rounded px-2 py-1 text-sm min-w-40"
+            >
+              {snapshots.map((snapshot) => (
+                <option key={`end-${snapshot.snapshot_date}`} value={snapshot.snapshot_date}>
+                  {new Date(`${snapshot.snapshot_date}T00:00:00`).toLocaleDateString()}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Link to="/inventory/corrections" className="px-3 py-1 border rounded text-sm bg-white hover:bg-gray-50">Correct Entries</Link>
+          <button onClick={() => fetchReconciliation(startEntryDate, endEntryDate)} className="px-3 py-1 border rounded text-sm bg-white hover:bg-gray-50">Reload</button>
           <Link to="/inventory/manual" className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Add Inventory (Manual)</Link>
         </div>
       </div>
+
+      {selectedRangeInvalid && (
+        <div className="border rounded p-3 bg-red-50 text-red-700 text-sm">
+          Start inventory date must be on or before end inventory date.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="border rounded p-3 bg-white">
@@ -104,9 +180,9 @@ export default function InventoryDashboard() {
           <div className="text-xs text-gray-500">These sales could not be tied to a recipe.</div>
         </div>
         <div className="border rounded p-3 bg-white">
-          <div className="text-sm text-gray-600">Data window</div>
+          <div className="text-sm text-gray-600">Comparison period</div>
           <div className="text-md font-semibold">{windowLabel}</div>
-          <div className="text-xs text-gray-500">Counts compared to purchases, adjustments, and sales.</div>
+          <div className="text-xs text-gray-500">Start count compared to end count, received goods, adjustments, and product mix usage.</div>
         </div>
       </div>
 
@@ -127,14 +203,14 @@ export default function InventoryDashboard() {
       <div className="border rounded bg-white overflow-hidden">
         <div className="grid grid-cols-12 bg-gray-50 text-xs font-semibold text-gray-700 uppercase tracking-wide border-b">
           <div className="col-span-3 px-3 py-2">Ingredient</div>
-          <div className="col-span-2 px-3 py-2 text-right">Last Count</div>
+          <div className="col-span-2 px-3 py-2 text-right">End Count</div>
           <div className="col-span-2 px-3 py-2 text-right">Expected</div>
           <div className="col-span-2 px-3 py-2 text-right">Variance</div>
-          <div className="col-span-2 px-3 py-2 text-right">Sales Usage</div>
+          <div className="col-span-2 px-3 py-2 text-right">Expected Usage</div>
           <div className="col-span-1 px-3 py-2 text-right">Details</div>
         </div>
         {rows.length === 0 && (
-          <div className="p-4 text-sm text-gray-600">No inventory records in this window.</div>
+          <div className="p-4 text-sm text-gray-600">No inventory records found for the selected snapshot dates.</div>
         )}
         {rows.map((row) => {
           const latestUnit = row.latest_count?.base_unit || row.latest_count?.unit || '';
@@ -153,8 +229,8 @@ export default function InventoryDashboard() {
                   <div className="font-semibold text-sm">{row.ingredient_name}</div>
                   <div className="text-xs text-gray-500">
                     {row.previous_count?.created_at
-                      ? `Prev count: ${new Date(row.previous_count.created_at).toLocaleDateString()}`
-                      : 'No prior count'}
+                      ? `Start count: ${new Date(row.previous_count.created_at).toLocaleDateString()}`
+                      : 'Missing start snapshot'}
                   </div>
                   {hasConversionIssues && (
                     <div className="mt-1 inline-flex items-center text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
@@ -188,7 +264,7 @@ export default function InventoryDashboard() {
                 <div className="bg-gray-50 border-t px-4 py-3 text-sm space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="border rounded p-3 bg-white">
-                      <div className="text-xs text-gray-600 uppercase">Previous Count</div>
+                      <div className="text-xs text-gray-600 uppercase">Start Count</div>
                       <div className="font-semibold">{formatQty(row.previous_count?.quantity_base, row.previous_count?.base_unit)}</div>
                       <div className="text-xs text-gray-500">{row.previous_count?.created_at ? new Date(row.previous_count.created_at).toLocaleString() : '—'}</div>
                     </div>
@@ -209,7 +285,7 @@ export default function InventoryDashboard() {
                   {row.sales_breakdown && row.sales_breakdown.length > 0 && (
                     <div className="border rounded bg-white p-3">
                       <div className="text-xs uppercase text-gray-600 mb-2">
-                        Sales drivers in window (mapped to recipes, usage shown in base unit)
+                        Product mix drivers in period (usage shown in comparison unit)
                       </div>
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-700 border-b pb-1">
                         <div className="col-span-6">Item</div>

@@ -240,6 +240,202 @@ def current_inventory():
     return jsonify(rows)
 
 
+@inventory_bp.route('/api/inventory/entries', methods=['GET'])
+def inventory_entries():
+    """Browse inventory count entries with joined source names for correction workflows."""
+    source_type = request.args.get('source_type')
+    source_id = request.args.get('source_id')
+    search = (request.args.get('search') or '').strip()
+    limit = max(1, min(request.args.get('limit', type=int) or 200, 1000))
+
+    cursor = get_db_cursor()
+    try:
+        params = []
+        conditions = []
+
+        if source_type:
+            conditions.append('ice.source_type = %s')
+            params.append(source_type)
+        if source_id not in (None, ''):
+            conditions.append('ice.source_id = %s')
+            params.append(source_id)
+        if search:
+            conditions.append("""
+                (
+                    COALESCE(i.name, '') ILIKE %s
+                    OR COALESCE(it.name, '') ILIKE %s
+                    OR COALESCE(ice.unit, '') ILIKE %s
+                    OR COALESCE(ice.location, '') ILIKE %s
+                    OR COALESCE(ice.barcode, '') ILIKE %s
+                )
+            """)
+            like = f'%{search}%'
+            params.extend([like, like, like, like, like])
+
+        query = """
+            SELECT
+                ice.id,
+                ice.source_type,
+                ice.source_id,
+                ice.quantity,
+                ice.unit,
+                ice.quantity_base,
+                ice.base_unit,
+                ice.barcode,
+                ice.location,
+                ice.created_at,
+                ice.user_id,
+                CASE
+                    WHEN ice.source_type = 'ingredient' THEN i.name
+                    WHEN ice.source_type = 'item' THEN it.name
+                    ELSE NULL
+                END AS source_name
+            FROM inventory_count_entries ice
+            LEFT JOIN ingredients i
+              ON ice.source_type = 'ingredient'
+             AND ice.source_id = i.ingredient_id
+            LEFT JOIN items it
+              ON ice.source_type = 'item'
+             AND ice.source_id = it.item_id
+        """
+
+        if conditions:
+            query += f" WHERE {' AND '.join(conditions)}"
+        query += " ORDER BY ice.created_at DESC, ice.id DESC LIMIT %s"
+        params.append(limit)
+
+        cursor.execute(query, tuple(params))
+        return jsonify(cursor.fetchall()), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@inventory_bp.route('/api/inventory/entries/<int:entry_id>', methods=['PATCH'])
+def update_inventory_entry(entry_id):
+    """Update an inventory count entry mapping or value and recalculate base quantity."""
+    data = request.json or {}
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("""
+            SELECT *
+            FROM inventory_count_entries
+            WHERE id = %s
+        """, (entry_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            return jsonify({'error': 'Inventory entry not found'}), 404
+
+        source_type = data.get('source_type', existing.get('source_type'))
+        source_id = data.get('source_id', existing.get('source_id'))
+        quantity = data.get('quantity', existing.get('quantity'))
+        unit = data.get('unit', existing.get('unit'))
+        barcode = data.get('barcode', existing.get('barcode'))
+        location = data.get('location', existing.get('location'))
+        recorded_date = data.get('recorded_date')
+        created_at = existing.get('created_at')
+
+        if recorded_date is not None:
+            if recorded_date == '':
+                return jsonify({'error': 'recorded_date cannot be blank'}), 400
+            parsed = _ensure_datetime(recorded_date)
+            if not parsed and isinstance(recorded_date, str) and len(recorded_date.strip()) == 10:
+                try:
+                    parsed = datetime.strptime(recorded_date.strip(), '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                except Exception:
+                    parsed = None
+            if not parsed:
+                return jsonify({'error': "Invalid recorded_date. Use YYYY-MM-DD or ISO datetime."}), 400
+            created_at = parsed
+
+        if source_type not in ('ingredient', 'item'):
+            return jsonify({'error': 'source_type must be ingredient or item'}), 400
+        if source_id in (None, ''):
+            return jsonify({'error': 'source_id is required'}), 400
+        try:
+            source_id = int(source_id)
+        except Exception:
+            return jsonify({'error': 'source_id must be an integer'}), 400
+
+        try:
+            quantity_base, base_unit = convert_to_base(source_id, source_type, unit, quantity)
+        except Exception:
+            quantity_base = quantity
+            base_unit = unit
+
+        cursor.execute("""
+            UPDATE inventory_count_entries
+            SET source_type = %s,
+                source_id = %s,
+                quantity = %s,
+                unit = %s,
+                quantity_base = %s,
+                base_unit = %s,
+                barcode = %s,
+                location = %s,
+                created_at = %s
+            WHERE id = %s
+        """, (
+            source_type,
+            source_id,
+            quantity,
+            unit,
+            quantity_base,
+            base_unit,
+            barcode,
+            location,
+            created_at,
+            entry_id
+        ))
+        cursor.connection.commit()
+
+        cursor.execute("""
+            SELECT
+                ice.id,
+                ice.source_type,
+                ice.source_id,
+                ice.quantity,
+                ice.unit,
+                ice.quantity_base,
+                ice.base_unit,
+                ice.barcode,
+                ice.location,
+                ice.created_at,
+                ice.user_id,
+                CASE
+                    WHEN ice.source_type = 'ingredient' THEN i.name
+                    WHEN ice.source_type = 'item' THEN it.name
+                    ELSE NULL
+                END AS source_name
+            FROM inventory_count_entries ice
+            LEFT JOIN ingredients i
+              ON ice.source_type = 'ingredient'
+             AND ice.source_id = i.ingredient_id
+            LEFT JOIN items it
+              ON ice.source_type = 'item'
+             AND ice.source_id = it.item_id
+            WHERE ice.id = %s
+        """, (entry_id,))
+        return jsonify({'status': 'updated', 'entry': cursor.fetchone()}), 200
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
 # Batch endpoint: accept JSON { items: [{ source_type, source_id }, ...] }
 @inventory_bp.route('/api/inventory/current/batch', methods=['POST'])
 def current_inventory_batch():
@@ -472,66 +668,176 @@ def _convert_quantity(qty, from_unit, to_unit, conv_map, ingredient_id=None):
     return qty, 'missing_conversion'
 
 
+def _parse_iso_date(value):
+    if not value:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except Exception:
+            return None
+    return None
+
+
+@inventory_bp.route('/api/inventory/reconciliation/snapshots', methods=['GET'])
+def inventory_reconciliation_snapshots():
+    """List available ingredient inventory snapshot dates for dashboard comparisons."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                DATE(created_at) AS snapshot_date,
+                COUNT(*) AS entry_count,
+                COUNT(DISTINCT source_id) AS ingredient_count,
+                MIN(created_at) AS first_created_at,
+                MAX(created_at) AS last_created_at
+            FROM inventory_count_entries
+            WHERE source_type = 'ingredient'
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at) DESC
+        """)
+        rows = cursor.fetchall()
+        snapshots = []
+        for row in rows:
+            snapshot_date = _parse_iso_date(row.get('snapshot_date'))
+            snapshots.append({
+                'snapshot_date': snapshot_date.isoformat() if snapshot_date else None,
+                'entry_count': row.get('entry_count') or 0,
+                'ingredient_count': row.get('ingredient_count') or 0,
+                'first_created_at': (_ensure_datetime(row.get('first_created_at')) or None).isoformat() if row.get('first_created_at') else None,
+                'last_created_at': (_ensure_datetime(row.get('last_created_at')) or None).isoformat() if row.get('last_created_at') else None
+            })
+        return jsonify({'results': snapshots}), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
 @inventory_bp.route('/api/inventory/reconciliation/latest', methods=['GET'])
 def inventory_reconciliation_latest():
     """
-    Compute variances between the two most recent inventory counts per ingredient,
-    factoring purchases, adjustments, and sales-driven usage (via recipes).
-    Returns one row per ingredient that has at least one inventory count in the lookback window.
+    Compute variances between two inventory snapshots, factoring purchases,
+    adjustments, and sales-driven usage (via recipes).
     """
     lookback_days = request.args.get('lookback_days', type=int) or 45
     ingredient_filter = request.args.get('ingredient_id')
+    start_entry_date = _parse_iso_date(request.args.get('start_entry_date'))
+    end_entry_date = _parse_iso_date(request.args.get('end_entry_date'))
 
     cursor = get_db_cursor()
     try:
-        # Limit scan window for inventory_count_entries to reduce workload while still allowing a prior count.
-        buffer_days = max(lookback_days * 2, 60)
-        # Pull the latest two counts for each ingredient
-        cursor.execute("""
-            WITH ranked AS (
-                SELECT
-                    source_id AS ingredient_id,
-                    quantity,
-                    unit,
-                    quantity_base,
-                    base_unit,
-                    location,
-                    created_at,
-                    user_id,
-                    ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
-                FROM inventory_count_entries
-                WHERE source_type = 'ingredient'
-                  AND created_at >= NOW() - (%s || ' days')::interval
-            )
-            SELECT * FROM ranked WHERE rn <= 2
-        """, (buffer_days,))
-        count_rows = cursor.fetchall()
-
         latest_counts = {}
         previous_counts = {}
-        for row in count_rows:
-            iid = row.get('ingredient_id')
-            if ingredient_filter and str(iid) != str(ingredient_filter):
-                continue
-            rn = row.get('rn')
-            if rn == 1:
-                latest_counts[iid] = row
-            elif rn == 2:
-                previous_counts[iid] = row
-
-        if not latest_counts:
-            return jsonify({'results': [], 'meta': {'message': 'No inventory counts found'}})
-
-        # Filter to ingredients whose latest count is within the lookback window
         now_ts = datetime.now(timezone.utc)
         cutoff = now_ts - timedelta(days=lookback_days)
-        filtered_ids = [iid for iid, row in latest_counts.items() if (_ensure_datetime(row.get('created_at')) or cutoff) >= cutoff]
+        if start_entry_date and end_entry_date and start_entry_date > end_entry_date:
+            return jsonify({'error': 'start_entry_date must be on or before end_entry_date'}), 400
 
-        if ingredient_filter and str(ingredient_filter) in map(str, filtered_ids):
-            filtered_ids = [int(ingredient_filter)]
+        if start_entry_date and end_entry_date:
+            cursor.execute("""
+                WITH start_counts AS (
+                    SELECT
+                        source_id AS ingredient_id,
+                        quantity,
+                        unit,
+                        quantity_base,
+                        base_unit,
+                        location,
+                        created_at,
+                        user_id,
+                        ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
+                    FROM inventory_count_entries
+                    WHERE source_type = 'ingredient'
+                      AND DATE(created_at) = %s
+                ),
+                end_counts AS (
+                    SELECT
+                        source_id AS ingredient_id,
+                        quantity,
+                        unit,
+                        quantity_base,
+                        base_unit,
+                        location,
+                        created_at,
+                        user_id,
+                        ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
+                    FROM inventory_count_entries
+                    WHERE source_type = 'ingredient'
+                      AND DATE(created_at) = %s
+                )
+                SELECT 'start' AS bucket, * FROM start_counts WHERE rn = 1
+                UNION ALL
+                SELECT 'end' AS bucket, * FROM end_counts WHERE rn = 1
+            """, (start_entry_date, end_entry_date))
+            count_rows = cursor.fetchall()
+            for row in count_rows:
+                iid = row.get('ingredient_id')
+                if ingredient_filter and str(iid) != str(ingredient_filter):
+                    continue
+                if row.get('bucket') == 'start':
+                    previous_counts[iid] = row
+                else:
+                    latest_counts[iid] = row
 
-        if not filtered_ids:
-            return jsonify({'results': [], 'meta': {'message': 'No recent inventory counts in the selected window'}})
+            filtered_ids = sorted(set(previous_counts.keys()) | set(latest_counts.keys()))
+            if ingredient_filter and str(ingredient_filter) in {str(i) for i in filtered_ids}:
+                filtered_ids = [int(ingredient_filter)]
+
+            if not filtered_ids:
+                return jsonify({'results': [], 'meta': {'message': 'No inventory counts found for the selected inventory dates'}})
+        else:
+            # Backward-compatible fallback: compare the latest two counts per ingredient,
+            # but only surface ingredients whose latest count falls in the selected lookback.
+            buffer_days = max(lookback_days * 2, 60)
+            cursor.execute("""
+                WITH ranked AS (
+                    SELECT
+                        source_id AS ingredient_id,
+                        quantity,
+                        unit,
+                        quantity_base,
+                        base_unit,
+                        location,
+                        created_at,
+                        user_id,
+                        ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
+                    FROM inventory_count_entries
+                    WHERE source_type = 'ingredient'
+                      AND created_at >= NOW() - (%s || ' days')::interval
+                )
+                SELECT * FROM ranked WHERE rn <= 2
+            """, (buffer_days,))
+            count_rows = cursor.fetchall()
+
+            for row in count_rows:
+                iid = row.get('ingredient_id')
+                if ingredient_filter and str(iid) != str(ingredient_filter):
+                    continue
+                rn = row.get('rn')
+                if rn == 1:
+                    latest_counts[iid] = row
+                elif rn == 2:
+                    previous_counts[iid] = row
+
+            if not latest_counts:
+                return jsonify({'results': [], 'meta': {'message': 'No inventory counts found'}})
+
+            filtered_ids = [iid for iid, row in latest_counts.items() if (_ensure_datetime(row.get('created_at')) or cutoff) >= cutoff]
+
+            if ingredient_filter and str(ingredient_filter) in map(str, filtered_ids):
+                filtered_ids = [int(ingredient_filter)]
+
+            if not filtered_ids:
+                return jsonify({'results': [], 'meta': {'message': 'No recent inventory counts in the selected window'}})
 
         # Build ingredient name lookup
         cursor.execute("SELECT ingredient_id, name FROM ingredients WHERE ingredient_id = ANY(%s)", (filtered_ids,))
@@ -556,15 +862,16 @@ def inventory_reconciliation_latest():
         global_start = min(interval_starts) if interval_starts else cutoff
         global_end = max(interval_ends) if interval_ends else now_ts
 
-        # Fetch purchases within the window for relevant ingredients (bounded by lookback cutoff)
-        purchases_start = cutoff
+        # Fetch purchases within the widest selected interval.
+        purchases_start = global_start.date() if isinstance(global_start, datetime) else global_start
+        purchases_end = global_end.date() if isinstance(global_end, datetime) else global_end
         cursor.execute("""
             SELECT ingredient_id, units, unit_type, receive_date
             FROM received_goods
             WHERE ingredient_id = ANY(%s)
               AND receive_date >= %s
               AND receive_date <= %s
-        """, (filtered_ids, purchases_start, global_end))
+        """, (filtered_ids, purchases_start, purchases_end))
         purchase_rows = cursor.fetchall()
 
         purchases_by_ing = defaultdict(list)
@@ -795,6 +1102,8 @@ def inventory_reconciliation_latest():
             latest_dt = _ensure_datetime(latest_row.get('created_at')) if latest_row else None
             prev_dt = _ensure_datetime(prev_row.get('created_at')) if prev_row else None
             effective_start_dt = max([d for d in [prev_dt, cutoff] if d], default=cutoff)
+            start_date_cutoff = prev_dt.date() if prev_dt else (start_entry_date or (effective_start_dt.date() if effective_start_dt else None))
+            end_date_cutoff = latest_dt.date() if latest_dt else (end_entry_date or (global_end.date() if isinstance(global_end, datetime) else None))
 
             # Pick a canonical unit: prefer latest count's base_unit, else unit, else previous, else first purchase unit
             canonical_unit = (
@@ -814,10 +1123,9 @@ def inventory_reconciliation_latest():
             purchase_details = []
             for e in purchases_by_ing.get(iid, []):
                 ts = e.get('ts')
-                # Compare on date to avoid dropping same-day purchases (receive_date has no time component)
-                if ts and ts < effective_start_dt:
+                if start_date_cutoff and ts and ts.date() <= start_date_cutoff:
                     continue
-                if latest_dt and ts and ts.date() > latest_dt.date():
+                if end_date_cutoff and ts and ts.date() > end_date_cutoff:
                     continue
                 purchase_details.append({
                     'ts': ts.isoformat() if ts else None,
@@ -830,15 +1138,6 @@ def inventory_reconciliation_latest():
                 if err:
                     conversion_issues.append({'type': 'purchase', 'unit': e.get('base_unit'), 'target': canonical_unit, 'detail': err})
                     qty_can = e.get('quantity_base')
-                try:
-                    purchases += float(qty_can or 0)
-                except Exception:
-                    purchases += 0.0
-            for p in purchase_details:
-                qty_can, err = _convert_quantity(p.get('quantity_base'), p.get('base_unit'), canonical_unit, conv_map, iid)
-                if err:
-                    conversion_issues.append({'type': 'purchase', 'unit': p.get('base_unit'), 'target': canonical_unit, 'detail': err})
-                    qty_can = p.get('quantity_base')
                 try:
                     purchases += float(qty_can or 0)
                 except Exception:
@@ -951,7 +1250,9 @@ def inventory_reconciliation_latest():
             'sales_skipped_no_item': skipped_sales['no_item_id'],
             'sales_skipped_missing_recipe': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['missing_recipe'].items()},
             'sales_skipped_compute_errors': {items_lookup.get(k, {}).get('name', f'item {k}'): v for k, v in skipped_sales['compute_errors'].items()},
-            # Display window reflects user-selected lookback (not the internal extended window used to find the previous count)
+            'comparison_mode': 'snapshot_dates' if start_entry_date and end_entry_date else 'lookback_latest',
+            'start_entry_date': start_entry_date.isoformat() if start_entry_date else None,
+            'end_entry_date': end_entry_date.isoformat() if end_entry_date else None,
             'window_start': cutoff.isoformat() if isinstance(cutoff, datetime) else None,
             'window_end': (max(interval_ends) if interval_ends else now_ts).isoformat()
         }

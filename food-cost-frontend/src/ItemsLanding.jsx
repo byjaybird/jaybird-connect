@@ -15,6 +15,11 @@ function getLocalUser() {
 
 function ItemsLanding() {
   const [itemsByCategory, setItemsByCategory] = useState({});
+  const [coverageSummary, setCoverageSummary] = useState({
+    totalItems: 0,
+    missingRecipe: 0,
+    missingIngredientLines: 0
+  });
   const [expandedCategories, setExpandedCategories] = useState({});
   const [user] = useState(getLocalUser());
   const [allowedEdit, setAllowedEdit] = useState(false);
@@ -47,6 +52,11 @@ function ItemsLanding() {
         }
 
         setItemsByCategory(grouped);
+        setCoverageSummary({
+          totalItems: data.length,
+          missingRecipe: data.filter((item) => item.recipe_coverage_status === 'missing_recipe').length,
+          missingIngredientLines: data.filter((item) => item.recipe_coverage_status === 'missing_ingredient_lines').length
+        });
       } catch (err) {
         console.error('Error fetching items:', err.response || err);
       }
@@ -64,6 +74,24 @@ function ItemsLanding() {
 
   console.log("Rendering ItemsLanding");
 
+  const coverageBadge = (item) => {
+    if (item.recipe_coverage_status === 'missing_recipe') {
+      return (
+        <span className="inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-medium">
+          Missing recipe
+        </span>
+      );
+    }
+    if (item.recipe_coverage_status === 'missing_ingredient_lines') {
+      return (
+        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">
+          No ingredient lines
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4">
       <div className="flex justify-between items-center mb-6">
@@ -75,6 +103,24 @@ function ItemsLanding() {
           ➕ Add New Item
         </Link>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <div className="border rounded bg-white p-4 shadow-sm">
+          <div className="text-sm text-gray-600">Items</div>
+          <div className="text-2xl font-semibold">{coverageSummary.totalItems}</div>
+        </div>
+        <div className="border rounded bg-red-50 p-4 shadow-sm">
+          <div className="text-sm text-red-700">Missing recipe</div>
+          <div className="text-2xl font-semibold text-red-800">{coverageSummary.missingRecipe}</div>
+          <div className="text-xs text-red-700">No recipe rows saved for the item.</div>
+        </div>
+        <div className="border rounded bg-amber-50 p-4 shadow-sm">
+          <div className="text-sm text-amber-800">Missing ingredients</div>
+          <div className="text-2xl font-semibold text-amber-900">{coverageSummary.missingIngredientLines}</div>
+          <div className="text-xs text-amber-800">Recipe exists, but it does not include any direct ingredient lines.</div>
+        </div>
+      </div>
+
       {Object.entries(itemsByCategory).map(([category, items]) => (
         <div key={category} className="mb-4 border rounded shadow-sm">
           <button
@@ -87,21 +133,33 @@ function ItemsLanding() {
           {expandedCategories[category] && (
             <ul className="p-4 bg-white border-t">
               {items.map((item) => (
-                <li key={item.item_id} className="py-1 flex justify-between">
-                  <Link
-                    to={`/item/${item.item_id}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {item.name} {item.yield_qty ? `— ${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : ''}
-                  </Link>
-                  {allowedEdit && (
+                <li key={item.item_id} className="py-2 flex justify-between items-start gap-4">
+                  <div className="min-w-0">
                     <Link
-                      to={`/item/${item.item_id}/edit`}
-                      className="text-sm text-gray-500 hover:text-black ml-4"
+                      to={`/item/${item.item_id}`}
+                      className="text-blue-600 hover:underline"
                     >
-                      ✏️ Edit
+                      {item.name} {item.yield_qty ? `— ${item.yield_qty}${item.yield_unit ? ' ' + item.yield_unit : ''}` : ''}
                     </Link>
-                  )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {coverageBadge(item)}
+                      {item.recipe_row_count > 0 && (
+                        <span className="text-xs text-gray-500">
+                          {item.ingredient_recipe_count || 0} ingredient lines, {item.item_recipe_count || 0} prep item lines
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    {allowedEdit && (
+                      <Link
+                        to={`/item/${item.item_id}/edit`}
+                        className="text-sm text-gray-500 hover:text-black"
+                      >
+                        ✏️ Edit
+                      </Link>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -113,4 +171,3 @@ function ItemsLanding() {
 }
 
 export default ItemsLanding;
-
