@@ -259,6 +259,51 @@ def summarize_cost_result(result):
     }
 
 
+def _iso_value(value):
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return value
+
+
+def _collect_ingredient_cost_issues(ingredient_id, recipe_units):
+    seen_units = set()
+    issues = []
+
+    for raw_unit in recipe_units or []:
+        unit = (raw_unit or '').strip().lower()
+        if unit in seen_units:
+            continue
+        seen_units.add(unit)
+
+        result = resolve_ingredient_cost(ingredient_id, unit, 1)
+        if isinstance(result, dict) and result.get('status') != 'ok':
+            issue = {
+                'issue': result.get('issue') or result.get('status') or 'error',
+                'message': result.get('message'),
+                'recipe_unit': unit or None
+            }
+            if isinstance(result.get('missing'), dict):
+                issue['missing'] = result.get('missing')
+            issues.append(issue)
+
+    return issues
+
+
+def _primary_ingredient_issue(issues):
+    if not issues:
+        return None
+
+    priority = {
+        'missing_price': 0,
+        'missing_conversion': 1,
+        'invalid_quote_format': 2,
+        'invalid_quote_quantity': 3,
+        'invalid_conversion_factor': 4,
+        'error': 5
+    }
+    return sorted(issues, key=lambda issue: priority.get(issue.get('issue'), 99))[0]
+
+
 def insert_cost_snapshot(item_id, unit, result, run_id=None):
     snapshot = summarize_cost_result(result)
     cursor = get_db_cursor()
@@ -314,10 +359,93 @@ def ingredients():
         cursor.connection.close()
         return jsonify({'status': 'Ingredient added'})
     else:
-        cursor.execute("SELECT * FROM ingredients WHERE archived IS NULL OR archived = FALSE")
+        include_archived = request.args.get('include_archived', 'false').lower() in ('1', 'true', 'yes')
+        include_details = request.args.get('include_details', 'false').lower() in ('1', 'true', 'yes')
+
+        where_clause = "" if include_archived else "WHERE i.archived IS NULL OR i.archived = FALSE"
+        cursor.execute(f"""
+            SELECT
+                i.*,
+                COALESCE(usage.active_recipe_count, 0) AS active_recipe_count,
+                COALESCE(usage.recipe_units, ARRAY[]::text[]) AS recipe_units,
+                latest_quote.date_found AS latest_quote_date,
+                latest_quote.source AS latest_quote_source,
+                latest_quote.size_qty AS latest_quote_size_qty,
+                latest_quote.size_unit AS latest_quote_size_unit,
+                latest_quote.price AS latest_quote_price,
+                latest_purchase.receive_date AS last_purchase_date,
+                latest_purchase.supplier AS last_purchase_supplier,
+                latest_purchase.units AS last_purchase_units,
+                latest_purchase.unit_type AS last_purchase_unit_type,
+                latest_purchase.price_per_unit AS last_purchase_price_per_unit
+            FROM ingredients i
+            LEFT JOIN (
+                SELECT
+                    r.source_id AS ingredient_id,
+                    COUNT(*) AS active_recipe_count,
+                    ARRAY_REMOVE(ARRAY_AGG(DISTINCT LOWER(COALESCE(r.unit, ''))), NULL) AS recipe_units
+                FROM recipes r
+                WHERE r.source_type = 'ingredient'
+                  AND (r.archived IS NULL OR r.archived = FALSE)
+                GROUP BY r.source_id
+            ) AS usage
+              ON usage.ingredient_id = i.ingredient_id
+            LEFT JOIN LATERAL (
+                SELECT pq.date_found, pq.source, pq.size_qty, pq.size_unit, pq.price
+                FROM price_quotes pq
+                WHERE pq.ingredient_id = i.ingredient_id
+                ORDER BY pq.date_found DESC NULLS LAST, pq.id DESC
+                LIMIT 1
+            ) AS latest_quote ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT rg.receive_date, rg.supplier, rg.units, rg.unit_type, rg.price_per_unit
+                FROM received_goods rg
+                WHERE rg.ingredient_id = i.ingredient_id
+                ORDER BY rg.receive_date DESC NULLS LAST, rg.id DESC
+                LIMIT 1
+            ) AS latest_purchase ON TRUE
+            {where_clause}
+            ORDER BY LOWER(COALESCE(i.name, ''))
+        """)
         ingredients = cursor.fetchall()
         cursor.connection.close()
-        return jsonify(ingredients)
+
+        if not include_details:
+            return jsonify(ingredients)
+
+        enriched = []
+        for ingredient in ingredients:
+            active_recipe_count = int(ingredient.get('active_recipe_count') or 0)
+            recipe_units = [unit for unit in (ingredient.get('recipe_units') or []) if unit]
+            cost_issues = _collect_ingredient_cost_issues(ingredient['ingredient_id'], recipe_units) if active_recipe_count > 0 else []
+            primary_issue = _primary_ingredient_issue(cost_issues)
+
+            ingredient['recipe_units'] = recipe_units
+            ingredient['latest_quote_date'] = _iso_value(ingredient.get('latest_quote_date'))
+            ingredient['last_purchase_date'] = _iso_value(ingredient.get('last_purchase_date'))
+            ingredient['cost_issue_count'] = len(cost_issues)
+            ingredient['cost_issue_types'] = sorted(list({issue.get('issue') for issue in cost_issues if issue.get('issue')}))
+            ingredient['cost_issue_details'] = cost_issues
+            ingredient['cost_status'] = 'ok'
+            ingredient['cost_status_label'] = 'Costed'
+            ingredient['cost_issue'] = None
+
+            if active_recipe_count == 0:
+                ingredient['cost_status'] = 'unused'
+                ingredient['cost_status_label'] = 'Unused'
+            elif primary_issue:
+                ingredient['cost_issue'] = primary_issue
+                ingredient['cost_status'] = primary_issue.get('issue') or 'error'
+                if ingredient['cost_status'] == 'missing_price':
+                    ingredient['cost_status_label'] = 'Missing quote'
+                elif ingredient['cost_status'] == 'missing_conversion':
+                    ingredient['cost_status_label'] = 'Missing conversion'
+                else:
+                    ingredient['cost_status_label'] = 'Needs review'
+
+            enriched.append(ingredient)
+
+        return jsonify(enriched)
 @app.route('/api/ingredients/<int:ingredient_id>', methods=['GET'])
 def get_ingredient_detail(ingredient_id):
     cursor = get_db_cursor()
