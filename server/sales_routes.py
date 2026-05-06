@@ -814,9 +814,15 @@ def item_daily_sales(item_id):
 
     cursor = get_db_cursor()
     try:
-        cursor.execute("SELECT name FROM items WHERE item_id = %s", (item_id,))
+        cursor.execute("SELECT name, cost FROM items WHERE item_id = %s", (item_id,))
         item_row = cursor.fetchone()
         item_name = item_row.get('name') if item_row else None
+        fallback_cost_per_unit = None
+        if item_row:
+            try:
+                fallback_cost_per_unit = float(item_row.get('cost')) if item_row.get('cost') is not None else None
+            except Exception:
+                fallback_cost_per_unit = None
 
         where_clause = "item_id = %s"
         params = [item_id]
@@ -827,20 +833,52 @@ def item_daily_sales(item_id):
 
         cursor.execute(
             f"""
+            WITH sales_by_day AS (
+                SELECT
+                    business_date::date AS business_date,
+                    SUM(COALESCE(item_qty, 0)) AS qty_sold,
+                    SUM(COALESCE(net_sales, 0)) AS net_sales,
+                    SUM(COALESCE(gross_sales, 0)) AS gross_sales,
+                    SUM(COALESCE(discount_amount, 0)) AS discounts,
+                    SUM(COALESCE(tax_amount, 0)) AS taxes
+                FROM sales_daily_lines
+                WHERE {where_clause}
+                  AND business_date BETWEEN %s AND %s
+                GROUP BY business_date::date
+            )
             SELECT
-                business_date,
-                SUM(COALESCE(item_qty, 0)) AS qty_sold,
-                SUM(COALESCE(net_sales, 0)) AS net_sales,
-                SUM(COALESCE(gross_sales, 0)) AS gross_sales,
-                SUM(COALESCE(discount_amount, 0)) AS discounts,
-                SUM(COALESCE(tax_amount, 0)) AS taxes
-            FROM sales_daily_lines
-            WHERE {where_clause}
-              AND business_date BETWEEN %s AND %s
-            GROUP BY business_date
-            ORDER BY business_date ASC
+                sbd.business_date,
+                sbd.qty_sold,
+                sbd.net_sales,
+                sbd.gross_sales,
+                sbd.discounts,
+                sbd.taxes,
+                snap.cost_per_unit AS historical_cost_per_unit
+            FROM sales_by_day sbd
+            LEFT JOIN LATERAL (
+                SELECT snap_choice.cost_per_unit
+                FROM (
+                    SELECT ics.cost_per_unit, ics.created_at, ics.snapshot_id, 0 AS priority
+                    FROM item_cost_snapshots ics
+                    WHERE ics.item_id = %s
+                      AND ics.status = 'ok'
+                      AND ics.created_at < (sbd.business_date::timestamp + INTERVAL '1 day')
+                    UNION ALL
+                    SELECT ics.cost_per_unit, ics.created_at, ics.snapshot_id, 1 AS priority
+                    FROM item_cost_snapshots ics
+                    WHERE ics.item_id = %s
+                      AND ics.status = 'ok'
+                ) snap_choice
+                ORDER BY
+                    snap_choice.priority ASC,
+                    CASE WHEN snap_choice.priority = 0 THEN snap_choice.created_at END DESC NULLS LAST,
+                    CASE WHEN snap_choice.priority = 1 THEN snap_choice.created_at END ASC NULLS LAST,
+                    snap_choice.snapshot_id DESC
+                LIMIT 1
+            ) snap ON TRUE
+            ORDER BY sbd.business_date ASC
             """,
-            tuple(params)
+            tuple(params + [item_id, item_id])
         )
         rows = cursor.fetchall() or []
         rows_by_day = {row['business_date']: row for row in rows}
@@ -851,6 +889,9 @@ def item_daily_sales(item_id):
         total_gross = 0.0
         total_discounts = 0.0
         total_taxes = 0.0
+        total_margin = 0.0
+        total_cogs = 0.0
+        cost_days_available = 0
         last_sale_date = None
         for day in daterange(start_date, end_date):
             record = rows_by_day.get(day) or {}
@@ -859,6 +900,13 @@ def item_daily_sales(item_id):
             gross = float(record.get('gross_sales') or 0)
             discounts = float(record.get('discounts') or 0)
             taxes = float(record.get('taxes') or 0)
+            day_cost_per_unit = record.get('historical_cost_per_unit')
+            try:
+                day_cost_per_unit = float(day_cost_per_unit) if day_cost_per_unit is not None else fallback_cost_per_unit
+            except Exception:
+                day_cost_per_unit = fallback_cost_per_unit
+            cogs = float(day_cost_per_unit * qty) if day_cost_per_unit is not None and qty else 0.0
+            margin = gross - cogs if day_cost_per_unit is not None else 0.0
             entry = {
                 'business_date': day.isoformat(),
                 'qty_sold': qty,
@@ -866,6 +914,10 @@ def item_daily_sales(item_id):
                 'gross_sales': gross,
                 'discounts': discounts,
                 'taxes': taxes,
+                'cost_per_unit': day_cost_per_unit,
+                'cogs': cogs,
+                'margin': margin,
+                'margin_pct': float((margin / gross) * 100) if gross and day_cost_per_unit is not None else None,
                 'avg_item_price': float(net / qty) if qty else 0.0,
                 'avg_gross_price': float(gross / qty) if qty else 0.0,
                 'discount_per_unit': float(discounts / qty) if qty else 0.0,
@@ -879,6 +931,10 @@ def item_daily_sales(item_id):
             total_gross += gross
             total_discounts += discounts
             total_taxes += taxes
+            total_margin += margin
+            total_cogs += cogs
+            if day_cost_per_unit is not None and qty:
+                cost_days_available += 1
 
         span_days = len(daily) if daily else 0
         avg_qty_per_day = total_qty / span_days if span_days else 0.0
@@ -914,6 +970,8 @@ def item_daily_sales(item_id):
                 'total_gross_sales': total_gross,
                 'total_discounts': total_discounts,
                 'total_taxes': total_taxes,
+                'total_cogs': total_cogs,
+                'total_margin': total_margin,
                 'avg_qty_per_day': avg_qty_per_day,
                 'avg_net_per_day': avg_net_per_day,
                 'avg_gross_per_day': avg_gross_per_day,
@@ -922,6 +980,10 @@ def item_daily_sales(item_id):
                 'avg_gross_price': total_gross / total_qty if total_qty else 0.0,
                 'discount_per_unit': total_discounts / total_qty if total_qty else 0.0,
                 'discount_rate_pct': ((total_discounts / total_gross) * 100) if total_gross else 0.0,
+                'fallback_cost_per_unit': fallback_cost_per_unit,
+                'margin_pct': ((total_margin / total_gross) * 100) if total_gross and cost_days_available > 0 else None,
+                'avg_margin_per_unit': total_margin / total_qty if total_qty and cost_days_available > 0 else None,
+                'historical_cost_days': cost_days_available,
                 'recent_avg_qty': recent_avg_qty,
                 'previous_avg_qty': prev_avg_qty,
                 'qty_trend_pct': qty_trend_pct,

@@ -1115,6 +1115,8 @@ def recalculate_item_cost(item_id):
 def recalculate_all_items():
     """Recalculate costs for all unarchived items, persist snapshots, and return a run summary."""
     cursor = get_db_cursor()
+    run_id = None
+    summary = {'run_id': None, 'updated': [], 'errors': [], 'scanned': 0}
     try:
         cursor.execute(
             """
@@ -1126,17 +1128,29 @@ def recalculate_all_items():
         )
         run = cursor.fetchone() or {}
         run_id = run.get('run_id')
+        summary['run_id'] = run_id
         cursor.connection.commit()
 
         cursor.execute("SELECT item_id, name, yield_unit FROM items WHERE archived IS NULL OR archived = FALSE ORDER BY name ASC, item_id ASC")
         items = cursor.fetchall()
-        summary = {'run_id': run_id, 'updated': [], 'errors': [], 'scanned': len(items)}
+        summary['scanned'] = len(items)
         for it in items:
             item_id = it.get('item_id')
             unit = (it.get('yield_unit') or '').strip() or 'each'
             try:
                 res = resolve_item_cost(item_id, unit, 1)
-                snapshot = insert_cost_snapshot(item_id, unit, res, run_id=run_id)
+                snapshot = {}
+                try:
+                    snapshot = insert_cost_snapshot(item_id, unit, res, run_id=run_id) or {}
+                except Exception as snapshot_err:
+                    logging.exception("Failed to insert cost snapshot for item_id=%s", item_id)
+                    summary['errors'].append({
+                        'item_id': item_id,
+                        'name': it.get('name'),
+                        'unit': unit,
+                        'issue_code': 'snapshot_insert_failed',
+                        'message': str(snapshot_err)
+                    })
                 if res.get('status') == 'ok':
                     c = get_db_cursor()
                     try:
@@ -1163,10 +1177,14 @@ def recalculate_all_items():
                         'issue_code': friendly.get('issue_code'),
                         'message': friendly.get('message'),
                         'details': friendly.get('details'),
-                        'snapshot_id': snapshot.get('snapshot_id')
-                    })
+                            'snapshot_id': snapshot.get('snapshot_id')
+                        })
             except Exception as e:
-                snapshot = insert_cost_snapshot(item_id, unit, {'status': 'error', 'issue': 'exception', 'message': str(e)}, run_id=run_id)
+                snapshot = {}
+                try:
+                    snapshot = insert_cost_snapshot(item_id, unit, {'status': 'error', 'issue': 'exception', 'message': str(e)}, run_id=run_id) or {}
+                except Exception:
+                    logging.exception("Failed to insert exception snapshot for item_id=%s", item_id)
                 summary['errors'].append({
                     'item_id': item_id,
                     'name': it.get('name'),
@@ -1192,14 +1210,95 @@ def recalculate_all_items():
                 len(summary['updated']),
                 len(summary['errors']),
                 psycopg2.extras.Json({
-                    'updated': summary['updated'][:25],
-                    'errors': summary['errors'][:25]
+                    'updated': [
+                        {
+                            'item_id': row.get('item_id'),
+                            'name': row.get('name'),
+                            'cost_per_unit': row.get('cost_per_unit'),
+                            'unit': row.get('unit'),
+                            'snapshot_id': row.get('snapshot_id')
+                        }
+                        for row in summary['updated'][:25]
+                    ],
+                    'errors': [
+                        {
+                            'item_id': row.get('item_id'),
+                            'name': row.get('name'),
+                            'unit': row.get('unit'),
+                            'issue_code': row.get('issue_code'),
+                            'message': row.get('message'),
+                            'snapshot_id': row.get('snapshot_id')
+                        }
+                        for row in summary['errors'][:25]
+                    ]
                 }),
                 run_id
             )
         )
         cursor.connection.commit()
         return jsonify(summary)
+    except Exception as e:
+        logging.exception("Bulk cost recalculation failed")
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        if run_id is not None:
+            try:
+                fail_cursor = get_db_cursor()
+                fail_cursor.execute(
+                    """
+                    UPDATE cost_recalculation_runs
+                    SET completed_at = NOW(),
+                        status = %s,
+                        items_scanned = %s,
+                        items_updated = %s,
+                        items_failed = %s,
+                        summary = %s
+                    WHERE run_id = %s
+                    """,
+                    (
+                        'failed',
+                        summary.get('scanned', 0),
+                        len(summary.get('updated', [])),
+                        len(summary.get('errors', [])),
+                        psycopg2.extras.Json({
+                            'updated': summary.get('updated', [])[:25],
+                            'errors': [
+                                {
+                                    'item_id': row.get('item_id'),
+                                    'name': row.get('name'),
+                                    'unit': row.get('unit'),
+                                    'issue_code': row.get('issue_code'),
+                                    'message': row.get('message'),
+                                    'snapshot_id': row.get('snapshot_id')
+                                }
+                                for row in summary.get('errors', [])[:25]
+                            ],
+                            'fatal_error': str(e)
+                        }),
+                        run_id
+                    )
+                )
+                fail_cursor.connection.commit()
+                fail_cursor.close()
+            except Exception:
+                logging.exception("Failed to persist failed recalculation run")
+        return jsonify({
+            'run_id': run_id,
+            'error': 'Unable to recalculate all costs.',
+            'message': 'Some items could not be recalculated. Review the items listed below.',
+            'updated': summary.get('updated', []),
+            'items_updated': len(summary.get('updated', [])),
+            'errors': summary.get('errors', []) + [{
+                'item_id': None,
+                'name': 'Bulk recalculation',
+                'unit': None,
+                'issue_code': 'fatal_error',
+                'message': str(e)
+            }],
+            'items_failed': len(summary.get('errors', [])) + 1
+        }), 500
     finally:
         try:
             cursor.close()

@@ -5,7 +5,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { API_URL } from './config';
 import { api } from './utils/auth';
 import { canEdit } from './utils/permissions';
-import SalesSparkline from './components/SalesSparkline';
+import ItemSalesMarginChart from './components/ItemSalesMarginChart';
 
 function getLocalUser() {
   try {
@@ -423,6 +423,12 @@ function ItemDetail() {
                 sub={`Gross ${formatCurrency(salesSummary.avg_gross_price)} • Avg discount ${formatCurrency(salesSummary.avg_gross_price - salesSummary.avg_net_price)}`}
               />
               <ItemInsightTile
+                label="Margin"
+                value={salesSummary.margin_pct != null ? `${salesSummary.margin_pct.toFixed(1)}%` : '—'}
+                sub={salesSummary.total_margin != null ? `${formatCurrency(salesSummary.total_margin)} gross margin • ${formatCurrency(salesSummary.avg_margin_per_unit || 0)} / unit` : 'Historical cost basis unavailable'}
+                highlight={salesSummary.margin_pct != null ? (salesSummary.margin_pct >= 0 ? 'positive' : 'negative') : null}
+              />
+              <ItemInsightTile
                 label="Projected need (7d)"
                 value={`${formatNumber(salesSummary.projected_next_week_qty, 0)} units`}
                 sub="Best estimate for next prep cycle"
@@ -440,10 +446,10 @@ function ItemDetail() {
             </div>
 
             <div className="mt-6">
-              <SalesSparkline data={salesInsights.daily} accessor="qty_sold" height={80} stroke="#16a34a" />
+              <ItemSalesMarginChart data={salesInsights.daily} height={240} />
               <div className="text-xs text-gray-500 mt-2">
                 Last sale: {salesSummary.last_sale_date ? formatBusinessDate(salesSummary.last_sale_date) : 'no sales yet'} •
-                {' '}Net {formatCurrency(salesSummary.avg_net_price || avgUnitPrice)} / unit • Gross {formatCurrency(salesSummary.avg_gross_price)} / unit
+                {' '}Net {formatCurrency(salesSummary.avg_net_price || avgUnitPrice)} / unit • Gross {formatCurrency(salesSummary.avg_gross_price)} / unit • Gross margin {salesSummary.margin_pct != null ? `${salesSummary.margin_pct.toFixed(1)}%` : '—'}
               </div>
             </div>
 
@@ -465,7 +471,10 @@ function ItemDetail() {
                       <th className="px-3 py-2 text-right">Gross Sales</th>
                       <th className="px-3 py-2 text-right">Discounts</th>
                       <th className="px-3 py-2 text-right">Net Sales</th>
+                      <th className="px-3 py-2 text-right">COGS</th>
+                      <th className="px-3 py-2 text-right">Margin</th>
                       <th className="px-3 py-2 text-right">Discount %</th>
+                      <th className="px-3 py-2 text-right">Margin %</th>
                       <th className="px-3 py-2 text-right">Avg Net</th>
                     </tr>
                   </thead>
@@ -477,7 +486,10 @@ function ItemDetail() {
                         <td className="px-3 py-2 text-right">{formatCurrency(day.gross_sales)}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.discounts)}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.net_sales)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.cogs)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.margin)}</td>
                         <td className="px-3 py-2 text-right">{Number(day.discount_rate_pct || 0).toFixed(1)}%</td>
+                        <td className="px-3 py-2 text-right">{day.margin_pct != null ? `${Number(day.margin_pct).toFixed(1)}%` : '—'}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.avg_item_price)}</td>
                       </tr>
                     ))}
