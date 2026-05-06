@@ -31,8 +31,8 @@ function NewItemForm() {
   const [newIngredientName, setNewIngredientName] = useState('');
   const [fixingIndex, setFixingIndex] = useState(null);
   const [fixData, setFixData] = useState(null);
-  const [yieldQty, setYieldQty] = useState('');
-  const [yieldUnit, setYieldUnit] = useState('');
+  const [yieldQty, setYieldQty] = useState('1');
+  const [yieldUnit, setYieldUnit] = useState('each');
   const [filterText, setFilterText] = useState('');
   const [user, setUser] = useState(getLocalUser());
   const [allowedCreate, setAllowedCreate] = useState(false);

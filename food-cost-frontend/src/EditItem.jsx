@@ -29,8 +29,8 @@ function EditItem() {
     description: '',
     notes: '',
     is_archived: false,
-    yield_qty: '',
-    yield_unit: ''
+    yield_qty: '1',
+    yield_unit: 'each'
   });
   const [ingredients, setIngredients] = useState([]);
   const [recipe, setRecipe] = useState([]);
@@ -78,8 +78,8 @@ function EditItem() {
             description: data.description || '',
             notes: data.process_notes || '',
             is_archived: !!data.archived,
-            yield_qty: data.yield_qty ?? '',
-            yield_unit: data.yield_unit ?? ''
+            yield_qty: data.yield_qty ?? '1',
+            yield_unit: data.yield_unit ?? 'each'
           });
         }
 

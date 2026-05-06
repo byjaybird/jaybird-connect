@@ -1026,7 +1026,7 @@ def inventory_reconciliation_latest():
 
             # Yield scaling: divide totals by effective yield to get per-unit usage
             yield_qty = item.get('yield_qty')
-            yield_unit = (item.get('yield_unit') or '').strip().lower() or output_unit or 'unit'
+            yield_unit = (item.get('yield_unit') or '').strip().lower() or output_unit or 'each'
 
             try:
                 yield_qty_val = float(yield_qty) if yield_qty is not None else 1.0

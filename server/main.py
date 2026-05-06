@@ -220,6 +220,16 @@ def parse_float(val):
     except (TypeError, ValueError):
         return None
 
+
+def normalize_item_yield(yield_qty, yield_unit):
+    qty = parse_float(yield_qty)
+    unit = (yield_unit or '').strip().lower()
+    if qty is None or qty <= 0:
+        qty = 1.0
+    if not unit:
+        unit = 'each'
+    return qty, unit
+
 @app.route('/')
 def index():
     return "Food Cost Tracker API Running"
@@ -518,8 +528,7 @@ def items():
     if request.method == 'POST':
         data = request.get_json()
         # parse optional yield fields
-        yield_qty = parse_float(data.get('yield_qty'))
-        yield_unit = data.get('yield_unit')
+        yield_qty, yield_unit = normalize_item_yield(data.get('yield_qty'), data.get('yield_unit'))
         price = parse_float(data.get('price'))
         cursor.execute("""
             INSERT INTO items (name, category, is_prep, is_for_sale, price, description, process_notes, yield_qty, yield_unit)
@@ -565,6 +574,8 @@ def items():
             WHERE i.archived IS NULL OR i.archived = FALSE
         """)
         items = cursor.fetchall()
+        for item in items:
+            item['yield_qty'], item['yield_unit'] = normalize_item_yield(item.get('yield_qty'), item.get('yield_unit'))
         cursor.connection.close()
         return jsonify(items)
 
@@ -578,6 +589,7 @@ def get_item_detail(item_id):
     item = cursor.fetchone()
     cursor.connection.close()
     if item:
+        item['yield_qty'], item['yield_unit'] = normalize_item_yield(item.get('yield_qty'), item.get('yield_unit'))
         return jsonify(item)
     else:
         return jsonify({'error': 'Item not found'}), 404
@@ -597,8 +609,7 @@ def update_item(item_id):
     description = data.get('description', '')
     process_notes = data.get('process_notes', '')
     archived = data.get('archived', data.get('is_archived', False))
-    yield_qty = parse_float(data.get('yield_qty'))
-    yield_unit = data.get('yield_unit')
+    yield_qty, yield_unit = normalize_item_yield(data.get('yield_qty'), data.get('yield_unit'))
 
     try:
         cursor.execute("""
@@ -732,8 +743,7 @@ def create_item():
     description = data.get('description', '').strip()
     process_notes = data.get('process_notes', '').strip()
     archived = bool(data.get('archived', data.get('is_archived', False)))
-    yield_qty = parse_float(data.get('yield_qty'))
-    yield_unit = data.get('yield_unit')
+    yield_qty, yield_unit = normalize_item_yield(data.get('yield_qty'), data.get('yield_unit'))
 
     try:
         cursor.execute("""
