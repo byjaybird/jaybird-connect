@@ -252,6 +252,7 @@ function ItemDetail() {
   const hasSalesHistory = Array.isArray(salesInsights?.daily) && salesInsights.daily.some((d) => (d.qty_sold || d.net_sales));
   const hasPositiveSales = Boolean(salesSummary?.busiest_day);
   const avgUnitPrice = salesSummary.avg_qty_per_day ? (salesSummary.avg_net_per_day || 0) / (salesSummary.avg_qty_per_day || 1) : 0;
+  const grossToNetDelta = Number(salesSummary.total_gross_sales || 0) - Number(salesSummary.total_net_sales || 0);
 
   if (!item) return <div className="p-4">Loading item...</div>;
 
@@ -394,7 +395,7 @@ function ItemDetail() {
           <div className="text-gray-600 mt-4 text-sm">No sales history yet for this item. Make sure sales uploads are mapped.</div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
               <ItemInsightTile
                 label="Units sold"
                 value={formatNumber(salesSummary.total_qty)}
@@ -404,6 +405,22 @@ function ItemDetail() {
                 label="Net sales"
                 value={formatCurrency(salesSummary.total_net_sales)}
                 sub={`Avg ${formatCurrency(salesSummary.avg_net_per_day)} / day`}
+              />
+              <ItemInsightTile
+                label="Gross sales"
+                value={formatCurrency(salesSummary.total_gross_sales)}
+                sub={`Before discounts • Avg ${formatCurrency(salesSummary.avg_gross_per_day)} / day`}
+              />
+              <ItemInsightTile
+                label="Discounts"
+                value={formatCurrency(salesSummary.total_discounts)}
+                sub={`${(salesSummary.discount_rate_pct || 0).toFixed(1)}% of gross • ${formatCurrency(salesSummary.discount_per_unit || 0)} / unit`}
+                highlight={grossToNetDelta > 0 ? 'negative' : null}
+              />
+              <ItemInsightTile
+                label="Realized price"
+                value={formatCurrency(salesSummary.avg_net_price)}
+                sub={`Gross ${formatCurrency(salesSummary.avg_gross_price)} • Avg discount ${formatCurrency(salesSummary.avg_gross_price - salesSummary.avg_net_price)}`}
               />
               <ItemInsightTile
                 label="Projected need (7d)"
@@ -426,7 +443,7 @@ function ItemDetail() {
               <SalesSparkline data={salesInsights.daily} accessor="qty_sold" height={80} stroke="#16a34a" />
               <div className="text-xs text-gray-500 mt-2">
                 Last sale: {salesSummary.last_sale_date ? formatBusinessDate(salesSummary.last_sale_date) : 'no sales yet'} •
-                {' '}Avg price {formatCurrency(avgUnitPrice)}
+                {' '}Net {formatCurrency(salesSummary.avg_net_price || avgUnitPrice)} / unit • Gross {formatCurrency(salesSummary.avg_gross_price)} / unit
               </div>
             </div>
 
@@ -445,8 +462,11 @@ function ItemDetail() {
                     <tr>
                       <th className="px-3 py-2">Date</th>
                       <th className="px-3 py-2 text-right">Units</th>
+                      <th className="px-3 py-2 text-right">Gross Sales</th>
+                      <th className="px-3 py-2 text-right">Discounts</th>
                       <th className="px-3 py-2 text-right">Net Sales</th>
-                      <th className="px-3 py-2 text-right">Avg Price</th>
+                      <th className="px-3 py-2 text-right">Discount %</th>
+                      <th className="px-3 py-2 text-right">Avg Net</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -454,7 +474,10 @@ function ItemDetail() {
                       <tr key={day.business_date} className="border-t">
                         <td className="px-3 py-2">{formatBusinessDate(day.business_date)}</td>
                         <td className="px-3 py-2 text-right">{formatNumber(day.qty_sold)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.gross_sales)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(day.discounts)}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.net_sales)}</td>
+                        <td className="px-3 py-2 text-right">{Number(day.discount_rate_pct || 0).toFixed(1)}%</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(day.avg_item_price)}</td>
                       </tr>
                     ))}

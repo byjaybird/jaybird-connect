@@ -831,7 +831,9 @@ def item_daily_sales(item_id):
                 business_date,
                 SUM(COALESCE(item_qty, 0)) AS qty_sold,
                 SUM(COALESCE(net_sales, 0)) AS net_sales,
-                SUM(COALESCE(gross_sales, 0)) AS gross_sales
+                SUM(COALESCE(gross_sales, 0)) AS gross_sales,
+                SUM(COALESCE(discount_amount, 0)) AS discounts,
+                SUM(COALESCE(tax_amount, 0)) AS taxes
             FROM sales_daily_lines
             WHERE {where_clause}
               AND business_date BETWEEN %s AND %s
@@ -846,28 +848,42 @@ def item_daily_sales(item_id):
         daily = []
         total_qty = 0.0
         total_net = 0.0
+        total_gross = 0.0
+        total_discounts = 0.0
+        total_taxes = 0.0
         last_sale_date = None
         for day in daterange(start_date, end_date):
             record = rows_by_day.get(day) or {}
             qty = float(record.get('qty_sold') or 0)
             net = float(record.get('net_sales') or 0)
             gross = float(record.get('gross_sales') or 0)
+            discounts = float(record.get('discounts') or 0)
+            taxes = float(record.get('taxes') or 0)
             entry = {
                 'business_date': day.isoformat(),
                 'qty_sold': qty,
                 'net_sales': net,
                 'gross_sales': gross,
-                'avg_item_price': float(net / qty) if qty else 0.0
+                'discounts': discounts,
+                'taxes': taxes,
+                'avg_item_price': float(net / qty) if qty else 0.0,
+                'avg_gross_price': float(gross / qty) if qty else 0.0,
+                'discount_per_unit': float(discounts / qty) if qty else 0.0,
+                'discount_rate_pct': float((discounts / gross) * 100) if gross else 0.0
             }
             if qty > 0:
                 last_sale_date = day.isoformat()
             daily.append(entry)
             total_qty += qty
             total_net += net
+            total_gross += gross
+            total_discounts += discounts
+            total_taxes += taxes
 
         span_days = len(daily) if daily else 0
         avg_qty_per_day = total_qty / span_days if span_days else 0.0
         avg_net_per_day = total_net / span_days if span_days else 0.0
+        avg_gross_per_day = total_gross / span_days if span_days else 0.0
 
         # Recent demand vs previous period for forecasting
         recent_window = min(7, span_days)
@@ -895,8 +911,17 @@ def item_daily_sales(item_id):
             'summary': {
                 'total_qty': total_qty,
                 'total_net_sales': total_net,
+                'total_gross_sales': total_gross,
+                'total_discounts': total_discounts,
+                'total_taxes': total_taxes,
                 'avg_qty_per_day': avg_qty_per_day,
                 'avg_net_per_day': avg_net_per_day,
+                'avg_gross_per_day': avg_gross_per_day,
+                'avg_discount_per_day': total_discounts / span_days if span_days else 0.0,
+                'avg_net_price': total_net / total_qty if total_qty else 0.0,
+                'avg_gross_price': total_gross / total_qty if total_qty else 0.0,
+                'discount_per_unit': total_discounts / total_qty if total_qty else 0.0,
+                'discount_rate_pct': ((total_discounts / total_gross) * 100) if total_gross else 0.0,
                 'recent_avg_qty': recent_avg_qty,
                 'previous_avg_qty': prev_avg_qty,
                 'qty_trend_pct': qty_trend_pct,

@@ -24,12 +24,18 @@ const pct = (num) => (num == null ? '—' : `${num > 0 ? '▲' : num < 0 ? '▼'
 function Prices() {
   const [days, setDays] = useState(30);
   const [dashboard, setDashboard] = useState(null);
+  const [history, setHistory] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [editingIdx, setEditingIdx] = useState(null);
   const [editQuote, setEditQuote] = useState(null);
   const [loadingDash, setLoadingDash] = useState(true);
   const [errorDash, setErrorDash] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState(null);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcResult, setRecalcResult] = useState(null);
+  const [recentRuns, setRecentRuns] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,6 +58,41 @@ function Prices() {
       });
     return () => { cancelled = true; };
   }, [days]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingHistory(true);
+    setHistoryError(null);
+    api.get('/api/prices/margin_history', { params: { days }, timeout: 30000 })
+      .then((res) => {
+        if (cancelled) return;
+        setHistory(res.data);
+      })
+      .catch((err) => {
+        console.error('Failed to load historical margin data', err);
+        if (cancelled) return;
+        setHistory(null);
+        setHistoryError('Unable to load historical margin data.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => { cancelled = true; };
+  }, [days]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/prices/recalculation_runs', { params: { limit: 5 } })
+      .then((res) => {
+        if (cancelled) return;
+        setRecentRuns(Array.isArray(res.data?.runs) ? res.data.runs : []);
+      })
+      .catch((err) => {
+        console.error('Failed to load recalculation runs', err);
+        if (!cancelled) setRecentRuns([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -135,6 +176,33 @@ function Prices() {
     return rows.sort((a, b) => (Number(b.net_sales || 0) - Number(a.net_sales || 0)));
   }, [dashboard]);
 
+  const latestRun = recalcResult || recentRuns[0] || null;
+
+  const refreshSnapshotsAndMargins = async () => {
+    const [dashRes, historyRes, runsRes] = await Promise.all([
+      api.get('/api/prices/margin_dashboard', { params: { days }, timeout: 30000 }),
+      api.get('/api/prices/margin_history', { params: { days }, timeout: 30000 }),
+      api.get('/api/prices/recalculation_runs', { params: { limit: 5 } })
+    ]);
+    setDashboard(dashRes.data);
+    setHistory(historyRes.data);
+    setRecentRuns(Array.isArray(runsRes.data?.runs) ? runsRes.data.runs : []);
+  };
+
+  const handleRecalculateAll = async () => {
+    setRecalcLoading(true);
+    try {
+      const res = await api.post('/api/items/recalculate_all');
+      setRecalcResult(res.data);
+      await refreshSnapshotsAndMargins();
+    } catch (err) {
+      console.error('Failed to recalculate all item costs', err);
+      alert(err.response?.data?.error || 'Failed to recalculate all item costs');
+    } finally {
+      setRecalcLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -170,6 +238,13 @@ function Prices() {
           >
             Upload Sales
           </Link>
+          <button
+            onClick={handleRecalculateAll}
+            disabled={recalcLoading}
+            className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 text-sm font-semibold disabled:opacity-60"
+          >
+            {recalcLoading ? 'Recalculating…' : 'Recalculate All Costs'}
+          </button>
         </div>
       </div>
 
@@ -240,6 +315,98 @@ function Prices() {
                   </ul>
                 ) : <div className="text-sm text-gray-500">All costed.</div>}
               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Historical Margin</h2>
+                  <p className="text-sm text-gray-500">Uses the latest cost snapshot available on each sale date.</p>
+                </div>
+                <div className="text-sm text-gray-600">{history?.window?.start_date} → {history?.window?.end_date}</div>
+              </div>
+              {loadingHistory ? (
+                <div className="text-sm text-gray-600">Loading historical margin…</div>
+              ) : historyError ? (
+                <div className="text-sm text-red-600">{historyError}</div>
+              ) : !history ? (
+                <div className="text-sm text-gray-600">No historical snapshot data available.</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-4">
+                    <StatCard label="Historical Margin $" value={formatCurrency(history.summary?.margin)} sub={history.summary?.margin_pct != null ? `${history.summary.margin_pct.toFixed(1)}% margin` : '—'} />
+                    <StatCard label="Historical COGS" value={formatCurrency(history.summary?.cogs)} sub={history.summary?.avg_cogs_per_unit != null ? `${formatCurrency(history.summary.avg_cogs_per_unit)} / unit` : '—'} />
+                    <StatCard label="Gross Sales" value={formatCurrency(history.summary?.gross_sales)} sub={history.summary?.discount_rate_pct != null ? `${history.summary.discount_rate_pct.toFixed(1)}% discounted` : '—'} />
+                    <StatCard label="Net Sales" value={formatCurrency(history.summary?.net_sales)} sub={history.summary?.avg_realized_price != null ? `${formatCurrency(history.summary.avg_realized_price)} / unit` : '—'} />
+                    <StatCard label="Uncosted Qty" value={formatNumber(history.summary?.uncosted_qty)} sub={`${formatNumber(history.summary?.uncosted_item_days)} item-days missing snapshots`} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500 mb-2">Gross sales</div>
+                      <SalesSparkline data={history.daily} accessor="gross_sales" height={80} stroke="#1d4ed8" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500 mb-2">COGS</div>
+                      <SalesSparkline data={history.daily} accessor="cogs" height={80} stroke="#b45309" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500 mb-2">Margin</div>
+                      <SalesSparkline data={history.daily} accessor="margin" height={80} stroke="#15803d" />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="bg-white rounded shadow p-6 space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold">Recent Cost Runs</h2>
+                <p className="text-sm text-gray-500">Bulk recalculation results and missing-cost alerts.</p>
+              </div>
+              {latestRun ? (
+                <div className="border rounded p-4 bg-gray-50">
+                  <div className="font-semibold">Run #{latestRun.run_id || 'current'}</div>
+                  <div className="text-sm text-gray-600">
+                    {latestRun.items_updated || latestRun.updated?.length || 0} updated • {latestRun.items_failed || latestRun.errors?.length || 0} failed
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">No recalculation runs yet.</div>
+              )}
+              {latestRun?.errors?.length ? (
+                <div>
+                  <div className="text-sm font-semibold text-gray-800 mb-2">Latest failures</div>
+                  <ul className="space-y-2 text-sm">
+                    {latestRun.errors.slice(0, 8).map((err) => (
+                      <li key={`${err.item_id}-${err.issue_code || 'issue'}`} className="border rounded p-3">
+                        <div className="flex justify-between gap-3">
+                          <Link to={`/item/${err.item_id}`} className="text-blue-600 underline">{err.name || `Item ${err.item_id}`}</Link>
+                          <span className="text-red-600">{err.issue_code || 'error'}</span>
+                        </div>
+                        <div className="text-gray-600 mt-1">{err.message || 'Missing cost inputs or conversions.'}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : latestRun?.summary?.errors?.length ? (
+                <div>
+                  <div className="text-sm font-semibold text-gray-800 mb-2">Latest failures</div>
+                  <ul className="space-y-2 text-sm">
+                    {latestRun.summary.errors.slice(0, 8).map((err) => (
+                      <li key={`${err.item_id}-${err.issue_code || 'issue'}`} className="border rounded p-3">
+                        <div className="flex justify-between gap-3">
+                          <Link to={`/item/${err.item_id}`} className="text-blue-600 underline">{err.name || `Item ${err.item_id}`}</Link>
+                          <span className="text-red-600">{err.issue_code || 'error'}</span>
+                        </div>
+                        <div className="text-gray-600 mt-1">{err.message || 'Missing cost inputs or conversions.'}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="text-sm text-green-700">No missing costs or conversions in the latest run.</div>
+              )}
             </div>
           </div>
 

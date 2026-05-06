@@ -230,6 +230,75 @@ def normalize_item_yield(yield_qty, yield_unit):
         unit = 'each'
     return qty, unit
 
+
+def summarize_cost_result(result):
+    if isinstance(result, dict) and result.get('status') == 'ok':
+        return {
+            'status': 'ok',
+            'issue_code': None,
+            'message': None,
+            'details': None,
+            'cost_per_unit': float(result.get('cost_per_unit')) if result.get('cost_per_unit') is not None else None
+        }
+
+    issue_code = None
+    message = None
+    details = result
+    if isinstance(result, dict):
+        issue_code = result.get('issue') or result.get('status') or 'error'
+        message = result.get('message')
+    else:
+        issue_code = 'exception'
+        message = str(result)
+    return {
+        'status': 'error',
+        'issue_code': issue_code,
+        'message': message,
+        'details': details,
+        'cost_per_unit': None
+    }
+
+
+def insert_cost_snapshot(item_id, unit, result, run_id=None):
+    snapshot = summarize_cost_result(result)
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO item_cost_snapshots (
+                run_id, item_id, unit, cost_per_unit, status, issue_code, issue_message, issue_details
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING snapshot_id, created_at
+            """,
+            (
+                run_id,
+                item_id,
+                unit,
+                snapshot['cost_per_unit'],
+                snapshot['status'],
+                snapshot['issue_code'],
+                snapshot['message'],
+                psycopg2.extras.Json(snapshot['details']) if snapshot['details'] is not None else None
+            )
+        )
+        row = cursor.fetchone() or {}
+        cursor.connection.commit()
+        snapshot['snapshot_id'] = row.get('snapshot_id')
+        snapshot['created_at'] = row.get('created_at')
+        return snapshot
+    except Exception:
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
 @app.route('/')
 def index():
     return "Food Cost Tracker API Running"
@@ -1010,6 +1079,7 @@ def recalculate_item_cost(item_id):
             return jsonify({'error': 'missing_unit', 'message': 'No yield_unit on item and no unit specified. Provide ?unit=<unit> or set item.yield_unit'}), 400
 
         result = resolve_item_cost(item_id, effective_unit, 1)
+        snapshot = insert_cost_snapshot(item_id, effective_unit, result)
         if result.get('status') == 'ok':
             cost_per_unit = result.get('cost_per_unit')
             c = get_db_cursor()
@@ -1021,7 +1091,7 @@ def recalculate_item_cost(item_id):
                     c.close()
                 except Exception:
                     pass
-            return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit, 'unit': effective_unit})
+            return jsonify({'status': 'ok', 'cost_per_unit': cost_per_unit, 'unit': effective_unit, 'snapshot_id': snapshot.get('snapshot_id')})
         else:
             # Provide a user-friendly message for the UI while keeping technical details
             issue = result.get('issue') if isinstance(result, dict) else None
@@ -1039,7 +1109,8 @@ def recalculate_item_cost(item_id):
                 'message': user_message,
                 'computed_cost': None,
                 'unit': effective_unit,
-                'debug': result
+                'debug': result,
+                'snapshot_id': snapshot.get('snapshot_id')
             }), 200
 
     finally:
@@ -1051,35 +1122,92 @@ def recalculate_item_cost(item_id):
 
 @app.route('/api/items/recalculate_all', methods=['POST'])
 def recalculate_all_items():
-    """Recalculate costs for all prep items. Returns summary of successes and failures."""
+    """Recalculate costs for all unarchived items, persist snapshots, and return a run summary."""
     cursor = get_db_cursor()
     try:
-        cursor.execute("SELECT item_id, yield_unit FROM items WHERE is_prep = TRUE AND (archived IS NULL OR archived = FALSE)")
+        cursor.execute(
+            """
+            INSERT INTO cost_recalculation_runs (trigger_source, status)
+            VALUES (%s, %s)
+            RETURNING run_id
+            """,
+            ('manual_bulk', 'running')
+        )
+        run = cursor.fetchone() or {}
+        run_id = run.get('run_id')
+        cursor.connection.commit()
+
+        cursor.execute("SELECT item_id, name, yield_unit FROM items WHERE archived IS NULL OR archived = FALSE ORDER BY name ASC, item_id ASC")
         items = cursor.fetchall()
-        summary = {'updated': [], 'errors': []}
+        summary = {'run_id': run_id, 'updated': [], 'errors': [], 'scanned': len(items)}
         for it in items:
             item_id = it.get('item_id')
-            unit = it.get('yield_unit')
-            if not unit:
-                summary['errors'].append({'item_id': item_id, 'issue': 'missing_yield_unit'})
-                continue
+            unit = (it.get('yield_unit') or '').strip() or 'each'
             try:
                 res = resolve_item_cost(item_id, unit, 1)
+                snapshot = insert_cost_snapshot(item_id, unit, res, run_id=run_id)
                 if res.get('status') == 'ok':
                     c = get_db_cursor()
                     try:
                         c.execute("UPDATE items SET cost = %s WHERE item_id = %s", (res.get('cost_per_unit'), item_id))
                         c.connection.commit()
-                        summary['updated'].append(item_id)
+                        summary['updated'].append({
+                            'item_id': item_id,
+                            'name': it.get('name'),
+                            'cost_per_unit': float(res.get('cost_per_unit')) if res.get('cost_per_unit') is not None else None,
+                            'unit': unit,
+                            'snapshot_id': snapshot.get('snapshot_id')
+                        })
                     finally:
                         try:
                             c.close()
                         except Exception:
                             pass
                 else:
-                    summary['errors'].append({'item_id': item_id, 'issue': res})
+                    friendly = summarize_cost_result(res)
+                    summary['errors'].append({
+                        'item_id': item_id,
+                        'name': it.get('name'),
+                        'unit': unit,
+                        'issue_code': friendly.get('issue_code'),
+                        'message': friendly.get('message'),
+                        'details': friendly.get('details'),
+                        'snapshot_id': snapshot.get('snapshot_id')
+                    })
             except Exception as e:
-                summary['errors'].append({'item_id': item_id, 'issue': str(e)})
+                snapshot = insert_cost_snapshot(item_id, unit, {'status': 'error', 'issue': 'exception', 'message': str(e)}, run_id=run_id)
+                summary['errors'].append({
+                    'item_id': item_id,
+                    'name': it.get('name'),
+                    'unit': unit,
+                    'issue_code': 'exception',
+                    'message': str(e),
+                    'snapshot_id': snapshot.get('snapshot_id')
+                })
+        cursor.execute(
+            """
+            UPDATE cost_recalculation_runs
+            SET completed_at = NOW(),
+                status = %s,
+                items_scanned = %s,
+                items_updated = %s,
+                items_failed = %s,
+                summary = %s
+            WHERE run_id = %s
+            """,
+            (
+                'completed_with_errors' if summary['errors'] else 'completed',
+                summary['scanned'],
+                len(summary['updated']),
+                len(summary['errors']),
+                psycopg2.extras.Json({
+                    'updated': summary['updated'][:25],
+                    'errors': summary['errors'][:25]
+                }),
+                run_id
+            )
+        )
+        cursor.connection.commit()
         return jsonify(summary)
     finally:
         try:

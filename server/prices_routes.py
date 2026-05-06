@@ -29,6 +29,22 @@ def _iso(val):
         return val.isoformat()
     return val
 
+
+def _normalize_run(row):
+    if not row:
+        return None
+    return {
+        'run_id': row.get('run_id'),
+        'trigger_source': row.get('trigger_source'),
+        'status': row.get('status'),
+        'started_at': _iso(row.get('started_at')),
+        'completed_at': _iso(row.get('completed_at')),
+        'items_scanned': int(row.get('items_scanned') or 0),
+        'items_updated': int(row.get('items_updated') or 0),
+        'items_failed': int(row.get('items_failed') or 0),
+        'summary': row.get('summary')
+    }
+
 @prices_bp.route('/price_quotes', methods=['GET'])
 def get_price_quotes():
     """Return all price quotes, optionally filtered by ingredient_id."""
@@ -464,6 +480,177 @@ def margin_dashboard():
             'daily': daily
         }
         return jsonify(payload)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@prices_bp.route('/prices/margin_history', methods=['GET'])
+def margin_history():
+    """Historical daily gross/net/discount/cogs/margin using latest cost snapshot as of each sale day."""
+    today = date.today()
+    end_date = _parse_date_arg(request.args.get('end_date'), today)
+
+    try:
+        days = int(request.args.get('days', 90))
+    except Exception:
+        days = 90
+    days = max(7, min(days, 365))
+
+    start_date = _parse_date_arg(request.args.get('start_date'))
+    if not start_date:
+        start_date = end_date - timedelta(days=days - 1)
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            WITH sales_by_item_day AS (
+                SELECT
+                    s.business_date::date AS business_date,
+                    s.item_id,
+                    SUM(COALESCE(s.item_qty, 0)) AS qty,
+                    SUM(COALESCE(s.net_sales, 0)) AS net_sales,
+                    SUM(COALESCE(s.gross_sales, 0)) AS gross_sales,
+                    SUM(COALESCE(s.discount_amount, 0)) AS discounts
+                FROM sales_daily_lines s
+                WHERE s.business_date BETWEEN %s AND %s
+                  AND s.item_id IS NOT NULL
+                GROUP BY s.business_date::date, s.item_id
+            ),
+            costed AS (
+                SELECT
+                    sid.business_date,
+                    sid.item_id,
+                    sid.qty,
+                    sid.net_sales,
+                    sid.gross_sales,
+                    sid.discounts,
+                    snap.cost_per_unit
+                FROM sales_by_item_day sid
+                LEFT JOIN LATERAL (
+                    SELECT snap_choice.cost_per_unit
+                    FROM (
+                        SELECT ics.cost_per_unit, ics.created_at, ics.snapshot_id, 0 AS priority
+                        FROM item_cost_snapshots ics
+                        WHERE ics.item_id = sid.item_id
+                          AND ics.status = 'ok'
+                          AND ics.created_at < (sid.business_date::timestamp + INTERVAL '1 day')
+                        UNION ALL
+                        SELECT ics.cost_per_unit, ics.created_at, ics.snapshot_id, 1 AS priority
+                        FROM item_cost_snapshots ics
+                        WHERE ics.item_id = sid.item_id
+                          AND ics.status = 'ok'
+                    ) snap_choice
+                    ORDER BY
+                        snap_choice.priority ASC,
+                        CASE WHEN snap_choice.priority = 0 THEN snap_choice.created_at END DESC NULLS LAST,
+                        CASE WHEN snap_choice.priority = 1 THEN snap_choice.created_at END ASC NULLS LAST,
+                        snap_choice.snapshot_id DESC
+                    LIMIT 1
+                ) snap ON TRUE
+            )
+            SELECT
+                business_date,
+                SUM(qty) AS qty,
+                SUM(net_sales) AS net_sales,
+                SUM(gross_sales) AS gross_sales,
+                SUM(discounts) AS discounts,
+                SUM(CASE WHEN cost_per_unit IS NOT NULL THEN cost_per_unit * qty ELSE 0 END) AS cogs,
+                SUM(CASE WHEN cost_per_unit IS NOT NULL THEN net_sales - (cost_per_unit * qty) ELSE 0 END) AS margin,
+                SUM(CASE WHEN cost_per_unit IS NULL THEN qty ELSE 0 END) AS uncosted_qty,
+                COUNT(*) FILTER (WHERE cost_per_unit IS NULL) AS uncosted_item_days
+            FROM costed
+            GROUP BY business_date
+            ORDER BY business_date ASC
+            """,
+            (start_date, end_date)
+        )
+        rows = cursor.fetchall() or []
+        rows_by_day = {row.get('business_date'): row for row in rows}
+
+        daily = []
+        summary = {
+            'qty': 0.0,
+            'gross_sales': 0.0,
+            'net_sales': 0.0,
+            'discounts': 0.0,
+            'cogs': 0.0,
+            'margin': 0.0,
+            'uncosted_qty': 0.0,
+            'uncosted_item_days': 0
+        }
+        for day in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
+            record = rows_by_day.get(day) or {}
+            qty = float(record.get('qty') or 0)
+            gross = float(record.get('gross_sales') or 0)
+            net = float(record.get('net_sales') or 0)
+            discounts = float(record.get('discounts') or 0)
+            cogs = float(record.get('cogs') or 0)
+            margin = float(record.get('margin') or 0)
+            uncosted_qty = float(record.get('uncosted_qty') or 0)
+            uncosted_item_days = int(record.get('uncosted_item_days') or 0)
+            entry = {
+                'business_date': day.isoformat(),
+                'qty': qty,
+                'gross_sales': gross,
+                'net_sales': net,
+                'discounts': discounts,
+                'cogs': cogs,
+                'margin': margin,
+                'margin_pct': (margin / net * 100) if net else None,
+                'discount_rate_pct': (discounts / gross * 100) if gross else None,
+                'uncosted_qty': uncosted_qty,
+                'uncosted_item_days': uncosted_item_days
+            }
+            daily.append(entry)
+            for key in ('qty', 'gross_sales', 'net_sales', 'discounts', 'cogs', 'margin', 'uncosted_qty'):
+                summary[key] += entry[key] or 0
+            summary['uncosted_item_days'] += uncosted_item_days
+
+        summary['margin_pct'] = (summary['margin'] / summary['net_sales'] * 100) if summary['net_sales'] else None
+        summary['discount_rate_pct'] = (summary['discounts'] / summary['gross_sales'] * 100) if summary['gross_sales'] else None
+        summary['avg_realized_price'] = _safe_div(summary['net_sales'], summary['qty'])
+        summary['avg_cogs_per_unit'] = _safe_div(summary['cogs'], summary['qty'])
+        summary['avg_margin_per_unit'] = _safe_div(summary['margin'], summary['qty'])
+
+        return jsonify({
+            'window': {
+                'start_date': _iso(start_date),
+                'end_date': _iso(end_date),
+                'days': (end_date - start_date).days + 1
+            },
+            'summary': summary,
+            'daily': daily
+        })
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@prices_bp.route('/prices/recalculation_runs', methods=['GET'])
+def recalculation_runs():
+    limit = request.args.get('limit', type=int) or 10
+    limit = max(1, min(limit, 50))
+    cursor = get_db_cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT run_id, trigger_source, status, started_at, completed_at, items_scanned, items_updated, items_failed, summary
+            FROM cost_recalculation_runs
+            ORDER BY run_id DESC
+            LIMIT %s
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall() or []
+        return jsonify({'runs': [_normalize_run(row) for row in rows]})
     finally:
         try:
             cursor.close()
