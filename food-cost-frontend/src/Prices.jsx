@@ -35,6 +35,7 @@ function Prices() {
   const [loadingQuotes, setLoadingQuotes] = useState(true);
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [recalcResult, setRecalcResult] = useState(null);
+  const [recalcError, setRecalcError] = useState(null);
   const [recentRuns, setRecentRuns] = useState([]);
   const navigate = useNavigate();
 
@@ -191,13 +192,27 @@ function Prices() {
 
   const handleRecalculateAll = async () => {
     setRecalcLoading(true);
+    setRecalcError(null);
     try {
       const res = await api.post('/api/items/recalculate_all');
       setRecalcResult(res.data);
       await refreshSnapshotsAndMargins();
     } catch (err) {
       console.error('Failed to recalculate all item costs', err);
-      alert(err.response?.data?.error || 'Failed to recalculate all item costs');
+      const payload = err.response?.data || {};
+      const inlineResult = {
+        run_id: payload.run_id,
+        items_updated: payload.items_updated || payload.updated?.length || 0,
+        items_failed: payload.items_failed || payload.errors?.length || 0,
+        errors: Array.isArray(payload.errors) ? payload.errors : []
+      };
+      if (inlineResult.run_id || inlineResult.errors.length) {
+        setRecalcResult(inlineResult);
+      }
+      setRecalcError({
+        message: payload.error || payload.message || 'Unable to recalculate all costs.',
+        details: Array.isArray(payload.errors) ? payload.errors : []
+      });
     } finally {
       setRecalcLoading(false);
     }
@@ -364,6 +379,12 @@ function Prices() {
                 <h2 className="text-xl font-semibold">Recent Cost Runs</h2>
                 <p className="text-sm text-gray-500">Bulk recalculation results and missing-cost alerts.</p>
               </div>
+              {recalcError && (
+                <div className="border border-red-200 bg-red-50 rounded p-4">
+                  <div className="font-semibold text-red-800">Recalculation needs attention</div>
+                  <div className="text-sm text-red-700 mt-1">{recalcError.message}</div>
+                </div>
+              )}
               {latestRun ? (
                 <div className="border rounded p-4 bg-gray-50">
                   <div className="font-semibold">Run #{latestRun.run_id || 'current'}</div>
@@ -374,14 +395,18 @@ function Prices() {
               ) : (
                 <div className="text-sm text-gray-500">No recalculation runs yet.</div>
               )}
-              {latestRun?.errors?.length ? (
+              {(latestRun?.errors?.length || recalcError?.details?.length) ? (
                 <div>
                   <div className="text-sm font-semibold text-gray-800 mb-2">Latest failures</div>
                   <ul className="space-y-2 text-sm">
-                    {latestRun.errors.slice(0, 8).map((err) => (
+                    {(latestRun?.errors || recalcError?.details || []).slice(0, 8).map((err) => (
                       <li key={`${err.item_id}-${err.issue_code || 'issue'}`} className="border rounded p-3">
                         <div className="flex justify-between gap-3">
-                          <Link to={`/item/${err.item_id}`} className="text-blue-600 underline">{err.name || `Item ${err.item_id}`}</Link>
+                          {err.item_id ? (
+                            <Link to={`/item/${err.item_id}`} className="text-blue-600 underline">{err.name || `Item ${err.item_id}`}</Link>
+                          ) : (
+                            <span>{err.name || 'Unknown item'}</span>
+                          )}
                           <span className="text-red-600">{err.issue_code || 'error'}</span>
                         </div>
                         <div className="text-gray-600 mt-1">{err.message || 'Missing cost inputs or conversions.'}</div>

@@ -17,9 +17,9 @@ function ItemsLanding() {
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [coverageSummary, setCoverageSummary] = useState({
     totalItems: 0,
-    missingRecipe: 0,
-    missingIngredientLines: 0
+    missingRecipe: 0
   });
+  const [missingRecipeItems, setMissingRecipeItems] = useState([]);
   const [expandedCategories, setExpandedCategories] = useState({});
   const [filterText, setFilterText] = useState('');
   const [user] = useState(getLocalUser());
@@ -53,11 +53,12 @@ function ItemsLanding() {
         }
 
         setItemsByCategory(grouped);
+        const missingRecipes = data.filter((item) => item.recipe_coverage_status === 'missing_recipe');
         setCoverageSummary({
           totalItems: data.length,
-          missingRecipe: data.filter((item) => item.recipe_coverage_status === 'missing_recipe').length,
-          missingIngredientLines: data.filter((item) => item.recipe_coverage_status === 'missing_ingredient_lines').length
+          missingRecipe: missingRecipes.length
         });
+        setMissingRecipeItems(missingRecipes.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       } catch (err) {
         console.error('Error fetching items:', err.response || err);
       }
@@ -92,13 +93,6 @@ function ItemsLanding() {
         </span>
       );
     }
-    if (item.recipe_coverage_status === 'missing_ingredient_lines') {
-      return (
-        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">
-          No ingredient lines
-        </span>
-      );
-    }
     return null;
   };
 
@@ -119,17 +113,33 @@ function ItemsLanding() {
           <div className="text-sm text-gray-600">Items</div>
           <div className="text-2xl font-semibold">{coverageSummary.totalItems}</div>
         </div>
-        <div className="border rounded bg-red-50 p-4 shadow-sm">
-          <div className="text-sm text-red-700">Missing recipe</div>
-          <div className="text-2xl font-semibold text-red-800">{coverageSummary.missingRecipe}</div>
-          <div className="text-xs text-red-700">No recipe rows saved for the item.</div>
-        </div>
-        <div className="border rounded bg-amber-50 p-4 shadow-sm">
-          <div className="text-sm text-amber-800">Missing ingredients</div>
-          <div className="text-2xl font-semibold text-amber-900">{coverageSummary.missingIngredientLines}</div>
-          <div className="text-xs text-amber-800">Recipe exists, but it does not include any direct ingredient lines.</div>
-        </div>
       </div>
+
+      {coverageSummary.missingRecipe > 0 && (
+        <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wide text-red-700">Missing Recipe Alert</div>
+              <div className="text-2xl font-semibold text-red-900">{coverageSummary.missingRecipe} items need recipes</div>
+              <div className="text-sm text-red-700">These items do not have any recipe rows saved yet.</div>
+            </div>
+            <div className="text-sm text-red-800 md:max-w-md">
+              <div className="font-medium mb-2">Items missing recipes</div>
+              <div className="flex flex-wrap gap-2">
+                {missingRecipeItems.map((item) => (
+                  <Link
+                    key={item.item_id}
+                    to={`/item/${item.item_id}`}
+                    className="rounded-full border border-red-200 bg-white px-3 py-1 hover:border-red-300 hover:text-red-800"
+                  >
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <input
