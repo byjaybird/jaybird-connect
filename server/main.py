@@ -774,18 +774,9 @@ def delete_item(item_id):
     cursor = get_db_cursor()
     cursor.execute("UPDATE items SET archived = TRUE WHERE item_id = %s", (item_id,))
     cursor.execute("UPDATE recipes SET archived = TRUE WHERE item_id = %s", (item_id,))
-    cursor.execute("""
-        UPDATE ingredients
-        SET archived = TRUE
-        WHERE ingredient_id IN (
-            SELECT i.ingredient_id FROM ingredients i
-            LEFT JOIN recipes r ON i.ingredient_id = r.ingredient_id AND (r.archived IS NULL OR r.archived = FALSE)
-            WHERE r.ingredient_id IS NULL
-        )
-    """)
     cursor.connection.commit()
     cursor.connection.close()
-    return jsonify({'status': 'Item archived and dependencies updated'})
+    return jsonify({'status': 'Item archived'})
 
 @app.route('/api/items/new', methods=['POST'])
 def create_item():
