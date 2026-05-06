@@ -21,6 +21,7 @@ function ItemsLanding() {
     missingIngredientLines: 0
   });
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [filterText, setFilterText] = useState('');
   const [user] = useState(getLocalUser());
   const [allowedEdit, setAllowedEdit] = useState(false);
 
@@ -74,6 +75,15 @@ function ItemsLanding() {
 
   console.log("Rendering ItemsLanding");
 
+  const normalizedFilter = filterText.trim().toLowerCase();
+  const filteredEntries = Object.entries(itemsByCategory)
+    .map(([category, items]) => {
+      if (!normalizedFilter) return [category, items];
+      const matchingItems = items.filter((item) => (item.name || '').toLowerCase().includes(normalizedFilter));
+      return [category, matchingItems];
+    })
+    .filter(([, items]) => items.length > 0);
+
   const coverageBadge = (item) => {
     if (item.recipe_coverage_status === 'missing_recipe') {
       return (
@@ -121,16 +131,32 @@ function ItemsLanding() {
         </div>
       </div>
 
-      {Object.entries(itemsByCategory).map(([category, items]) => (
+      <div className="mb-6">
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="Filter items by name..."
+          className="w-full rounded border border-gray-300 bg-white px-4 py-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+      </div>
+
+      {filteredEntries.length === 0 && (
+        <div className="rounded border bg-white p-6 text-gray-600 shadow-sm">
+          No menu items match "{filterText.trim()}".
+        </div>
+      )}
+
+      {filteredEntries.map(([category, items]) => (
         <div key={category} className="mb-4 border rounded shadow-sm">
           <button
             onClick={() => toggleCategory(category)}
             className="w-full flex justify-between items-center bg-gray-100 p-4 text-left font-semibold text-lg"
           >
             <span>{category}</span>
-            <span>{expandedCategories[category] ? '▲' : '▼'}</span>
+            <span>{normalizedFilter || expandedCategories[category] ? '▲' : '▼'}</span>
           </button>
-          {expandedCategories[category] && (
+          {(normalizedFilter || expandedCategories[category]) && (
             <ul className="p-4 bg-white border-t">
               {items.map((item) => (
                 <li key={item.item_id} className="py-2 flex justify-between items-start gap-4">

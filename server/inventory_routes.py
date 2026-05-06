@@ -1311,6 +1311,7 @@ def ingredient_usage_from_sales(ingredient_id):
 
             total_base = 0.0
             base_unit = None
+            found_match = False
             for comp in comps:
                 try:
                     qty_val = float(comp.get('quantity'))
@@ -1326,14 +1327,20 @@ def ingredient_usage_from_sales(ingredient_id):
                     except Exception:
                         qty_base = qty_val
                         bu = unit
+                    found_match = True
                     total_base += qty_base
                     base_unit = base_unit or bu
                 elif comp.get('source_type') == 'item':
                     child_usage = usage_per_sale(comp.get('source_id'), visited=set(visited))
-                    if not child_usage:
+                    if not child_usage or child_usage.get('quantity_base') is None:
                         continue
+                    found_match = True
                     total_base += child_usage.get('quantity_base', 0) * qty_val
                     base_unit = base_unit or child_usage.get('base_unit')
+
+            if not found_match:
+                usage_cache[item_id] = None
+                return None
 
             try:
                 yq = float((items.get(item_id) or {}).get('yield_qty')) if (items.get(item_id) or {}).get('yield_qty') is not None else 1.0
@@ -1369,7 +1376,7 @@ def ingredient_usage_from_sales(ingredient_id):
             if not item_id or qty_sold == 0:
                 continue
             per_sale = usage_per_sale(item_id)
-            if not per_sale or per_sale.get('quantity_base') is None:
+            if not per_sale or per_sale.get('quantity_base') is None or per_sale.get('quantity_base') == 0:
                 continue
             usage_amount = per_sale['quantity_base'] * qty_sold
             bu = per_sale.get('base_unit')
